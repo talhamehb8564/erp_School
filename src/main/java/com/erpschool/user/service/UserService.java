@@ -1,3 +1,4 @@
+
 package com.erpschool.user.service;
 
 import com.erpschool.audit.service.AuditService;
@@ -52,25 +53,47 @@ public class UserService {
 
     @Transactional
     public CreateUserResponse create(CreateUserRequest request) {
+
         if (request.getRole() == UserRole.ERP_OWNER) {
-            throw new ForbiddenException("Cannot create another ERP owner through this API");
+            throw new ForbiddenException(
+                    "Cannot create another ERP owner through this API"
+            );
         }
-        UUID tenantId = TenantGuard.requireTenantId(request.getTenantId());
+
+        UUID tenantId = TenantGuard.requireTenantId(
+                request.getTenantId()
+        );
+
         Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Tenant", tenantId));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Tenant", tenantId)
+                );
 
-        if (request.getEmail() != null && userRepository.existsByEmailIgnoreCase(request.getEmail())) {
-            throw new DuplicateResourceException("Email is already in use");
+        if (request.getEmail() != null
+                && userRepository.existsByEmailIgnoreCase(request.getEmail())) {
+
+            throw new DuplicateResourceException(
+                    "Email is already in use"
+            );
         }
 
-        String username = usernameGenerator.next(tenant.getId(), tenant.getCode(), request.getRole());
-        String temporaryPassword = PasswordGenerator.temporaryPassword();
+        String username = usernameGenerator.next(
+                tenant.getId(),
+                tenant.getCode(),
+                request.getRole()
+        );
+
+        String temporaryPassword =
+                PasswordGenerator.temporaryPassword();
 
         User user = new User();
+
         user.setTenantId(tenant.getId());
         user.setUsername(username);
         user.setEmail(blankToNull(request.getEmail()));
-        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+        user.setPasswordHash(
+                passwordEncoder.encode(temporaryPassword)
+        );
         user.setFirstName(request.getFirstName().trim());
         user.setLastName(request.getLastName().trim());
         user.setPhone(blankToNull(request.getPhone()));
@@ -78,15 +101,26 @@ public class UserService {
         user.setStatus(UserStatus.ACTIVE);
         user.setMustChangePassword(true);
         user.setCreatedBy(TenantContext.getUserId());
+
         user = userRepository.save(user);
 
-        auditService.record(AuditService.USER_CREATED, "User", user.getId().toString(),
-                Map.of("username", user.getUsername(), "role", user.getRole().name()));
+        auditService.record(
+                AuditService.USER_CREATED,
+                "User",
+                user.getId().toString(),
+                Map.of(
+                        "username", user.getUsername(),
+                        "role", user.getRole().name()
+                )
+        );
 
         return CreateUserResponse.builder()
                 .user(UserResponse.from(user))
                 .temporaryPassword(temporaryPassword)
-                .message("Account created. Share the temporary password securely. The user must change it after login.")
+                .message(
+                        "Account created. Share the temporary password securely. "
+                                + "The user must change it after login."
+                )
                 .build();
     }
 
@@ -94,25 +128,43 @@ public class UserService {
      * Used by tenant creation / seeder where temporary password may be chosen.
      */
     @Transactional
-    public CreateUserResponse createInternal(UUID tenantId,
-                                             String tenantCode,
-                                             UserRole role,
-                                             String firstName,
-                                             String lastName,
-                                             String email,
-                                             String phone,
-                                             String rawPassword,
-                                             boolean mustChangePassword) {
-        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
-            throw new DuplicateResourceException("Email is already in use");
+    public CreateUserResponse createInternal(
+            UUID tenantId,
+            String tenantCode,
+            UserRole role,
+            String firstName,
+            String lastName,
+            String email,
+            String phone,
+            String rawPassword,
+            boolean mustChangePassword) {
+
+        if (email != null
+                && userRepository.existsByEmailIgnoreCase(email)) {
+
+            throw new DuplicateResourceException(
+                    "Email is already in use"
+            );
         }
-        String username = usernameGenerator.next(tenantId, tenantCode, role);
-        String password = rawPassword != null ? rawPassword : PasswordGenerator.temporaryPassword();
+
+        String username = usernameGenerator.next(
+                tenantId,
+                tenantCode,
+                role
+        );
+
+        String password = rawPassword != null
+                ? rawPassword
+                : PasswordGenerator.temporaryPassword();
+
         User user = new User();
+
         user.setTenantId(tenantId);
         user.setUsername(username);
         user.setEmail(blankToNull(email));
-        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setPasswordHash(
+                passwordEncoder.encode(password)
+        );
         user.setFirstName(firstName.trim());
         user.setLastName(lastName.trim());
         user.setPhone(blankToNull(phone));
@@ -120,7 +172,9 @@ public class UserService {
         user.setStatus(UserStatus.ACTIVE);
         user.setMustChangePassword(mustChangePassword);
         user.setCreatedBy(TenantContext.getUserId());
+
         user = userRepository.save(user);
+
         return CreateUserResponse.builder()
                 .user(UserResponse.from(user))
                 .temporaryPassword(password)
@@ -129,131 +183,327 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<UserResponse> list(UUID requestedTenantId,
-                                           UserRole role,
-                                           UserStatus status,
-                                           String q,
-                                           Pageable pageable) {
-        UUID tenantId = TenantGuard.requireTenantId(requestedTenantId);
+    public PageResponse<UserResponse> list(
+            UUID requestedTenantId,
+            UserRole role,
+            UserStatus status,
+            String q,
+            Pageable pageable) {
+
+        UUID tenantId = TenantGuard.requireTenantId(
+                requestedTenantId
+        );
+
         Page<UserResponse> page = userRepository
-                .searchByTenant(tenantId, role, status, blankToNull(q), pageable)
+                .searchByTenant(
+                        tenantId,
+                        role,
+                        status,
+                        blankToNull(q),
+                        pageable
+                )
                 .map(UserResponse::from);
+
         return PageResponse.from(page);
     }
 
     @Transactional(readOnly = true)
-    public UserResponse get(UUID id, UUID requestedTenantId) {
-        User user = findScoped(id, requestedTenantId);
+    public UserResponse get(
+            UUID id,
+            UUID requestedTenantId) {
+
+        User user = findScoped(
+                id,
+                requestedTenantId
+        );
+
         return UserResponse.from(user);
     }
 
     @Transactional
-    public UserResponse update(UUID id, UUID requestedTenantId, UpdateUserRequest request) {
-        User user = findScoped(id, requestedTenantId);
+    public UserResponse update(
+            UUID id,
+            UUID requestedTenantId,
+            UpdateUserRequest request) {
+
+        User user = findScoped(
+                id,
+                requestedTenantId
+        );
+
         if (request.getFirstName() != null) {
-            user.setFirstName(request.getFirstName().trim());
+            user.setFirstName(
+                    request.getFirstName().trim()
+            );
         }
+
         if (request.getLastName() != null) {
-            user.setLastName(request.getLastName().trim());
+            user.setLastName(
+                    request.getLastName().trim()
+            );
         }
+
         if (request.getPhone() != null) {
-            user.setPhone(blankToNull(request.getPhone()));
+            user.setPhone(
+                    blankToNull(request.getPhone())
+            );
         }
+
         if (request.getEmail() != null) {
-            String email = blankToNull(request.getEmail());
+
+            String email = blankToNull(
+                    request.getEmail()
+            );
+
             if (email != null) {
+
+                /*
+                 * IMPORTANT:
+                 * user is reassigned later after save().
+                 * Therefore we cannot directly use user inside
+                 * the lambda expression.
+                 *
+                 * Store the ID in a separate effectively-final variable.
+                 */
+                UUID currentUserId = user.getId();
+
                 userRepository.findByEmailIgnoreCase(email)
-                        .filter(existing -> !existing.getId().equals(user.getId()))
+                        .filter(existing ->
+                                !existing.getId().equals(currentUserId)
+                        )
                         .ifPresent(existing -> {
-                            throw new DuplicateResourceException("Email is already in use");
+                            throw new DuplicateResourceException(
+                                    "Email is already in use"
+                            );
                         });
             }
+
             user.setEmail(email);
         }
-        user.setUpdatedBy(TenantContext.getUserId());
+
+        user.setUpdatedBy(
+                TenantContext.getUserId()
+        );
+
         user = userRepository.save(user);
-        auditService.record(AuditService.USER_UPDATED, "User", user.getId().toString(),
-                Map.of("username", user.getUsername()));
+
+        auditService.record(
+                AuditService.USER_UPDATED,
+                "User",
+                user.getId().toString(),
+                Map.of(
+                        "username",
+                        user.getUsername()
+                )
+        );
+
         return UserResponse.from(user);
     }
 
     @Transactional
-    public UserResponse activate(UUID id, UUID requestedTenantId) {
-        User user = findScoped(id, requestedTenantId);
+    public UserResponse activate(
+            UUID id,
+            UUID requestedTenantId) {
+
+        User user = findScoped(
+                id,
+                requestedTenantId
+        );
+
         if (user.getRole() == UserRole.ERP_OWNER) {
-            throw new ForbiddenException("Cannot change ERP owner status");
+            throw new ForbiddenException(
+                    "Cannot change ERP owner status"
+            );
         }
-        user.setStatus(UserStatus.ACTIVE);
+
+        user.setStatus(
+                UserStatus.ACTIVE
+        );
+
         user.setLockedUntil(null);
+
         user.setFailedLoginAttempts(0);
-        user.setUpdatedBy(TenantContext.getUserId());
+
+        user.setUpdatedBy(
+                TenantContext.getUserId()
+        );
+
         user = userRepository.save(user);
-        auditService.record(AuditService.USER_ACTIVATED, "User", user.getId().toString(),
-                Map.of("username", user.getUsername()));
+
+        auditService.record(
+                AuditService.USER_ACTIVATED,
+                "User",
+                user.getId().toString(),
+                Map.of(
+                        "username",
+                        user.getUsername()
+                )
+        );
+
         return UserResponse.from(user);
     }
 
     @Transactional
-    public UserResponse deactivate(UUID id, UUID requestedTenantId) {
-        User user = findScoped(id, requestedTenantId);
+    public UserResponse deactivate(
+            UUID id,
+            UUID requestedTenantId) {
+
+        User user = findScoped(
+                id,
+                requestedTenantId
+        );
+
         if (user.getRole() == UserRole.ERP_OWNER) {
-            throw new ForbiddenException("Cannot deactivate the ERP owner");
+            throw new ForbiddenException(
+                    "Cannot deactivate the ERP owner"
+            );
         }
-        if (user.getId().equals(TenantContext.getUserId())) {
-            throw new BusinessException("Cannot deactivate your own account");
+
+        if (user.getId().equals(
+                TenantContext.getUserId())) {
+
+            throw new BusinessException(
+                    "Cannot deactivate your own account"
+            );
         }
-        user.setStatus(UserStatus.INACTIVE);
-        user.setUpdatedBy(TenantContext.getUserId());
+
+        user.setStatus(
+                UserStatus.INACTIVE
+        );
+
+        user.setUpdatedBy(
+                TenantContext.getUserId()
+        );
+
         user = userRepository.save(user);
-        auditService.record(AuditService.USER_DEACTIVATED, "User", user.getId().toString(),
-                Map.of("username", user.getUsername()));
+
+        auditService.record(
+                AuditService.USER_DEACTIVATED,
+                "User",
+                user.getId().toString(),
+                Map.of(
+                        "username",
+                        user.getUsername()
+                )
+        );
+
         return UserResponse.from(user);
     }
 
     @Transactional
-    public CreateUserResponse resetPassword(UUID id, UUID requestedTenantId) {
-        User user = findScoped(id, requestedTenantId);
-        if (user.getRole() == UserRole.ERP_OWNER && !TenantContext.isErpOwner()) {
-            throw new ForbiddenException("Cannot reset ERP owner password");
+    public CreateUserResponse resetPassword(
+            UUID id,
+            UUID requestedTenantId) {
+
+        User user = findScoped(
+                id,
+                requestedTenantId
+        );
+
+        if (user.getRole() == UserRole.ERP_OWNER
+                && !TenantContext.isErpOwner()) {
+
+            throw new ForbiddenException(
+                    "Cannot reset ERP owner password"
+            );
         }
-        String temporaryPassword = PasswordGenerator.temporaryPassword();
-        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+
+        String temporaryPassword =
+                PasswordGenerator.temporaryPassword();
+
+        user.setPasswordHash(
+                passwordEncoder.encode(temporaryPassword)
+        );
+
         user.setMustChangePassword(true);
-        user.setPasswordChangedAt(Instant.now());
+
+        user.setPasswordChangedAt(
+                Instant.now()
+        );
+
         user.setFailedLoginAttempts(0);
+
         user.setLockedUntil(null);
-        user.setUpdatedBy(TenantContext.getUserId());
+
+        user.setUpdatedBy(
+                TenantContext.getUserId()
+        );
+
         userRepository.save(user);
-        auditService.record(AuditService.PASSWORD_RESET, "User", user.getId().toString(),
-                Map.of("username", user.getUsername()));
+
+        auditService.record(
+                AuditService.PASSWORD_RESET,
+                "User",
+                user.getId().toString(),
+                Map.of(
+                        "username",
+                        user.getUsername()
+                )
+        );
+
         return CreateUserResponse.builder()
                 .user(UserResponse.from(user))
                 .temporaryPassword(temporaryPassword)
-                .message("Password reset. Share the temporary password securely.")
+                .message(
+                        "Password reset. Share the temporary password securely."
+                )
                 .build();
     }
 
-    public User findScoped(UUID id, UUID requestedTenantId) {
+    public User findScoped(
+            UUID id,
+            UUID requestedTenantId) {
+
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User", id));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User",
+                                id
+                        )
+                );
+
         if (user.getRole() == UserRole.ERP_OWNER) {
-            if (!TenantContext.isErpOwner() && !user.getId().equals(TenantContext.getUserId())) {
-                throw new ResourceNotFoundException("User", id);
+
+            if (!TenantContext.isErpOwner()
+                    && !user.getId().equals(
+                    TenantContext.getUserId())) {
+
+                throw new ResourceNotFoundException(
+                        "User",
+                        id
+                );
             }
+
             return user;
         }
-        UUID tenantId = TenantGuard.requireTenantId(requestedTenantId);
-        if (!tenantId.equals(user.getTenantId())) {
-            throw new ResourceNotFoundException("User", id);
+
+        UUID tenantId = TenantGuard.requireTenantId(
+                requestedTenantId
+        );
+
+        if (!tenantId.equals(
+                user.getTenantId())) {
+
+            throw new ResourceNotFoundException(
+                    "User",
+                    id
+            );
         }
+
         return user;
     }
 
-    private static String blankToNull(String value) {
+    private static String blankToNull(
+            String value) {
+
         if (value == null) {
             return null;
         }
+
         String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+
+        return trimmed.isEmpty()
+                ? null
+                : trimmed;
     }
 }

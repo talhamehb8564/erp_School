@@ -89,12 +89,15 @@ springdoc:
 
 app:
   upload-dir: ${UPLOAD_DIR:uploads}
+
   jwt:
-    secret: ${JWT_SECRET:FAKESECRET_a4b5c6d7e8f9g0h1i2j3}
+    secret: ${JWT_SECRET:ERP_SCHOOL_JWT_SECRET_2026_CHANGE_THIS_TO_A_RANDOM_VALUE_9x7k}
     access-token-ttl-seconds: ${JWT_ACCESS_TTL:900}
     refresh-token-ttl-seconds: ${JWT_REFRESH_TTL:604800}
+
   cors:
     allowed-origins: ${CORS_ORIGINS:*}
+
   seed:
     enabled: ${SEED_DEMO_DATA:true}
     erp-owner-username: erp.owner
