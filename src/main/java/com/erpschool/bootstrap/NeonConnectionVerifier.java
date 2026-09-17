@@ -64,15 +64,26 @@ public class NeonConnectionVerifier implements ApplicationRunner {
         requireTable(tables, "refresh_tokens");
         requireTable(tables, "audit_logs");
         requireTable(tables, "flyway_schema_history");
+        requireTable(tables, "students");
+        requireTable(tables, "fee_challans");
+        requireTable(tables, "subscriptions");
+        requireTable(tables, "timetable_slots");
 
         boolean v1 = history.stream().anyMatch(row ->
                 "1".equals(String.valueOf(row.get("version")))
+                        && Boolean.TRUE.equals(row.get("success")));
+        boolean v2 = history.stream().anyMatch(row ->
+                "2".equals(String.valueOf(row.get("version")))
                         && Boolean.TRUE.equals(row.get("success")));
         if (!v1) {
             throw new IllegalStateException(
                     "Flyway did not record a successful V1 migration on Neon. History=" + history);
         }
-        log.info("Neon connection and Flyway V1 verification succeeded. tables={}", tables);
+        if (!v2) {
+            throw new IllegalStateException(
+                    "Flyway did not record a successful V2 migration on Neon. History=" + history);
+        }
+        log.info("Neon connection and Flyway V1+V2 verification succeeded. tables={}", tables);
     }
 
     private static void requireTable(List<String> tables, String name) {

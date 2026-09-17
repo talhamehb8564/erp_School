@@ -21,7 +21,7 @@ public class HealthController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> health() {
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
                 "status", "UP",
-                "phase", "1",
+                "phase", "2",
                 "service", "erp-school",
                 "time", Instant.now().toString()
         )));

@@ -25,6 +25,11 @@ public final class TenantContext {
         ROLE.set(role);
     }
 
+    /** ERP Owner may pin a school for the request via X-Tenant-Id. */
+    public static void overrideTenantId(UUID tenantId) {
+        TENANT_ID.set(tenantId);
+    }
+
     public static UUID getTenantId() {
         return TENANT_ID.get();
     }

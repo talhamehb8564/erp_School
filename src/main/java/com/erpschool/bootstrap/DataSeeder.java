@@ -12,12 +12,14 @@ import com.erpschool.user.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Component
+@Order(10)
 public class DataSeeder implements ApplicationRunner {
 
     private final AppProperties properties;

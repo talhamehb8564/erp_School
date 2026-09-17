@@ -51,6 +51,11 @@ spring:
         default-page-size: 20
         max-page-size: 100
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
 server:
   port: ${PORT:8080}
   address: 0.0.0.0
@@ -83,6 +88,7 @@ springdoc:
   show-actuator: false
 
 app:
+  upload-dir: ${UPLOAD_DIR:uploads}
   jwt:
     secret: ${JWT_SECRET:FAKESECRET_a4b5c6d7e8f9g0h1i2j3}
     access-token-ttl-seconds: ${JWT_ACCESS_TTL:900}

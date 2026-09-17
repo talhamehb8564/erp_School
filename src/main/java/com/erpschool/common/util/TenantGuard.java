@@ -17,10 +17,15 @@ public final class TenantGuard {
      */
     public static UUID requireTenantId(UUID requestedTenantId) {
         if (TenantContext.isErpOwner()) {
-            if (requestedTenantId == null) {
-                throw new BusinessException("TENANT_REQUIRED", "tenantId is required for this operation");
+            if (requestedTenantId != null) {
+                return requestedTenantId;
             }
-            return requestedTenantId;
+            UUID current = TenantContext.getTenantId();
+            if (current == null) {
+                throw new BusinessException("TENANT_REQUIRED",
+                        "tenantId is required for this operation (query param or X-Tenant-Id header)");
+            }
+            return current;
         }
         UUID current = TenantContext.getTenantId();
         if (current == null) {

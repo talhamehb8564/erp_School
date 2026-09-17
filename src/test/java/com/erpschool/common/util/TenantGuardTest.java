@@ -39,6 +39,13 @@ class TenantGuardTest {
     }
 
     @Test
+    void erpOwnerCanUsePinnedTenantFromContext() {
+        TenantContext.set(null, UUID.randomUUID(), "erp.owner", UserRole.ERP_OWNER);
+        TenantContext.overrideTenantId(schoolA);
+        assertThat(TenantGuard.requireTenantId(null)).isEqualTo(schoolA);
+    }
+
+    @Test
     void schoolUserCannotReadForeignTenant() {
         TenantContext.set(schoolA, UUID.randomUUID(), "GVS-TCH-0001", UserRole.TEACHER);
         assertThatThrownBy(() -> TenantGuard.assertSameTenant(schoolB))

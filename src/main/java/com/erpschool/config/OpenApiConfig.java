@@ -23,10 +23,13 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("ERP School API")
-                        .version("0.1.0-PHASE1")
+                        .version("0.2.0")
                         .description("""
-                                Multi-tenant School ERP SaaS — Phase 1.
-                                Foundation, JWT authentication, tenant isolation, user management, audit.
+                                Multi-tenant School ERP SaaS — database + APIs.
+                                Auth, tenants, subscriptions, campuses, academics, students/parents,
+                                lecture attendance, homework, offline exam results, fees, salaries,
+                                announcements, calendar, reports. Tenant isolation is enforced in queries.
+                                ERP Owner may send X-Tenant-Id to pin a school for school-scoped APIs.
                                 """))
                 .servers(List.of(new Server().url("/").description("Current host")))
                 .components(new Components().addSecuritySchemes("bearerAuth", bearer))

@@ -13,9 +13,9 @@
 
     <groupId>com.erpschool</groupId>
     <artifactId>erp-school</artifactId>
-    <version>0.1.0-PHASE1</version>
+    <version>0.2.0</version>
     <name>ERP School</name>
-    <description>Multi-tenant School ERP SaaS — Phase 1 Foundation, Auth, Tenancy, User Management</description>
+    <description>Multi-tenant School ERP SaaS — database and modular REST APIs</description>
     <packaging>jar</packaging>
 
     <properties>

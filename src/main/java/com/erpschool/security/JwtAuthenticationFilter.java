@@ -51,6 +51,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                     TenantContext.set(tenantId, userId, username, role);
+                    if (role == UserRole.ERP_OWNER) {
+                        String override = request.getHeader("X-Tenant-Id");
+                        if (override != null && !override.isBlank()) {
+                            TenantContext.overrideTenantId(UUID.fromString(override.trim()));
+                        }
+                    }
                 }
             }
             filterChain.doFilter(request, response);
