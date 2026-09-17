@@ -4,6 +4,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.env.ConfigurableEnvironment;
 
+import java.util.Arrays;
+
 /**
  * Fail fast if the datasource is missing, unauthenticated, or an in-memory fallback.
  * This backend is required to use Neon PostgreSQL.
