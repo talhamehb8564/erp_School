@@ -1,0 +1,104 @@
+spring:
+  application:
+    name: erp-school
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channelBinding=require}
+    username: ${DB_USERNAME:neondb_owner}
+    password: ${DB_PASSWORD:npg_i7yZ9RzFTLsq}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: ErpSchoolHikariPool
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: 2
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 900000
+      data-source-properties:
+        ssl: true
+        sslmode: require
+        ApplicationName: erp-school-phase1
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: UTC
+
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
+
+server:
+  port: ${PORT:8080}
+  address: 0.0.0.0
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+  show-actuator: false
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:FAKESECRET_a4b5c6d7e8f9g0h1i2j3}
+    access-token-ttl-seconds: ${JWT_ACCESS_TTL:900}
+    refresh-token-ttl-seconds: ${JWT_REFRESH_TTL:604800}
+  cors:
+    allowed-origins: ${CORS_ORIGINS:*}
+  seed:
+    enabled: ${SEED_DEMO_DATA:true}
+    erp-owner-username: erp.owner
+    erp-owner-password: ${ERP_OWNER_PASSWORD:Owner@12345}
+    erp-owner-email: owner@erpschool.local
+    demo-school-code: GVS
+    demo-school-name: Green Valley School
+    demo-user-password: ${DEMO_USER_PASSWORD:ChangeMe@123}
+
+logging:
+  level:
+    root: INFO
+    com.erpschool: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
