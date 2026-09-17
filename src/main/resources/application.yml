@@ -3,17 +3,19 @@ spring:
     name: erp-school
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channelBinding=require}
-    username: ${DB_USERNAME:neondb_owner}
-    password: ${DB_PASSWORD:npg_i7yZ9RzFTLsq}
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://${PGHOST:ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech}/${PGDATABASE:neondb}?sslmode=${PGSSLMODE:require}}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:${PGUSER:neondb_owner}}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:${PGPASSWORD:}}}
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: ErpSchoolHikariPool
       maximum-pool-size: ${DB_POOL_SIZE:10}
       minimum-idle: 2
-      connection-timeout: 20000
+      connection-timeout: 30000
       idle-timeout: 300000
       max-lifetime: 900000
+      initialization-fail-timeout: 1
+      connection-test-query: SELECT 1
       data-source-properties:
         ssl: true
         sslmode: require
@@ -100,5 +102,7 @@ logging:
   level:
     root: INFO
     com.erpschool: INFO
+    org.flywaydb: INFO
+    org.springframework.jdbc.datasource: INFO
     org.springframework.security: WARN
     org.hibernate.SQL: WARN

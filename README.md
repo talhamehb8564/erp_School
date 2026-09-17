@@ -50,15 +50,26 @@ Tables:
 - `refresh_tokens` (opaque token, SHA-256 stored)
 - `audit_logs`
 
-The app is configured for your Neon database:
+The app connects to **Neon PostgreSQL only**. There is no H2 / SQLite / PGlite fallback. Missing credentials or a non-Neon URL fail startup.
 
+JDBC URL:
+
+```text
+jdbc:postgresql://ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require
 ```
-jdbc:postgresql://ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech/neondb
+
+Do **not** commit the database password. Copy `.env.example` and export:
+
+```bash
+export PGHOST=ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech
+export PGDATABASE=neondb
+export PGUSER=neondb_owner
+export PGPASSWORD='your-neon-password'
+export PGSSLMODE=require
+export DB_URL="jdbc:postgresql://${PGHOST}/${PGDATABASE}?sslmode=require"
+export DB_USERNAME="$PGUSER"
+export DB_PASSWORD="$PGPASSWORD"
 ```
-
-Override with env vars if needed: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`.
-
-If the Neon **pooler** rejects `channelBinding=require`, drop that query parameter or set `channelBinding=prefer`.
 
 ## Run
 
@@ -68,6 +79,8 @@ Requirements: **JDK 21** and **Maven 3.9+**.
 mvn test
 mvn spring-boot:run
 ```
+
+Flyway runs `V1__phase1_foundation.sql` against Neon on startup. Logs must show `Neon connection and Flyway V1 verification succeeded`.
 
 - API: http://localhost:8080/api/v1
 - Swagger UI: http://localhost:8080/swagger-ui.html

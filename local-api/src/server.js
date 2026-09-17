@@ -22,8 +22,8 @@ const HOST = process.env.HOST || "0.0.0.0";
 const NEON = {
   host: "ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech",
   port: 5432,
-  user: process.env.DB_USERNAME || "neondb_owner",
-  password: process.env.DB_PASSWORD || "npg_i7yZ9RzFTLsq",
+  user: process.env.DB_USERNAME || process.env.PGUSER || "neondb_owner",
+  password: process.env.DB_PASSWORD || process.env.PGPASSWORD || "",
   database: "neondb",
 };
 
