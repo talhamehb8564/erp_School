@@ -1,0 +1,139 @@
+### ERP School — module APIs (after login)
+### Demo school admin: GVS-ADM-0001 / ChangeMe@123
+@base = http://localhost:8080
+@accessToken =
+@classId =
+@sectionId =
+@subjectId =
+@slotId =
+@studentId =
+@sessionId =
+@challanId =
+@proofId =
+@homeworkId =
+
+### School dashboard
+GET {{base}}/api/v1/dashboard/school
+Authorization: Bearer {{accessToken}}
+
+### Campuses
+GET {{base}}/api/v1/campuses
+Authorization: Bearer {{accessToken}}
+
+### Classes
+GET {{base}}/api/v1/classes
+Authorization: Bearer {{accessToken}}
+
+### Students
+GET {{base}}/api/v1/students?size=50
+Authorization: Bearer {{accessToken}}
+
+### Enroll student (+ optional new parent)
+POST {{base}}/api/v1/students
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "firstName": "Zain",
+  "lastName": "Ali",
+  "classId": "{{classId}}",
+  "sectionId": "{{sectionId}}",
+  "parentFirstName": "Imran",
+  "parentLastName": "Ali",
+  "relationship": "FATHER"
+}
+
+### Teacher portal
+GET {{base}}/api/v1/portals/teacher
+Authorization: Bearer {{accessToken}}
+
+### Parent children
+GET {{base}}/api/v1/parents/me/children
+Authorization: Bearer {{accessToken}}
+
+### Lecture roster
+GET {{base}}/api/v1/attendance/lectures/{{slotId}}/roster
+Authorization: Bearer {{accessToken}}
+
+### Mark lecture attendance
+POST {{base}}/api/v1/attendance/lectures/{{slotId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "date": "2026-09-14",
+  "marks": [
+    { "studentId": "{{studentId}}", "status": "PRESENT" }
+  ]
+}
+
+### Generate monthly fee challans
+POST {{base}}/api/v1/fees/challans/generate
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "classId": "{{classId}}",
+  "month": "2026-09-01"
+}
+
+### Student challans (parent/student)
+GET {{base}}/api/v1/fees/students/{{studentId}}/challans
+Authorization: Bearer {{accessToken}}
+
+### Submit fee payment proof
+POST {{base}}/api/v1/fees/challans/{{challanId}}/proofs
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "slipUrl": "/api/v1/files/tenant/slip.pdf",
+  "transactionRef": "TXN-001"
+}
+
+### Review fee proof (account officer)
+POST {{base}}/api/v1/fees/proofs/{{proofId}}/review
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "approve": true
+}
+
+### Homework
+GET {{base}}/api/v1/homework
+Authorization: Bearer {{accessToken}}
+
+### Submit homework (student/parent)
+POST {{base}}/api/v1/homework/{{homeworkId}}/submissions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "fileUrl": "/api/v1/files/tenant/work.pdf",
+  "notes": "Completed exercises 1-10"
+}
+
+### Mark overdue fee challans
+POST {{base}}/api/v1/fees/challans/mark-overdue
+Authorization: Bearer {{accessToken}}
+
+### Expire overdue SaaS subscriptions (ERP Owner)
+POST {{base}}/api/v1/subscriptions/expire-overdue
+Authorization: Bearer {{accessToken}}
+
+### Exam sessions
+GET {{base}}/api/v1/exams/sessions
+Authorization: Bearer {{accessToken}}
+
+### Calendar
+GET {{base}}/api/v1/calendar/events
+Authorization: Bearer {{accessToken}}
+
+### Notifications
+GET {{base}}/api/v1/notifications
+Authorization: Bearer {{accessToken}}
+
+### Current subscription
+GET {{base}}/api/v1/subscriptions/current
+Authorization: Bearer {{accessToken}}
