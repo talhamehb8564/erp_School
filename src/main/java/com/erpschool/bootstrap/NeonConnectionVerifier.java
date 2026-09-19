@@ -68,12 +68,16 @@ public class NeonConnectionVerifier implements ApplicationRunner {
         requireTable(tables, "fee_challans");
         requireTable(tables, "subscriptions");
         requireTable(tables, "timetable_slots");
+        requireTable(tables, "homework_submissions");
 
         boolean v1 = history.stream().anyMatch(row ->
                 "1".equals(String.valueOf(row.get("version")))
                         && Boolean.TRUE.equals(row.get("success")));
         boolean v2 = history.stream().anyMatch(row ->
                 "2".equals(String.valueOf(row.get("version")))
+                        && Boolean.TRUE.equals(row.get("success")));
+        boolean v3 = history.stream().anyMatch(row ->
+                "3".equals(String.valueOf(row.get("version")))
                         && Boolean.TRUE.equals(row.get("success")));
         if (!v1) {
             throw new IllegalStateException(
@@ -83,7 +87,11 @@ public class NeonConnectionVerifier implements ApplicationRunner {
             throw new IllegalStateException(
                     "Flyway did not record a successful V2 migration on Neon. History=" + history);
         }
-        log.info("Neon connection and Flyway V1+V2 verification succeeded. tables={}", tables);
+        if (!v3) {
+            throw new IllegalStateException(
+                    "Flyway did not record a successful V3 migration on Neon. History=" + history);
+        }
+        log.info("Neon connection and Flyway V1+V2+V3 verification succeeded. tables={}", tables);
     }
 
     private static void requireTable(List<String> tables, String name) {

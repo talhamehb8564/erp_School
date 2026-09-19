@@ -10,6 +10,7 @@
 @sessionId =
 @challanId =
 @proofId =
+@homeworkId =
 
 ### School dashboard
 GET {{base}}/api/v1/dashboard/school
@@ -101,6 +102,24 @@ Content-Type: application/json
 
 ### Homework
 GET {{base}}/api/v1/homework
+Authorization: Bearer {{accessToken}}
+
+### Submit homework (student/parent)
+POST {{base}}/api/v1/homework/{{homeworkId}}/submissions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "fileUrl": "/api/v1/files/tenant/work.pdf",
+  "notes": "Completed exercises 1-10"
+}
+
+### Mark overdue fee challans
+POST {{base}}/api/v1/fees/challans/mark-overdue
+Authorization: Bearer {{accessToken}}
+
+### Expire overdue SaaS subscriptions (ERP Owner)
+POST {{base}}/api/v1/subscriptions/expire-overdue
 Authorization: Bearer {{accessToken}}
 
 ### Exam sessions

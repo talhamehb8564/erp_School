@@ -38,4 +38,11 @@ public class Subscription extends TenantAwareEntity {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    public boolean isPeriodExpired(LocalDate today) {
+        return status == SubscriptionStatus.PAID
+                && periodEnd != null
+                && today != null
+                && periodEnd.isBefore(today);
+    }
 }

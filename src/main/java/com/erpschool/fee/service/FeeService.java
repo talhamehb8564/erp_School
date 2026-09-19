@@ -216,6 +216,24 @@ public class FeeService {
         return challanRepository.findByTenantIdAndStatus(TenantGuard.requireTenantId(null), status);
     }
 
+    @Transactional
+    public List<FeeChallan> markOverdue() {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        LocalDate today = LocalDate.now();
+        List<FeeChallan> unpaid = challanRepository.findByTenantIdAndStatusAndDueDateBefore(
+                tenantId, ChallanStatus.UNPAID, today);
+        List<FeeChallan> updated = new ArrayList<>();
+        for (FeeChallan challan : unpaid) {
+            if (!challan.isPastDue(today)) {
+                continue;
+            }
+            challan.setStatus(ChallanStatus.OVERDUE);
+            challan.setUpdatedBy(TenantContext.getUserId());
+            updated.add(challanRepository.save(challan));
+        }
+        return updated;
+    }
+
     private FeeChallan requireChallan(UUID id) {
         FeeChallan c = challanRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Challan", id));

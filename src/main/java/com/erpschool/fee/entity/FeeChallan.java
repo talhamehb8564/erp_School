@@ -67,4 +67,11 @@ public class FeeChallan extends TenantAwareEntity {
             totalPayable = BigDecimal.ZERO;
         }
     }
+
+    public boolean isPastDue(LocalDate today) {
+        return status == ChallanStatus.UNPAID
+                && dueDate != null
+                && today != null
+                && dueDate.isBefore(today);
+    }
 }

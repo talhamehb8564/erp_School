@@ -96,6 +96,12 @@ public class FeeController {
         return ResponseEntity.ok(ApiResponse.ok(feeService.byStatus(status)));
     }
 
+    @PostMapping("/challans/mark-overdue")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<List<FeeChallan>>> markOverdue() {
+        return ResponseEntity.ok(ApiResponse.ok("Overdue challans updated", feeService.markOverdue()));
+    }
+
     @Getter
     @Setter
     public static class GenerateRequest {

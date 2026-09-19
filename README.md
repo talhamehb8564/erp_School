@@ -50,6 +50,7 @@ Flyway on startup:
 
 - `src/main/resources/db/migration/V1__phase1_foundation.sql`
 - `src/main/resources/db/migration/V2__erp_modules.sql`
+- `src/main/resources/db/migration/V3__homework_submissions.sql`
 
 The app connects to **Neon PostgreSQL only**. There is no H2 / SQLite / PGlite fallback. Missing credentials or a non-Neon URL fail startup.
 
@@ -79,9 +80,9 @@ mvn test
 mvn spring-boot:run
 ```
 
-Flyway applies V1+V2 against Neon. Logs must show:
+Flyway applies V1+V2+V3 against Neon. Logs must show:
 
-`Neon connection and Flyway V1+V2 verification succeeded`
+`Neon connection and Flyway V1+V2+V3 verification succeeded`
 
 If SSL drops (`Connection terminated unexpectedly` / `ECONNRESET`): wake the Neon compute, check IP allowlist, try the non-pooler host. Do not add `channelBinding=require` until connectivity is proven.
 

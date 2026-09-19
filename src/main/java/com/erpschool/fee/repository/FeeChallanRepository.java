@@ -16,4 +16,6 @@ public interface FeeChallanRepository extends JpaRepository<FeeChallan, UUID> {
     List<FeeChallan> findByTenantIdAndMonth(UUID tenantId, LocalDate month);
     List<FeeChallan> findByTenantIdAndStudentIdAndStatusIn(UUID tenantId, UUID studentId, List<ChallanStatus> statuses);
     long countByTenantIdAndStatus(UUID tenantId, ChallanStatus status);
+
+    List<FeeChallan> findByTenantIdAndStatusAndDueDateBefore(UUID tenantId, ChallanStatus status, LocalDate dueDate);
 }

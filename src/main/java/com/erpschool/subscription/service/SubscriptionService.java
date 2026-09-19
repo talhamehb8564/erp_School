@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -128,6 +129,33 @@ public class SubscriptionService {
         paymentRepository.save(latest);
         s.setUpdatedBy(TenantContext.getUserId());
         return toResponse(subscriptionRepository.save(s));
+    }
+
+    @Transactional
+    public List<SubscriptionDtos.Response> expireOverdue() {
+        LocalDate today = LocalDate.now();
+        List<Subscription> paid = subscriptionRepository.findByStatusAndPeriodEndBefore(
+                SubscriptionStatus.PAID, today);
+        List<SubscriptionDtos.Response> expired = new java.util.ArrayList<>();
+        for (Subscription subscription : paid) {
+            if (!subscription.isPeriodExpired(today)) {
+                continue;
+            }
+            UUID tenantId = subscription.getTenantId();
+            UUID subscriptionId = subscription.getId();
+            subscription.setStatus(SubscriptionStatus.EXPIRED);
+            subscription.setUpdatedBy(TenantContext.getUserId());
+            subscriptionRepository.save(subscription);
+            Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+            if (tenant != null && tenant.getStatus() == TenantStatus.ACTIVE) {
+                tenant.setStatus(TenantStatus.EXPIRED);
+                tenantRepository.save(tenant);
+            }
+            auditService.record("SUBSCRIPTION_EXPIRED", "Subscription", subscriptionId.toString(),
+                    Map.of("tenantId", tenantId.toString()));
+            expired.add(toResponse(subscription));
+        }
+        return expired;
     }
 
     private Subscription load(UUID id) {

@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -70,5 +71,12 @@ public class SubscriptionController {
             @Valid @RequestBody SubscriptionDtos.ReviewRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Subscription reviewed",
                 subscriptionService.review(id, request)));
+    }
+
+    @PostMapping("/expire-overdue")
+    @PreAuthorize("hasRole('ERP_OWNER')")
+    public ResponseEntity<ApiResponse<List<SubscriptionDtos.Response>>> expireOverdue() {
+        return ResponseEntity.ok(ApiResponse.ok("Expired subscriptions updated",
+                subscriptionService.expireOverdue()));
     }
 }

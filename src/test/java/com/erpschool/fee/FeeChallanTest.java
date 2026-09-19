@@ -3,7 +3,10 @@ package com.erpschool.fee;
 import com.erpschool.fee.entity.FeeChallan;
 import org.junit.jupiter.api.Test;
 
+import com.erpschool.fee.entity.ChallanStatus;
+
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,5 +30,16 @@ class FeeChallanTest {
         c.setDiscountAmount(new BigDecimal("5000"));
         c.recomputeTotal();
         assertThat(c.getTotalPayable()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void unpaidChallanIsPastDueAfterDueDate() {
+        FeeChallan c = new FeeChallan();
+        c.setStatus(ChallanStatus.UNPAID);
+        c.setDueDate(LocalDate.of(2026, 9, 1));
+        assertThat(c.isPastDue(LocalDate.of(2026, 9, 2))).isTrue();
+        assertThat(c.isPastDue(LocalDate.of(2026, 9, 1))).isFalse();
+        c.setStatus(ChallanStatus.PAID);
+        assertThat(c.isPastDue(LocalDate.of(2026, 9, 10))).isFalse();
     }
 }
