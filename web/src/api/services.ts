@@ -187,8 +187,12 @@ export const examApi = {
   publish: (sessionId: string) => api.post<ExamSession>(`${v1}/exams/sessions/${sessionId}/publish`),
   sessionResults: (sessionId: string) => api.get<ExamResult[]>(`${v1}/exams/sessions/${sessionId}/results`),
   studentResult: (sessionId: string, studentId: string) =>
-    api.get<{ session: ExamSession; subjects: ExamResult[]; totalMarks: number; obtainedMarks: number; percentage: number; grade: string; passStatus: string }>(
+    api.get<{ session: ExamSession; subjects: ExamResult[]; totalMarks: number; obtainedMarks: number; percentage: number; grade: string; passStatus: string; rollNumber?: string; admissionNumber?: string; studentId?: string }>(
       `${v1}/exams/sessions/${sessionId}/students/${studentId}`,
+    ),
+  byRoll: (sessionId: string, rollNumber: string) =>
+    api.get<{ session: ExamSession; subjects: ExamResult[]; totalMarks: number; obtainedMarks: number; percentage: number; grade: string; passStatus: string; rollNumber?: string; admissionNumber?: string; studentId?: string }>(
+      `${v1}/exams/sessions/${sessionId}/results/by-roll?rollNumber=${encodeURIComponent(rollNumber)}`,
     ),
 };
 

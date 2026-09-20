@@ -357,3 +357,33 @@ export function Bars({ items }: { items: { label: string; value: number; max?: n
     </div>
   );
 }
+
+export function Donut({ value, max, label }: { value: number; max: number; label: string }) {
+  const safeMax = Math.max(1, max);
+  const pct = Math.min(100, (value / safeMax) * 100);
+  const r = 36;
+  const c = 2 * Math.PI * r;
+  const dash = (pct / 100) * c;
+  return (
+    <div className="donut">
+      <svg viewBox="0 0 88 88" width="88" height="88" aria-hidden>
+        <circle cx="44" cy="44" r={r} fill="none" stroke="var(--accent-2)" strokeWidth="10" />
+        <circle
+          cx="44"
+          cy="44"
+          r={r}
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth="10"
+          strokeDasharray={`${dash} ${c}`}
+          strokeLinecap="round"
+          transform="rotate(-90 44 44)"
+        />
+      </svg>
+      <div>
+        <b>{value}</b>
+        <span>{label}</span>
+      </div>
+    </div>
+  );
+}

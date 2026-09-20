@@ -13,4 +13,6 @@ public interface TimetableSlotRepository extends JpaRepository<TimetableSlot, UU
             UUID tenantId, UUID teacherUserId);
     List<TimetableSlot> findByTenantIdAndTeacherUserIdAndDayOfWeek(
             UUID tenantId, UUID teacherUserId, int dayOfWeek);
+
+    List<TimetableSlot> findByTenantId(UUID tenantId);
 }

@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
@@ -74,6 +75,13 @@ public class ExamController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> student(
             @PathVariable UUID id, @PathVariable UUID studentId) {
         return ResponseEntity.ok(ApiResponse.ok(examService.studentResult(id, studentId)));
+    }
+
+    @GetMapping("/sessions/{id}/results/by-roll")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> byRoll(
+            @PathVariable UUID id, @RequestParam String rollNumber) {
+        return ResponseEntity.ok(ApiResponse.ok(examService.studentResultByRoll(id, rollNumber)));
     }
 
     @Getter

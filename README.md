@@ -115,9 +115,14 @@ Seed data is created on first boot (`app.seed.enabled=true`).
 | Parent | `GVS-PAR-0001` | `ChangeMe@123` |
 | Student | `GVS-STU-0001` | `ChangeMe@123` |
 
-Demo school **GVS** also seeds: Main campus, Grade 5-A, Mathematics, Monday 08:00 lecture, student↔parent link, fee structure, paid subscription.
+Demo school **GVS** seeds (idempotent on boot when `app.seed.enabled=true`):
 
-Demo school users have `mustChangePassword=true`. Generated accounts return the temporary password **once**.
+- 2 campuses (Main + Canal), Grade 5/6 with sections A/B, 5 subjects
+- ~50 students (roll numbers `1`–`50`), 14 teachers, multiple parents (demo parent has two children)
+- Timetable, homework, lecture attendance, monthly fee challans, announcements, calendar
+- Published **Mid-Term 2026** results — search by roll number on Marks & results (`GET /api/v1/exams/sessions/{id}/results/by-roll?rollNumber=1`). Unknown rolls return **No result found** (404), not a blank page or 500.
+
+Demo school users have `mustChangePassword=false` so portals are immediately usable. Password can still be changed from **Password** in the sidebar. Generated accounts still return a temporary password **once**.
 
 ## API map (`/api/v1`)
 

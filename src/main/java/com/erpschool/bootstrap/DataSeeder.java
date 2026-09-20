@@ -97,9 +97,15 @@ public class DataSeeder implements ApplicationRunner {
 
     private void seedDemoUser(Tenant tenant, UserRole role, String first, String last, String email, String password) {
         if (userRepository.existsByEmailIgnoreCase(email)) {
+            userRepository.findByEmailIgnoreCase(email).ifPresent(existing -> {
+                if (existing.isMustChangePassword()) {
+                    existing.setMustChangePassword(false);
+                    userRepository.save(existing);
+                }
+            });
             return;
         }
-        userService.createInternal(tenant.getId(), tenant.getCode(), role, first, last, email, null, password, true);
+        userService.createInternal(tenant.getId(), tenant.getCode(), role, first, last, email, null, password, false);
         log.info("Seeded demo {} for school {}", role, tenant.getCode());
     }
 }

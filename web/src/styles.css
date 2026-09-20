@@ -172,7 +172,23 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 18px; box-shadow: var(--shadow);
+  transition: transform .16s ease, box-shadow .16s ease;
 }
+.card:hover { transform: translateY(-2px); }
+.hero-strip {
+  display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap;
+  margin-bottom: 16px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--forest) 18%, var(--card)), var(--card));
+}
+.hero-strip h1 { margin: 4px 0 6px; }
+.hero-strip p { margin: 0; color: var(--muted); }
+.chart-card h3 { margin-top: 0; }
+.donut { display: flex; gap: 12px; align-items: center; }
+.donut b { display: block; font-size: 28px; font-family: Fraunces, serif; }
+.donut span { color: var(--muted); font-size: 13px; }
+.result-search { margin-bottom: 16px; }
+.stat { position: relative; overflow: hidden; }
 .stat .label { color: var(--muted); font-size: 13px; }
 .stat b { display: block; font-size: 28px; font-family: Fraunces, serif; margin-top: 8px; }
 

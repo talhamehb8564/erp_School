@@ -28,7 +28,7 @@ export default function SchoolApp() {
   if (locked && loc.pathname !== "/app/billing") return <Locked />;
 
   const role = user.role;
-  const items = SCHOOL_NAV.filter((i) => i.to !== "/app/password" && i.roles.includes(role));
+  const items = SCHOOL_NAV.filter((i) => i.roles.includes(role));
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
     applyTheme(next);

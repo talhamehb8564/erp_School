@@ -6,7 +6,7 @@ import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
 import { applyTheme, readTheme, type Theme } from "../lib/theme";
 import { ApiError } from "../api/client";
-import { Badge, Button, Empty, Field, FileLink, Form, Modal, Pager, QueryState, Search, Stat, Table, useAsync, useDebounced } from "../ui/kit";
+import { Badge, Bars, Button, Donut, Empty, Field, FileLink, Form, Modal, Pager, QueryState, Search, Stat, Table, useAsync, useDebounced } from "../ui/kit";
 import type { Tenant, TenantStatus } from "../lib/types";
 
 export default function OwnerApp() {
@@ -77,6 +77,7 @@ export function OwnerHome() {
     <>
       <div className="page-title">
         <div>
+          <p className="kicker">SaaS console</p>
           <h1>Platform</h1>
           <p>Live counts from PostgreSQL via /dashboard/platform</p>
         </div>
@@ -89,11 +90,27 @@ export function OwnerHome() {
         </Button>
       </div>
       <QueryState status={dash} label="platform dashboard">
+      <div className="hero-strip card">
+        <div>
+          <p className="kicker">Network health</p>
+          <h2 style={{ margin: "4px 0 6px" }}>Schools on this platform</h2>
+          <p>Verify payment proofs, then turn a school subscription ON or OFF.</p>
+        </div>
+        <Donut value={Number(dash.data?.schools || 0)} max={Math.max(Number(dash.data?.schools || 1), 1)} label="Schools" />
+      </div>
       <div className="grid stats">
         <Stat label="Schools" value={dash.data?.schools} loading={dash.loading} />
         <Stat label="Users" value={dash.data?.users} loading={dash.loading} />
         <Stat label="Proofs to review" value={pending.length} loading={subs.loading} />
         <Stat label="Listed tenants" value={schools.data?.totalElements} loading={schools.loading} />
+      </div>
+      <div className="card chart-card" style={{ marginTop: 16 }}>
+        <h3>Network</h3>
+        <Bars items={[
+          { label: "Schools", value: Number(dash.data?.schools || 0) },
+          { label: "Users", value: Number(dash.data?.users || 0) },
+          { label: "Proofs", value: pending.length },
+        ]} />
       </div>
       </QueryState>
       <div className="card" style={{ marginTop: 16 }}>

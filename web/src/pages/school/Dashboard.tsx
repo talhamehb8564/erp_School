@@ -1,6 +1,6 @@
 import { useSession } from "../../lib/session";
 import { portalApi, reportApi } from "../../api/services";
-import { Badge, Empty, QueryState, Stat, Table, useAsync } from "../../ui/kit";
+import { Badge, Bars, Donut, Empty, QueryState, Stat, Table, useAsync } from "../../ui/kit";
 import { money, pretty } from "../../lib/format";
 import type { StudentUser } from "../../lib/types";
 import ChildSwitch from "./ChildSwitch";
@@ -17,29 +17,42 @@ export default function Dashboard() {
 function StaffDash() {
   const d = useAsync(() => reportApi.schoolDashboard());
   const m = d.data || {};
+  const students = Number(m.students || 0);
+  const active = Number(m.activeStudents || 0);
+  const teachers = Number(m.teachers || 0);
+  const unpaid = Number(m.unpaidChallans || 0);
+  const parents = Number(m.parents || 0);
   return (
     <>
-      <div className="page-title">
+      <div className="hero-strip card">
         <div>
+          <p className="kicker">Live school census</p>
           <h1>School dashboard</h1>
-          <p>Live aggregates from /api/v1/dashboard/school</p>
+          <p>Aggregates from /api/v1/dashboard/school — not a static template.</p>
         </div>
+        <Donut value={active} max={Math.max(students, 1)} label="Active students" />
       </div>
       <QueryState status={d} label="school dashboard">
         <div className="grid stats">
-          <Stat label="Students" value={m.students} loading={d.loading} />
-          <Stat label="Active students" value={m.activeStudents} loading={d.loading} />
-          <Stat label="Teachers" value={m.teachers} loading={d.loading} />
-          <Stat label="Unpaid challans" value={m.unpaidChallans} loading={d.loading} />
+          <Stat label="Students" value={students} loading={d.loading} />
+          <Stat label="Active students" value={active} loading={d.loading} />
+          <Stat label="Teachers" value={teachers} loading={d.loading} />
+          <Stat label="Unpaid challans" value={unpaid} loading={d.loading} />
         </div>
         <div className="grid two" style={{ marginTop: 16 }}>
-          <div className="card">
-            <h3>Operations</h3>
-            <p>Parents {m.parents} · Pending fee proofs {m.pendingFeeProofs} · Active users {m.activeUsers}</p>
+          <div className="card chart-card">
+            <h3>Census</h3>
+            <Bars items={[
+              { label: "Students", value: students },
+              { label: "Teachers", value: teachers },
+              { label: "Parents", value: parents },
+              { label: "Unpaid", value: unpaid },
+            ]} />
           </div>
           <div className="card">
-            <h3>Today</h3>
-            <p>Use the sidebar to mark attendance, publish results, or generate monthly challans. Every action writes to Neon.</p>
+            <h3>Operations</h3>
+            <p>Pending fee proofs {m.pendingFeeProofs ?? 0} · Active users {m.activeUsers ?? 0}</p>
+            <p className="hint">Mark attendance, search results by roll number, or generate monthly challans. Every action writes to Neon.</p>
           </div>
         </div>
       </QueryState>

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { academicApi, attendanceApi, examApi, fileApi, homeworkApi, studentApi } from "../../api/services";
+import { ApiError } from "../../api/client";
 import { useLookups } from "../../lib/lookups";
 import { dayName, fmtDate, pretty, today } from "../../lib/format";
 import { useSession } from "../../lib/session";
@@ -222,11 +223,53 @@ export function ExamsPage() {
   const mine = useAsync(() => (sessionId && sid ? examApi.studentResult(sessionId, sid) : Promise.resolve(null)), [sessionId, sid]);
   const dir = useStudentDirectory(user?.role !== "STUDENT" && user?.role !== "PARENT");
   const [mark, setMark] = useState({ studentId: "", subjectId: "", totalMarks: "100", obtainedMarks: "0" });
+  const [roll, setRoll] = useState("");
+  const [rollHit, setRollHit] = useState<Awaited<ReturnType<typeof examApi.byRoll>> | null>(null);
+  const [rollMiss, setRollMiss] = useState("");
+
+  useEffect(() => {
+    if (sessionId || !sessions.data?.length) return;
+    const published = sessions.data.find((s) => s.published) || sessions.data[0];
+    setSessionId(published.id);
+  }, [sessions.data, sessionId]);
 
   return (
     <>
       <div className="page-title"><div><h1>Marks & results</h1><p>Offline exam sessions — published results only for families</p></div></div>
       {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
+      <div className="card result-search">
+        <p className="kicker">Result lookup</p>
+        <h3 style={{ marginTop: 4 }}>Search by roll number</h3>
+        <p className="hint">Enter a student roll number for the selected session. Invalid rolls show “No result found”.</p>
+        <Form busyLabel="Searching…" onSubmit={async () => {
+          setRollHit(null);
+          setRollMiss("");
+          if (!sessionId) throw new Error("Select an exam session first.");
+          const q = roll.trim();
+          if (!q) throw new Error("Enter a roll number");
+          try {
+            setRollHit(await examApi.byRoll(sessionId, q));
+          } catch (e) {
+            if (e instanceof ApiError && (e.status === 404 || /no result found/i.test(e.message))) {
+              setRollMiss("No result found");
+              return;
+            }
+            throw e;
+          }
+        }}>
+          <div className="row">
+            <input className="search" placeholder="e.g. 1" value={roll} onChange={(e) => { setRoll(e.target.value); setRollMiss(""); }} />
+            <Button type="submit" kind="brass" loadingText="Searching…">Search</Button>
+          </div>
+        </Form>
+        {rollMiss ? <Empty title="No result found" hint={`No marks for roll number ${roll.trim() || "—"}.`} /> : null}
+        {rollHit ? (
+          <div style={{ marginTop: 14 }}>
+            <p>Roll {rollHit.rollNumber || roll.trim()} · Grade {rollHit.grade} · {rollHit.percentage}% · {pretty(rollHit.passStatus)}</p>
+            <Table headers={["Subject", "Obtained", "Total", "Grade"]} rows={(rollHit.subjects || []).map((r) => [subjectName(r.subjectId), r.obtainedMarks, r.totalMarks, r.grade || "—"])} />
+          </div>
+        ) : null}
+      </div>
       {(user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? (
         <Form busyLabel="Creating…" onSubmit={async () => { await examApi.createSession({ name }); toast("ok", "Session created"); void sessions.reload(); }}>
           <div className="row">

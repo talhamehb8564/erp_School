@@ -25,6 +25,10 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 
     Optional<Student> findByTenantIdAndUserId(UUID tenantId, UUID userId);
 
+    Optional<Student> findFirstByTenantIdAndRollNumberIgnoreCase(UUID tenantId, String rollNumber);
+
+    List<Student> findByTenantId(UUID tenantId);
+
     long countByTenantId(UUID tenantId);
 
     long countByTenantIdAndStatus(UUID tenantId, StudentStatus status);

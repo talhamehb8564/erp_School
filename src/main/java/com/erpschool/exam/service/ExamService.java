@@ -305,6 +305,8 @@ public class ExamService {
 
         m.put("session", session);
         m.put("studentId", student.getId());
+        m.put("rollNumber", student.getRollNumber());
+        m.put("admissionNumber", student.getAdmissionNumber());
         m.put("subjects", rows);
         m.put("totalMarks", total);
         m.put("obtainedMarks", obtained);
@@ -319,6 +321,27 @@ public class ExamService {
         );
 
         return m;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> studentResultByRoll(UUID sessionId, String rollNumber) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        if (rollNumber == null || rollNumber.isBlank()) {
+            throw new BusinessException("Enter a roll number");
+        }
+        String roll = rollNumber.trim();
+        Student student = studentRepository.findFirstByTenantIdAndRollNumberIgnoreCase(tenantId, roll)
+                .orElseThrow(() -> new ResourceNotFoundException("No result found for roll number " + roll));
+        try {
+            Map<String, Object> summary = studentResult(sessionId, student.getId());
+            List<?> subjects = (List<?>) summary.get("subjects");
+            if (subjects == null || subjects.isEmpty()) {
+                throw new ResourceNotFoundException("No result found for roll number " + roll);
+            }
+            return summary;
+        } catch (ForbiddenException ex) {
+            throw new ResourceNotFoundException("No result found for roll number " + roll);
+        }
     }
 
     @Transactional(readOnly = true)

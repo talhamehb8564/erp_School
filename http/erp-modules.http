@@ -130,6 +130,10 @@ Authorization: Bearer {{accessToken}}
 GET {{base}}/api/v1/exams/sessions
 Authorization: Bearer {{accessToken}}
 
+### Result by roll number (valid: 1, invalid: 999 → No result found)
+GET {{base}}/api/v1/exams/sessions/{{sessionId}}/results/by-roll?rollNumber=1
+Authorization: Bearer {{accessToken}}
+
 ### Calendar
 GET {{base}}/api/v1/calendar/events
 Authorization: Bearer {{accessToken}}

@@ -16,4 +16,6 @@ public interface StudentAttendanceRepository extends JpaRepository<StudentAttend
     long countByTenantIdAndStudentIdAndAttendanceDateBetween(UUID tenantId, UUID studentId, LocalDate from, LocalDate to);
     Optional<StudentAttendance> findByTenantIdAndTimetableSlotIdAndStudentIdAndAttendanceDate(
             UUID tenantId, UUID slotId, UUID studentId, LocalDate date);
+
+    long countByTenantId(UUID tenantId);
 }
