@@ -38,8 +38,8 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
         <h1>{owner ? "ERP Owner" : ROLE_LABEL[expected]}</h1>
         <p className="hint">
           {owner
-            ? "Platform access for school subscriptions and verification."
-            : "Authenticate against the live /api/v1/auth/login endpoint."}
+            ? "Sign in with erp.owner or owner@erpschool.local against /api/v1/auth/login."
+            : "Use the generated username (GVS-ADM-0001) or the account email. Same live /api/v1/auth/login endpoint."}
         </p>
         <Form
           busyLabel="Signing in…"
@@ -49,7 +49,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
             nav(homeFor(u), { replace: true });
           }}
         >
-          <Field label="Username">
+          <Field label="Username or email">
             <input value={username} autoComplete="username" onChange={(e) => setUsername(e.target.value)} required />
           </Field>
           <Field label="Password">

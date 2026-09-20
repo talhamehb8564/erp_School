@@ -29,18 +29,33 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("""
             SELECT u FROM User u
             WHERE u.tenantId = :tenantId
-              AND (:role IS NULL OR u.role = :role)
-              AND (:status IS NULL OR u.status = :status)
-              AND (:q IS NULL OR LOWER(u.username) LIKE LOWER(CONCAT('%', :q, '%'))
-                   OR LOWER(u.firstName) LIKE LOWER(CONCAT('%', :q, '%'))
-                   OR LOWER(u.lastName) LIKE LOWER(CONCAT('%', :q, '%'))
-                   OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :q, '%')))
+              AND (:rolePresent = false OR u.role = :role)
+              AND (:statusPresent = false OR u.status = :status)
             """)
     Page<User> searchByTenant(@Param("tenantId") UUID tenantId,
+                              @Param("rolePresent") boolean rolePresent,
                               @Param("role") UserRole role,
+                              @Param("statusPresent") boolean statusPresent,
                               @Param("status") UserStatus status,
-                              @Param("q") String q,
                               Pageable pageable);
+
+    @Query("""
+            SELECT u FROM User u
+            WHERE u.tenantId = :tenantId
+              AND (:rolePresent = false OR u.role = :role)
+              AND (:statusPresent = false OR u.status = :status)
+              AND (LOWER(u.username) LIKE :q
+                   OR LOWER(u.firstName) LIKE :q
+                   OR LOWER(u.lastName) LIKE :q
+                   OR LOWER(COALESCE(u.email, '')) LIKE :q)
+            """)
+    Page<User> searchByTenantQuery(@Param("tenantId") UUID tenantId,
+                                   @Param("rolePresent") boolean rolePresent,
+                                   @Param("role") UserRole role,
+                                   @Param("statusPresent") boolean statusPresent,
+                                   @Param("status") UserStatus status,
+                                   @Param("q") String q,
+                                   Pageable pageable);
 
     long countByTenantId(UUID tenantId);
 

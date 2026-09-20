@@ -194,17 +194,27 @@ public class UserService {
                 requestedTenantId
         );
 
-        Page<UserResponse> page = userRepository
-                .searchByTenant(
-                        tenantId,
-                        role,
-                        status,
-                        blankToNull(q),
-                        pageable
-                )
-                .map(UserResponse::from);
+        boolean rolePresent = role != null;
+        boolean statusPresent = status != null;
+        UserRole roleBind = rolePresent ? role : UserRole.TEACHER;
+        UserStatus statusBind = statusPresent ? status : UserStatus.ACTIVE;
+        String term = blankToNull(q);
+        Page<User> page;
+        if (term == null) {
+            page = userRepository.searchByTenant(
+                    tenantId, rolePresent, roleBind, statusPresent, statusBind, pageable);
+        } else {
+            page = userRepository.searchByTenantQuery(
+                    tenantId,
+                    rolePresent,
+                    roleBind,
+                    statusPresent,
+                    statusBind,
+                    "%" + term.toLowerCase() + "%",
+                    pageable);
+        }
 
-        return PageResponse.from(page);
+        return PageResponse.from(page.map(UserResponse::from));
     }
 
     @Transactional(readOnly = true)

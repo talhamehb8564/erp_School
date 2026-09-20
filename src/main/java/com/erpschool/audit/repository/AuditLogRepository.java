@@ -13,15 +13,22 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
     Page<AuditLog> findByTenantIdOrderByCreatedAtDesc(UUID tenantId, Pageable pageable);
 
+    /**
+     * Avoid {@code :tenantId IS NULL OR a.tenantId = :tenantId}. A null UUID bind
+     * becomes bytea on PostgreSQL ({@code uuid = bytea} / {@code lower(bytea)}).
+     */
     @Query("""
             SELECT a FROM AuditLog a
-            WHERE (:tenantId IS NULL OR a.tenantId = :tenantId)
-              AND (:action IS NULL OR a.action = :action)
-              AND (:entityType IS NULL OR a.entityType = :entityType)
+            WHERE (:tenantPresent = false OR a.tenantId = :tenantId)
+              AND (:actionPresent = false OR a.action = :action)
+              AND (:entityPresent = false OR a.entityType = :entityType)
             ORDER BY a.createdAt DESC
             """)
-    Page<AuditLog> search(@Param("tenantId") UUID tenantId,
+    Page<AuditLog> search(@Param("tenantPresent") boolean tenantPresent,
+                          @Param("tenantId") UUID tenantId,
+                          @Param("actionPresent") boolean actionPresent,
                           @Param("action") String action,
+                          @Param("entityPresent") boolean entityPresent,
                           @Param("entityType") String entityType,
                           Pageable pageable);
 }

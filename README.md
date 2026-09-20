@@ -105,15 +105,17 @@ Seed data is created on first boot (`app.seed.enabled=true`).
 
 ## Demo logins (after first successful boot)
 
-| Role | Username | Password |
-| --- | --- | --- |
-| SaaS / ERP Owner | `erp.owner` | `Owner@12345` |
-| School Admin | `GVS-ADM-0001` | `ChangeMe@123` |
-| Principal | `GVS-PRN-0001` | `ChangeMe@123` |
-| Teacher | `GVS-TCH-0001` | `ChangeMe@123` |
-| Account Officer | `GVS-ACC-0001` | `ChangeMe@123` |
-| Parent | `GVS-PAR-0001` | `ChangeMe@123` |
-| Student | `GVS-STU-0001` | `ChangeMe@123` |
+Login accepts **username or email**. School users are generated as `GVS-ADM-0001` (not `admin`).
+
+| Role | Username | Email | Password |
+| --- | --- | --- | --- |
+| SaaS / ERP Owner | `erp.owner` | `owner@erpschool.local` | `Owner@12345` |
+| School Admin | `GVS-ADM-0001` | `admin@greenvalley.school` | `ChangeMe@123` |
+| Principal | `GVS-PRN-0001` | `principal@greenvalley.school` | `ChangeMe@123` |
+| Teacher | `GVS-TCH-0001` | `teacher@greenvalley.school` | `ChangeMe@123` |
+| Account Officer | `GVS-ACC-0001` | `accounts@greenvalley.school` | `ChangeMe@123` |
+| Parent | `GVS-PAR-0001` | `parent@greenvalley.school` | `ChangeMe@123` |
+| Student | `GVS-STU-0001` | `student@greenvalley.school` | `ChangeMe@123` |
 
 Demo school **GVS** seeds (idempotent on boot when `app.seed.enabled=true`):
 

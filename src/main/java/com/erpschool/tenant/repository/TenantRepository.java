@@ -19,13 +19,26 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
 
     Page<Tenant> findByStatus(TenantStatus status, Pageable pageable);
 
+    /**
+     * No LOWER()/CONCAT() on bind parameters. Hibernate 6 + PostgreSQL infers
+     * a null {@code :q} as bytea, which produces {@code function lower(bytea) does not exist}.
+     * Search text is applied only to varchar columns; the like-pattern is built in Java.
+     */
     @Query("""
             SELECT t FROM Tenant t
-            WHERE (:status IS NULL OR t.status = :status)
-              AND (:q IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%'))
-                   OR LOWER(t.code) LIKE LOWER(CONCAT('%', :q, '%')))
+            WHERE (:statusPresent = false OR t.status = :status)
             """)
-    Page<Tenant> search(@Param("status") TenantStatus status,
+    Page<Tenant> listFiltered(@Param("statusPresent") boolean statusPresent,
+                              @Param("status") TenantStatus status,
+                              Pageable pageable);
+
+    @Query("""
+            SELECT t FROM Tenant t
+            WHERE (:statusPresent = false OR t.status = :status)
+              AND (LOWER(t.name) LIKE :q OR LOWER(t.code) LIKE :q)
+            """)
+    Page<Tenant> search(@Param("statusPresent") boolean statusPresent,
+                        @Param("status") TenantStatus status,
                         @Param("q") String q,
                         Pageable pageable);
 }

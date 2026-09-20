@@ -128,6 +128,24 @@ class AuthServiceTest {
     }
 
     @Test
+    void loginSucceedsWithEmailAsWellAsUsername() {
+        teacher.setEmail("teacher@greenvalley.school");
+        when(userRepository.findByUsernameIgnoreCase("teacher@greenvalley.school")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("teacher@greenvalley.school")).thenReturn(Optional.of(teacher));
+        Tenant tenant = new Tenant();
+        tenant.setId(tenantId);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AuthResponse response = authService.login("teacher@greenvalley.school", "ChangeMe@123", null);
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(response.getUser().getUsername()).isEqualTo("GVS-TCH-0001");
+    }
+
+    @Test
     void loginRejectedForBadPassword() {
         when(userRepository.findByUsernameIgnoreCase("GVS-TCH-0001")).thenReturn(Optional.of(teacher));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));

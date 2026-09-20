@@ -93,8 +93,16 @@ public class TenantService {
 
     @Transactional(readOnly = true)
     public PageResponse<TenantResponse> list(TenantStatus status, String q, Pageable pageable) {
+        boolean statusPresent = status != null;
+        TenantStatus statusBind = statusPresent ? status : TenantStatus.ACTIVE;
+        String term = trimToNull(q);
+        if (term == null) {
+            return PageResponse.from(
+                    tenantRepository.listFiltered(statusPresent, statusBind, pageable).map(TenantResponse::from));
+        }
+        String pattern = "%" + term.toLowerCase() + "%";
         return PageResponse.from(
-                tenantRepository.search(status, trimToNull(q), pageable).map(TenantResponse::from));
+                tenantRepository.search(statusPresent, statusBind, pattern, pageable).map(TenantResponse::from));
     }
 
     @Transactional(readOnly = true)

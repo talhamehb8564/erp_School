@@ -41,7 +41,17 @@ public class AuditLogController {
         UUID scopedTenant = TenantContext.isErpOwner()
                 ? tenantId
                 : TenantGuard.requireTenantId(tenantId);
-        var page = auditLogRepository.search(scopedTenant, emptyToNull(action), emptyToNull(entityType), pageable)
+        boolean tenantPresent = scopedTenant != null;
+        String actionValue = emptyToNull(action);
+        String entityValue = emptyToNull(entityType);
+        var page = auditLogRepository.search(
+                        tenantPresent,
+                        tenantPresent ? scopedTenant : UUID.fromString("00000000-0000-0000-0000-000000000000"),
+                        actionValue != null,
+                        actionValue == null ? "" : actionValue,
+                        entityValue != null,
+                        entityValue == null ? "" : entityValue,
+                        pageable)
                 .map(AuditLogResponse::from);
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
     }

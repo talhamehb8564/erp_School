@@ -58,9 +58,13 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(String username, String password, HttpServletRequest request) {
-        User user = userRepository.findByUsernameIgnoreCase(username.trim()).orElse(null);
+        String identifier = username == null ? "" : username.trim();
+        User user = userRepository.findByUsernameIgnoreCase(identifier).orElse(null);
+        if (user == null && !identifier.isEmpty()) {
+            user = userRepository.findByEmailIgnoreCase(identifier).orElse(null);
+        }
         if (user == null) {
-            auditService.record(null, null, username, null, AuditService.LOGIN_FAILED,
+            auditService.record(null, null, identifier, null, AuditService.LOGIN_FAILED,
                     "User", null, Map.of("reason", "unknown_user"));
             throw new UnauthorizedException("Invalid username or password");
         }
