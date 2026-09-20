@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import { notificationApi } from "../api/services";
-import { LookupsProvider } from "../lib/lookups";
+import { LookupsProvider, useLookups } from "../lib/lookups";
 import { initials } from "../lib/format";
 import { useSession } from "../lib/session";
 import { applyTheme, readTheme, type Theme } from "../lib/theme";
 import { SCHOOL_NAV } from "../lib/nav";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
-import { Button } from "../ui/kit";
+import { Button, ErrorBox } from "../ui/kit";
 
 export default function SchoolApp() {
   const { user, tenant, locked, logout } = useSession();
@@ -73,10 +73,21 @@ export default function SchoolApp() {
             </div>
           </header>
           <div className="content">
+            <LookupsAlert />
             <Outlet />
           </div>
         </div>
       </div>
     </LookupsProvider>
+  );
+}
+
+function LookupsAlert() {
+  const { error, reload, classes, subjects } = useLookups();
+  if (!error || classes.length || subjects.length) return null;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <ErrorBox error={error} onRetry={() => void reload()} title="Unable to load classes and subjects" />
+    </div>
   );
 }

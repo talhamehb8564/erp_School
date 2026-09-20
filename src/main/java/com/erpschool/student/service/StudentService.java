@@ -168,7 +168,19 @@ public class StudentService {
         } else {
             page = studentRepository.findByTenantId(tenantId, pageable);
         }
-        return PageResponse.from(page.map(s -> StudentDtos.from(s, loadUser(s.getUserId()))));
+        Map<UUID, UserResponse> users = usersById(page.getContent());
+        List<StudentDtos.Response> content = page.getContent().stream()
+                .map(s -> StudentDtos.from(s, users.get(s.getUserId())))
+                .toList();
+        return PageResponse.<StudentDtos.Response>builder()
+                .content(content)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .first(page.isFirst())
+                .last(page.isLast())
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -197,9 +209,7 @@ public class StudentService {
         }
         Map<UUID, Student> students = studentRepository.findAllById(studentIds).stream()
                 .collect(Collectors.toMap(Student::getId, Function.identity()));
-        List<UUID> userIds = students.values().stream().map(Student::getUserId).filter(Objects::nonNull).toList();
-        Map<UUID, UserResponse> users = userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, UserResponse::from));
+        Map<UUID, UserResponse> users = usersById(students.values().stream().toList());
         return studentIds.stream()
                 .map(students::get)
                 .filter(Objects::nonNull)
@@ -230,6 +240,15 @@ public class StudentService {
         s.setUpdatedBy(TenantContext.getUserId());
         s = studentRepository.save(s);
         return StudentDtos.from(s, loadUser(s.getUserId()));
+    }
+
+    private Map<UUID, UserResponse> usersById(List<Student> students) {
+        List<UUID> userIds = students.stream().map(Student::getUserId).filter(Objects::nonNull).distinct().toList();
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, UserResponse::from));
     }
 
     private UserResponse loadUser(UUID userId) {

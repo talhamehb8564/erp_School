@@ -1,7 +1,8 @@
 import { useSession } from "../../lib/session";
-import { portalApi, reportApi, studentApi } from "../../api/services";
+import { portalApi, reportApi } from "../../api/services";
 import { Badge, Empty, QueryState, Stat, Table, useAsync } from "../../ui/kit";
 import { money, pretty } from "../../lib/format";
+import type { StudentUser } from "../../lib/types";
 import ChildSwitch from "./ChildSwitch";
 
 export default function Dashboard() {
@@ -101,23 +102,21 @@ function AccountDash() {
 function ParentDash() {
   const { childId } = useSession();
   const d = useAsync(() => portalApi.parent());
-  const kids = useAsync(() => studentApi.children());
+  const kids = (d.data?.children as StudentUser[]) || [];
   const all = (d.data?.fees as { studentId?: string; challanNumber: string; totalPayable: number; status: string }[]) || [];
   const fees = childId ? all.filter((f) => f.studentId === childId) : all;
   return (
     <>
       <div className="page-title"><div><h1>Family</h1><p>One parent login, many children</p></div></div>
-      <QueryState status={kids} label="children">
-        <ChildSwitch childrenList={kids.data || []} />
-      </QueryState>
-      <div className="card">
-        <h3>Fee challans</h3>
-        <QueryState status={d} label="fee challans">
+      <QueryState status={d} label="family dashboard">
+        <ChildSwitch childrenList={kids} />
+        <div className="card">
+          <h3>Fee challans</h3>
           {!fees.length ? <Empty title="No challans" /> : (
             <Table headers={["Challan", "Amount", "Status"]} rows={fees.map((f) => [f.challanNumber, money(f.totalPayable), pretty(f.status)])} />
           )}
-        </QueryState>
-      </div>
+        </div>
+      </QueryState>
     </>
   );
 }

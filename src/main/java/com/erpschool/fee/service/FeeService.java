@@ -4,6 +4,7 @@ import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.service.DocumentSequenceService;
 import com.erpschool.common.util.TenantGuard;
+import com.erpschool.fee.entity.ChallanCharge;
 import com.erpschool.fee.entity.ChallanStatus;
 import com.erpschool.fee.entity.FeeChallan;
 import com.erpschool.fee.entity.FeePaymentProof;
@@ -33,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class FeeService {
@@ -161,17 +163,15 @@ public class FeeService {
     public List<Map<String, Object>> studentChallans(UUID studentId) {
         Student student = studentAccessService.requireStudent(studentId);
         LocalDate today = LocalDate.now();
-        return challanRepository.findByTenantIdAndStudentIdOrderByMonthDesc(student.getTenantId(), studentId)
-                .stream()
-                .map(c -> {
-                    if (c.isPastDue(today)) {
-                        c.setStatus(ChallanStatus.OVERDUE);
-                        c.setUpdatedBy(TenantContext.getUserId());
-                        challanRepository.save(c);
-                    }
-                    return toMap(c);
-                })
-                .toList();
+        List<FeeChallan> rows = challanRepository.findByTenantIdAndStudentIdOrderByMonthDesc(student.getTenantId(), studentId);
+        for (FeeChallan c : rows) {
+            if (c.isPastDue(today)) {
+                c.setStatus(ChallanStatus.OVERDUE);
+                c.setUpdatedBy(TenantContext.getUserId());
+                challanRepository.save(c);
+            }
+        }
+        return toMaps(rows);
     }
 
     @Transactional
@@ -274,7 +274,7 @@ public class FeeService {
                         "FeeChallan", challan.getId().toString()));
     }
 
-    private Map<String, Object> toMap(FeeChallan c) {
+    private Map<String, Object> toSummary(FeeChallan c) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", c.getId());
         m.put("studentId", c.getStudentId());
@@ -288,8 +288,32 @@ public class FeeService {
         m.put("additionalCharges", c.getAdditionalCharges());
         m.put("totalPayable", c.getTotalPayable());
         m.put("status", c.getStatus());
-        m.put("charges", chargeRepository.findByChallanId(c.getId()));
-        m.put("proofs", proofRepository.findByChallanIdOrderByCreatedAtDesc(c.getId()));
+        return m;
+    }
+
+    private List<Map<String, Object>> toMaps(List<FeeChallan> rows) {
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = rows.stream().map(FeeChallan::getId).toList();
+        Map<UUID, List<ChallanCharge>> charges = chargeRepository.findByChallanIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ChallanCharge::getChallanId));
+        Map<UUID, List<FeePaymentProof>> proofs = proofRepository.findByChallanIdInOrderByCreatedAtDesc(ids).stream()
+                .collect(Collectors.groupingBy(FeePaymentProof::getChallanId));
+        return rows.stream()
+                .map(c -> toMap(c, charges.getOrDefault(c.getId(), List.of()), proofs.getOrDefault(c.getId(), List.of())))
+                .toList();
+    }
+
+    private Map<String, Object> toMap(FeeChallan c) {
+        return toMap(c, chargeRepository.findByChallanId(c.getId()),
+                proofRepository.findByChallanIdOrderByCreatedAtDesc(c.getId()));
+    }
+
+    private Map<String, Object> toMap(FeeChallan c, List<ChallanCharge> charges, List<FeePaymentProof> proofs) {
+        Map<String, Object> m = toSummary(c);
+        m.put("charges", charges);
+        m.put("proofs", proofs);
         return m;
     }
 }
