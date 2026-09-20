@@ -1,6 +1,6 @@
 # ERP School — Multi-Tenant School ERP SaaS
 
-**Database + REST APIs only.** No frontend.
+Multi-tenant School ERP SaaS: Spring Boot `/api/v1` + the **Atrium** web app in `web/`.
 
 ## What is included
 
@@ -71,7 +71,17 @@ export DB_USERNAME="$PGUSER"
 export DB_PASSWORD="$PGPASSWORD"
 ```
 
-## Run
+## Web application
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Vite (port 5173) proxies `/api` to the Spring Boot server on 8080. See `web/README.md`.
+
+## Run the API
 
 Requirements: **JDK 21** and **Maven 3.9+**.
 

@@ -99,7 +99,32 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login("GVS-TCH-0001", "ChangeMe@123", null))
                 .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("suspended");
+                .hasMessageContaining("subscription is currently inactive");
+    }
+
+    @Test
+    void schoolAdminCanLoginWhenSchoolSuspendedToSubmitPaymentProof() {
+        User admin = new User();
+        admin.setId(UUID.randomUUID());
+        admin.setTenantId(tenantId);
+        admin.setUsername("GVS-ADM-0001");
+        admin.setPasswordHash(passwordEncoder.encode("ChangeMe@123"));
+        admin.setFirstName("School");
+        admin.setLastName("Admin");
+        admin.setRole(UserRole.SCHOOL_ADMIN);
+        admin.setStatus(UserStatus.ACTIVE);
+        when(userRepository.findByUsernameIgnoreCase("GVS-ADM-0001")).thenReturn(Optional.of(admin));
+        Tenant tenant = new Tenant();
+        tenant.setId(tenantId);
+        tenant.setStatus(TenantStatus.SUSPENDED);
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AuthResponse response = authService.login("GVS-ADM-0001", "ChangeMe@123", null);
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(response.getUser().getRole()).isEqualTo(UserRole.SCHOOL_ADMIN);
     }
 
     @Test

@@ -193,8 +193,16 @@ public class AuthService {
         }
         Tenant tenant = tenantRepository.findById(user.getTenantId())
                 .orElseThrow(() -> new UnauthorizedException("School account is not available"));
-        if (!tenant.allowsSchoolLogin()) {
-            throw new UnauthorizedException("School access is " + tenant.getStatus().name().toLowerCase());
+        if (tenant.allowsSchoolLogin()) {
+            return;
         }
+        /* School admin may authenticate while the tenant is locked so they can
+         * submit subscription payment proof. Module APIs stay blocked by
+         * SubscriptionGuardFilter. Other school roles cannot log in. */
+        if (user.getRole() == UserRole.SCHOOL_ADMIN) {
+            return;
+        }
+        throw new UnauthorizedException(
+                "Your school's ERP subscription is currently inactive. Please complete the payment and submit the payment proof to reactivate your account.");
     }
 }

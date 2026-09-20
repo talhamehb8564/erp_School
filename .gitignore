@@ -1,5 +1,7 @@
-# Node local API runner
+# Node
 local-api/node_modules/
+web/node_modules/
+web/dist/
 
 # Maven
 target/

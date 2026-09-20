@@ -150,6 +150,10 @@ public class HomeworkService {
                     .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
             return forClass(me.getClassId(), me.getSectionId());
         }
+        if (role == UserRole.SCHOOL_ADMIN || role == UserRole.PRINCIPAL || role == UserRole.ERP_OWNER) {
+            return homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId)
+                    .stream().map(this::toMap).toList();
+        }
         if (role == UserRole.PARENT) {
             return parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
                     .stream()
