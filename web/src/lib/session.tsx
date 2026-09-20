@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { authApi, tenantApi } from "../api/services";
-import { ApiError, clearTokens, getAccessToken, getRefreshToken, setTokens } from "../api/client";
+import { ApiError, LOCKED_EVENT, clearTokens, getAccessToken, getRefreshToken, setTokens } from "../api/client";
 import type { Role, Tenant, User } from "./types";
 import { LOCKED_STATUSES } from "./types";
 
@@ -32,6 +32,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   });
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
+  const [forcedLocked, setForcedLocked] = useState(false);
   const [childId, setChildIdState] = useState<string | null>(() => localStorage.getItem(CHILD_KEY));
 
   const persist = (next: User | null) => {
@@ -43,13 +44,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const loadTenant = async (u: User) => {
     if (u.role === "ERP_OWNER") {
       setTenant(null);
+      setForcedLocked(false);
       return;
     }
     try {
       const t = await tenantApi.me();
       setTenant(t);
-    } catch {
-      setTenant(null);
+      setForcedLocked(LOCKED_STATUSES.includes(t.status));
+    } catch (e) {
+      if (e instanceof ApiError && e.errorCode === "SUBSCRIPTION_INACTIVE") {
+        setForcedLocked(true);
+      } else {
+        setTenant(null);
+      }
     }
   };
 
@@ -64,10 +71,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const me = await authApi.me();
       persist(me);
       await loadTenant(me);
-    } catch {
-      clearTokens();
-      persist(null);
-      setTenant(null);
+    } catch (e) {
+      if (e instanceof ApiError && e.errorCode === "SUBSCRIPTION_INACTIVE") {
+        setForcedLocked(true);
+      } else {
+        clearTokens();
+        persist(null);
+        setTenant(null);
+        setForcedLocked(false);
+      }
     } finally {
       setLoading(false);
     }
@@ -77,21 +89,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    const onLocked = () => setForcedLocked(true);
+    window.addEventListener(LOCKED_EVENT, onLocked);
+    return () => window.removeEventListener(LOCKED_EVENT, onLocked);
+  }, []);
+
   const login = useCallback(async (username: string, password: string, expected?: Role) => {
     const payload = await authApi.login(username.trim(), password);
+    setTokens(payload.accessToken, payload.refreshToken);
     if (expected && payload.user.role !== expected) {
       try {
         await authApi.logout(payload.refreshToken);
       } catch {
         /* ignore */
       }
+      clearTokens();
+      persist(null);
+      setTenant(null);
       throw new ApiError(403, {
         success: false,
         errorCode: "WRONG_PORTAL",
         message: `This portal is for a different role. Your account is ${payload.user.role.replaceAll("_", " ").toLowerCase()}.`,
       });
     }
-    setTokens(payload.accessToken, payload.refreshToken);
     persist(payload.user);
     await loadTenant(payload.user);
     return payload.user;
@@ -107,6 +128,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     clearTokens();
     persist(null);
     setTenant(null);
+    setForcedLocked(false);
     localStorage.removeItem(CHILD_KEY);
     setChildIdState(null);
   }, []);
@@ -120,8 +142,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const locked = Boolean(
     user &&
       user.role !== "ERP_OWNER" &&
-      tenant &&
-      LOCKED_STATUSES.includes(tenant.status),
+      (forcedLocked || (tenant && LOCKED_STATUSES.includes(tenant.status))),
   );
 
   const value = useMemo<Session>(

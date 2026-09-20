@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { healthApi } from "../api/services";
 
 const roles = [
   { to: "/login/teacher", title: "Teacher", hint: "Lectures, attendance, homework and marks" },
@@ -10,6 +12,17 @@ const roles = [
 ];
 
 export default function Welcome() {
+  const [apiOk, setApiOk] = useState<boolean | null>(null);
+  const [apiMsg, setApiMsg] = useState("");
+  useEffect(() => {
+    void healthApi
+      .ping()
+      .then(() => setApiOk(true))
+      .catch((e) => {
+        setApiOk(false);
+        setApiMsg(e instanceof Error ? e.message : "API unreachable");
+      });
+  }, []);
   return (
     <div className="welcome">
       <section className="welcome-art">
@@ -34,6 +47,11 @@ export default function Welcome() {
         <div className="kicker">Choose your portal</div>
         <h2 className="serif" style={{ fontSize: 36, margin: "10px 0 8px" }}>Sign in with your real account</h2>
         <p className="hint">Each card uses the same backend authentication. You will land on the dashboard for your role.</p>
+        {apiOk === false ? (
+          <div className="error-box" style={{ textAlign: "left", marginBottom: 16 }}>
+            Spring Boot API is not reachable at /api/v1. {apiMsg}
+          </div>
+        ) : null}
         <div className="role-grid">
           {roles.map((r) => (
             <Link key={r.to} to={r.to} className="role-card">

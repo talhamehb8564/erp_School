@@ -30,12 +30,33 @@ function PublicOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function RoleGate({ roles, children }: { roles: Role[]; children: ReactNode }) {
+  const { user } = useSession();
+  if (!user || !roles.includes(user.role)) {
+    return <Navigate to={user ? homeFor(user) : "/"} replace />;
+  }
+  return <>{children}</>;
+}
+
+function HomeRedirect() {
+  const { user, loading } = useSession();
+  if (loading) return <div className="loading">Loading…</div>;
+  if (!user) return <Navigate to="/" replace />;
+  return <Navigate to={homeFor(user)} replace />;
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
       <Route path="/login/:role" element={<PublicOnly><LoginPage /></PublicOnly>} />
       <Route path="/admin" element={<PublicOnly><LoginPage owner /></PublicOnly>} />
+      <Route path="/dashboard" element={<HomeRedirect />} />
+      <Route path="/teacher" element={<HomeRedirect />} />
+      <Route path="/principal" element={<HomeRedirect />} />
+      <Route path="/student" element={<HomeRedirect />} />
+      <Route path="/parent" element={<HomeRedirect />} />
+      <Route path="/account" element={<HomeRedirect />} />
       <Route
         path="/admin/app"
         element={
@@ -59,24 +80,24 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="password" element={<ChangePassword />} />
-        <Route path="students" element={<StudentsPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="campuses" element={<CampusesPage />} />
-        <Route path="academics" element={<AcademicsPage />} />
-        <Route path="timetable" element={<TimetablePage />} />
-        <Route path="attendance" element={<AttendancePage />} />
-        <Route path="homework" element={<HomeworkPage />} />
-        <Route path="exams" element={<ExamsPage />} />
-        <Route path="fees" element={<FeesPage />} />
-        <Route path="salaries" element={<SalariesPage />} />
+        <Route path="students" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "ACCOUNT_OFFICER"]}><StudentsPage /></RoleGate>} />
+        <Route path="users" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><UsersPage /></RoleGate>} />
+        <Route path="campuses" element={<RoleGate roles={["SCHOOL_ADMIN"]}><CampusesPage /></RoleGate>} />
+        <Route path="academics" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><AcademicsPage /></RoleGate>} />
+        <Route path="timetable" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT", "PARENT"]}><TimetablePage /></RoleGate>} />
+        <Route path="attendance" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><AttendancePage /></RoleGate>} />
+        <Route path="homework" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><HomeworkPage /></RoleGate>} />
+        <Route path="exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><ExamsPage /></RoleGate>} />
+        <Route path="fees" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"]}><FeesPage /></RoleGate>} />
+        <Route path="salaries" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "TEACHER"]}><SalariesPage /></RoleGate>} />
         <Route path="announcements" element={<AnnouncementsPage />} />
         <Route path="calendar" element={<CalendarPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="billing" element={<BillingPage />} />
+        <Route path="reports" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "ACCOUNT_OFFICER"]}><ReportsPage /></RoleGate>} />
+        <Route path="settings" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER"]}><SettingsPage /></RoleGate>} />
+        <Route path="billing" element={<RoleGate roles={["SCHOOL_ADMIN"]}><BillingPage /></RoleGate>} />
         <Route path="notifications" element={<NotificationsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<HomeRedirect />} />
     </Routes>
   );
 }

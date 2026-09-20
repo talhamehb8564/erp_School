@@ -4,14 +4,27 @@ import { useLookups } from "../../lib/lookups";
 import { dayName, fmtDate, pretty, today } from "../../lib/format";
 import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
-import { Badge, Button, Empty, ErrorBox, Field, Form, Loading, Modal, Table, useAsync } from "../../ui/kit";
+import { Badge, Button, Empty, ErrorBox, Field, FileLink, Form, Loading, Modal, Table, studentLabel, useAsync } from "../../ui/kit";
 import ChildSwitch, { useActiveStudentId } from "./ChildSwitch";
-import type { AttendanceStatus } from "../../lib/types";
+import type { AttendanceStatus, StudentUser } from "../../lib/types";
+
+function useStudentDirectory(enabled: boolean) {
+  const list = useAsync(() => (enabled ? studentApi.list() : Promise.resolve(null)), [enabled]);
+  const map = new Map<string, StudentUser>();
+  for (const s of list.data?.content || []) map.set(s.id, s);
+  const nameOf = (id: string) => {
+    const s = map.get(id);
+    return s ? studentLabel(s) : id.slice(0, 8);
+  };
+  return { students: list.data?.content || [], nameOf };
+}
 
 export function AttendancePage() {
   const { user } = useSession();
   const teacher = user?.role === "TEACHER";
+  const staff = user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL" || teacher;
   const { classes, sections } = useLookups();
+  const dir = useStudentDirectory(staff);
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
   const slots = useAsync(() => {
@@ -64,7 +77,7 @@ export function AttendancePage() {
         <select className="search" value={slotId} onChange={(e) => setSlotId(e.target.value)}>
           <option value="">Select lecture</option>
           {(slots.data || []).map((s) => (
-            <option key={s.id} value={s.id}>{dayName(s.dayOfWeek)} {s.startTime} · {s.id.slice(0, 6)}</option>
+            <option key={s.id} value={s.id}>{dayName(s.dayOfWeek)} {s.startTime}</option>
           ))}
         </select>
         <input className="search" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -82,11 +95,11 @@ export function AttendancePage() {
           Save roll
         </Button>
       </div>
-      {roster.loading ? <Loading /> : (
+      {roster.loading ? <Loading /> : roster.error ? <ErrorBox error={roster.error} /> : (
         <Table
           headers={["Student", "Status"]}
           rows={(roster.data || []).map((st) => [
-            st.user?.fullName || st.admissionNumber || st.id.slice(0, 8),
+            dir.nameOf(st.id) !== st.id.slice(0, 8) ? dir.nameOf(st.id) : studentLabel(st),
             <select key={st.id} className="search" value={marks[st.id] || "PRESENT"} onChange={(e) => setMarks((m) => ({ ...m, [st.id]: e.target.value as AttendanceStatus }))}>
               {["PRESENT", "ABSENT", "LATE", "LEAVE"].map((s) => <option key={s}>{s}</option>)}
             </select>,
@@ -109,8 +122,16 @@ export function HomeworkPage() {
   const me = useAsync(() => (user?.role === "STUDENT" ? studentApi.me() : Promise.resolve(null)), [user?.role]);
   const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
   const sid = useActiveStudentId(me.data?.id);
+  const child = (kids.data || []).find((k) => k.id === sid);
+  const dir = useStudentDirectory(user?.role !== "STUDENT" && user?.role !== "PARENT");
   const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const homeworkRows = (list.data || []).filter((h) => {
+    if (user?.role !== "PARENT") return true;
+    if (!child) return false;
+    return h.classId === child.classId && h.sectionId === child.sectionId;
+  });
+  const current = (list.data || []).find((h) => h.id === active);
 
   return (
     <>
@@ -124,7 +145,7 @@ export function HomeworkPage() {
       {list.loading ? <Loading /> : list.error ? <ErrorBox error={list.error} /> : (
         <Table
           headers={["Title", "Class", "Subject", "Due", ""]}
-          rows={(list.data || []).map((h) => [
+          rows={homeworkRows.map((h) => [
             h.title, className(h.classId), subjectName(h.subjectId), fmtDate(h.dueDate),
             <Button key={h.id} kind="ghost" onClick={() => setActive(h.id)}>Open</Button>,
           ])}
@@ -147,24 +168,32 @@ export function HomeworkPage() {
         </Form>
       </Modal>
       <Modal title="Homework" open={!!active} onClose={() => setActive(null)}>
+        {current?.attachments?.length ? (
+          <div className="row" style={{ marginBottom: 12 }}>
+            {current.attachments.map((a) => (
+              <FileLink key={a.id || a.fileUrl} href={a.fileUrl} label={a.fileName || "Attachment"} />
+            ))}
+          </div>
+        ) : null}
         {(user?.role === "STUDENT" || user?.role === "PARENT") && sid ? (
           <Form onSubmit={async () => {
             try {
               let fileUrl: string | undefined;
               if (file) fileUrl = (await fileApi.upload(file)).url;
               await homeworkApi.submit(active!, { studentId: sid, fileUrl, notes });
-              toast("ok", "Submitted"); setActive(null);
+              toast("ok", "Submitted"); setActive(null); setFile(null); setNotes("");
             } catch (e) { toast("err", e instanceof Error ? e.message : "Submit failed"); }
           }}>
             <Field label="Notes"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
-            <Field label="File"><input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} /></Field>
+            <Field label="File"><input type="file" accept=".pdf,image/*,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} /></Field>
             <Button type="submit" kind="brass">Submit work</Button>
           </Form>
-        ) : subs.loading ? <Loading /> : (
+        ) : subs.loading ? <Loading /> : subs.error ? <ErrorBox error={subs.error} /> : (
           <Table
-            headers={["Student", "Status", "Notes", ""]}
+            headers={["Student", "Status", "Notes", "File", ""]}
             rows={(subs.data || []).map((s) => [
-              s.studentId.slice(0, 8), <Badge key={s.id} value={s.status} />, s.notes || "—",
+              dir.nameOf(s.studentId), <Badge key={s.id} value={s.status} />, s.notes || "—",
+              <FileLink key={`f${s.id}`} href={s.fileUrl} />,
               <Button key={`rv${s.id}`} kind="ghost" onClick={async () => { await homeworkApi.review(s.id, "Reviewed"); toast("ok", "Reviewed"); void subs.reload(); }}>Review</Button>,
             ])}
           />
@@ -186,6 +215,7 @@ export function ExamsPage() {
   const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
   const sid = useActiveStudentId(me.data?.id);
   const mine = useAsync(() => (sessionId && sid ? examApi.studentResult(sessionId, sid) : Promise.resolve(null)), [sessionId, sid]);
+  const dir = useStudentDirectory(user?.role !== "STUDENT" && user?.role !== "PARENT");
   const [mark, setMark] = useState({ studentId: "", subjectId: "", totalMarks: "100", obtainedMarks: "0" });
 
   return (
@@ -224,7 +254,12 @@ export function ExamsPage() {
                   toast("ok", "Result saved"); void results.reload();
                 } catch (e) { toast("err", e instanceof Error ? e.message : "Failed"); }
               }}>
-                <Field label="Student id"><input value={mark.studentId} onChange={(e) => setMark({ ...mark, studentId: e.target.value })} required /></Field>
+                <Field label="Student">
+                  <select value={mark.studentId} onChange={(e) => setMark({ ...mark, studentId: e.target.value })} required>
+                    <option value="">Select</option>
+                    {dir.students.map((s) => <option key={s.id} value={s.id}>{studentLabel(s)}</option>)}
+                  </select>
+                </Field>
                 <Field label="Subject">
                   <select value={mark.subjectId} onChange={(e) => setMark({ ...mark, subjectId: e.target.value })} required>
                     <option value="">Select</option>
@@ -242,8 +277,8 @@ export function ExamsPage() {
               ) : null}
             </div>
           ) : null}
-          {results.loading ? <Loading /> : (
-            <Table headers={["Student", "Subject", "Marks", "Grade"]} rows={(results.data || []).map((r) => [r.studentId.slice(0, 8), subjectName(r.subjectId), `${r.obtainedMarks}/${r.totalMarks}`, r.grade || "—"])} />
+          {results.loading ? <Loading /> : results.error ? <ErrorBox error={results.error} /> : (
+            <Table headers={["Student", "Subject", "Marks", "Grade"]} rows={(results.data || []).map((r) => [dir.nameOf(r.studentId), subjectName(r.subjectId), `${r.obtainedMarks}/${r.totalMarks}`, r.grade || "—"])} />
           )}
         </>
       )}

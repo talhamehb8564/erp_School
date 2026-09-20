@@ -3,6 +3,8 @@ import type { ApiErrorBody } from "../lib/types";
 const ACCESS = "atrium.access";
 const REFRESH = "atrium.refresh";
 
+export const LOCKED_EVENT = "atrium:subscription-inactive";
+
 export class ApiError extends Error {
   status: number;
   errorCode?: string;
@@ -91,12 +93,77 @@ export async function request<T>(
     }
   }
   if (!res.ok) {
+    if (res.status === 403 && json && (json as ApiErrorBody).errorCode === "SUBSCRIPTION_INACTIVE") {
+      window.dispatchEvent(new Event(LOCKED_EVENT));
+    }
     throw new ApiError(res.status, (json as ApiErrorBody) || text || res.statusText);
   }
   if (json && Object.prototype.hasOwnProperty.call(json, "data")) {
     return json.data as T;
   }
   return json as T;
+}
+
+export const ALLOWED_UPLOADS = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
+export function validateUpload(file: File) {
+  if (file.size > 10 * 1024 * 1024) {
+    throw new ApiError(400, {
+      success: false,
+      errorCode: "FILE_TOO_LARGE",
+      message: "Maximum upload size is 10MB",
+    });
+  }
+  const type = (file.type || "").split(";", 2)[0].trim().toLowerCase();
+  const name = file.name.toLowerCase();
+  const byExt = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".doc", ".docx"].some((ext) => name.endsWith(ext));
+  if (type && !ALLOWED_UPLOADS.has(type) && !byExt) {
+    throw new ApiError(400, {
+      success: false,
+      errorCode: "FILE_TYPE",
+      message: "File type is not allowed. Use PDF, image, or Word.",
+    });
+  }
+  if (!type && !byExt) {
+    throw new ApiError(400, {
+      success: false,
+      errorCode: "FILE_TYPE",
+      message: "File type is not allowed. Use PDF, image, or Word.",
+    });
+  }
+}
+
+export async function openAuthedFile(href: string, retry = true) {
+  const path = /^https?:\/\//i.test(href) ? new URL(href).pathname + new URL(href).search : href;
+  const headers = new Headers();
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  let res: Response;
+  try {
+    res = await fetch(path, { headers });
+  } catch {
+    throw new ApiError(0, "Cannot reach the ERP server. Start the Spring Boot API on port 8080.");
+  }
+  if (res.status === 401 && retry) {
+    const ok = await tryRefresh();
+    if (ok) return openAuthedFile(href, false);
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, "Could not open file");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export const api = {
@@ -109,6 +176,7 @@ export const api = {
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   upload: <T>(path: string, file: File) => {
+    validateUpload(file);
     const fd = new FormData();
     fd.append("file", file);
     return request<T>(path, { method: "POST", body: fd });

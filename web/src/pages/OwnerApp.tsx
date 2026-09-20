@@ -5,7 +5,7 @@ import { fmtDate, money, pretty } from "../lib/format";
 import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
 import { applyTheme, readTheme, type Theme } from "../lib/theme";
-import { Badge, Button, Empty, ErrorBox, Field, Form, Loading, Modal, Search, Stat, Table, useAsync } from "../ui/kit";
+import { Badge, Button, Empty, ErrorBox, Field, FileLink, Form, Loading, Modal, Search, Stat, Table, useAsync } from "../ui/kit";
 import type { Tenant, TenantStatus } from "../lib/types";
 
 export default function OwnerApp() {
@@ -19,6 +19,7 @@ export default function OwnerApp() {
   };
   return (
     <div className="shell">
+      {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="brand-mark" style={{ marginBottom: 18 }}>
           <div className="mark">A</div>
@@ -71,6 +72,7 @@ export function OwnerHome() {
   if (dash.loading) return <Loading />;
   if (dash.error) return <ErrorBox error={dash.error} />;
   const pending = (subs.data?.content || []).filter((s) => s.status === "PAYMENT_SUBMITTED");
+  const nameOf = (tenantId: string) => schools.data?.content?.find((t) => t.id === tenantId)?.name || tenantId.slice(0, 8);
   return (
     <>
       <div className="page-title">
@@ -95,7 +97,7 @@ export function OwnerHome() {
         ) : (
           <Table
             headers={["Subscription", "School", "Amount", "Status"]}
-            rows={pending.map((s) => [s.id.slice(0, 8), s.tenantId.slice(0, 8), money(s.amount, s.currency), <Badge key={s.id} value={s.status} />])}
+            rows={pending.map((s) => [s.id.slice(0, 8), nameOf(s.tenantId), money(s.amount, s.currency), <Badge key={s.id} value={s.status} />])}
           />
         )}
       </div>
@@ -223,7 +225,7 @@ export function SchoolDetail() {
               <p>Period {fmtDate(s.periodStart)} → {fmtDate(s.periodEnd)}</p>
               {proof?.slipUrl ? (
                 <p>
-                  Latest slip: <a href={proof.slipUrl} target="_blank" rel="noreferrer">{proof.slipUrl}</a>
+                  Latest slip: <FileLink href={proof.slipUrl} label="Open slip" />
                   <br />
                   Ref {proof.transactionRef || "—"}
                 </p>
@@ -309,12 +311,14 @@ function ReviewBox({ id, onDone }: { id: string; onDone: () => void }) {
 
 export function Subscriptions() {
   const list = useAsync(() => subscriptionApi.list());
+  const schools = useAsync(() => tenantApi.list());
   const nav = useNavigate();
   const [filter, setFilter] = useState("");
   const rows = useMemo(
     () => (list.data?.content || []).filter((s) => !filter || s.status === filter),
     [list.data, filter],
   );
+  const nameOf = (tenantId: string) => schools.data?.content?.find((t) => t.id === tenantId)?.name || tenantId.slice(0, 8);
   if (list.loading) return <Loading />;
   if (list.error) return <ErrorBox error={list.error} />;
   return (
@@ -336,7 +340,7 @@ export function Subscriptions() {
       <Table
         headers={["School", "Status", "Amount", "Period", ""]}
         rows={rows.map((s) => [
-          s.tenantId.slice(0, 8),
+          nameOf(s.tenantId),
           <Badge key={s.id} value={s.status} />,
           money(s.amount, s.currency),
           `${fmtDate(s.periodStart)} → ${fmtDate(s.periodEnd)}`,

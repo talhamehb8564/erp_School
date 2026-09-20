@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { openAuthedFile } from "../api/client";
 import { pretty, statusTone } from "../lib/format";
 
 export function Field({
@@ -152,6 +153,30 @@ export function Form({ onSubmit, children }: { onSubmit: () => void | Promise<vo
     await onSubmit();
   };
   return <form onSubmit={go}>{children}</form>;
+}
+
+export function FileLink({ href, label }: { href?: string; label?: string }) {
+  const [err, setErr] = useState("");
+  if (!href) return <span>—</span>;
+  return (
+    <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <button
+        type="button"
+        className="btn ghost sm"
+        onClick={() => {
+          setErr("");
+          void openAuthedFile(href).catch((e) => setErr(e instanceof Error ? e.message : "Open failed"));
+        }}
+      >
+        {label || "Open file"}
+      </button>
+      {err ? <span className="hint" style={{ margin: 0 }}>{err}</span> : null}
+    </span>
+  );
+}
+
+export function studentLabel(s: { id: string; admissionNumber?: string; rollNumber?: string; user?: { fullName?: string } }) {
+  return s.user?.fullName || s.admissionNumber || s.rollNumber || s.id.slice(0, 8);
 }
 
 export function Bars({ items }: { items: { label: string; value: number; max?: number }[] }) {

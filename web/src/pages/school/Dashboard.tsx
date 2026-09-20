@@ -97,11 +97,13 @@ function AccountDash() {
 }
 
 function ParentDash() {
+  const { childId } = useSession();
   const d = useAsync(() => portalApi.parent());
   const kids = useAsync(() => studentApi.children());
   if (d.loading || kids.loading) return <Loading />;
   if (d.error) return <ErrorBox error={d.error} />;
-  const fees = (d.data?.fees as { challanNumber: string; totalPayable: number; status: string }[]) || [];
+  const all = (d.data?.fees as { studentId?: string; challanNumber: string; totalPayable: number; status: string }[]) || [];
+  const fees = childId ? all.filter((f) => f.studentId === childId) : all;
   return (
     <>
       <div className="page-title"><div><h1>Family</h1><p>One parent login, many children</p></div></div>

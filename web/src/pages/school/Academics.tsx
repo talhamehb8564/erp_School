@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { academicApi, campusApi } from "../../api/services";
+import { academicApi, campusApi, userApi } from "../../api/services";
 import { useLookups } from "../../lib/lookups";
 import { dayName, fmtTime } from "../../lib/format";
 import { useToast } from "../../lib/toast";
@@ -38,6 +38,8 @@ export function CampusesPage() {
 }
 
 export function AcademicsPage() {
+  const { user } = useSession();
+  const canWrite = user?.role === "SCHOOL_ADMIN";
   const { classes, subjects, sections, reload } = useLookups();
   const toast = useToast();
   const [cOpen, setCOpen] = useState(false);
@@ -51,10 +53,12 @@ export function AcademicsPage() {
   return (
     <>
       <div className="page-title"><div><h1>Academics</h1><p>Classes, sections and subjects</p></div>
-        <div className="row">
-          <Button onClick={() => setCOpen(true)}>New class</Button>
-          <Button kind="ghost" onClick={() => setSOpen(true)}>New subject</Button>
-        </div>
+        {canWrite ? (
+          <div className="row">
+            <Button onClick={() => setCOpen(true)}>New class</Button>
+            <Button kind="ghost" onClick={() => setSOpen(true)}>New subject</Button>
+          </div>
+        ) : null}
       </div>
       <div className="grid two">
         <div className="card">
@@ -65,7 +69,7 @@ export function AcademicsPage() {
               <div style={{ color: "var(--muted)", fontSize: 13 }}>
                 Sections: {(sections[c.id] || []).map((s) => s.name).join(", ") || "none"}
               </div>
-              <Button kind="ghost" onClick={() => setSectionFor(c.id)}>Add section</Button>
+              {canWrite ? <Button kind="ghost" onClick={() => setSectionFor(c.id)}>Add section</Button> : null}
             </div>
           ))}
         </div>
@@ -128,6 +132,7 @@ export function TimetablePage() {
     [teacher, effectiveClass, effectiveSection],
   );
   const toast = useToast();
+  const teachers = useAsync(() => (user?.role === "SCHOOL_ADMIN" ? userApi.list({ role: "TEACHER" }) : Promise.resolve(null)), [user?.role]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ classId: "", sectionId: "", subjectId: "", teacherUserId: "", dayOfWeek: 1, startTime: "08:00", endTime: "08:45" });
 
@@ -180,9 +185,16 @@ export function TimetablePage() {
               {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </Field>
-          <Field label="Teacher user id"><input value={form.teacherUserId} onChange={(e) => setForm({ ...form, teacherUserId: e.target.value })} required /></Field>
-          <Field label="Day (1=Mon)">
-            <input type="number" min={1} max={7} value={form.dayOfWeek} onChange={(e) => setForm({ ...form, dayOfWeek: Number(e.target.value) })} />
+          <Field label="Teacher">
+            <select value={form.teacherUserId} onChange={(e) => setForm({ ...form, teacherUserId: e.target.value })} required>
+              <option value="">Select</option>
+              {(teachers.data?.content || []).map((t) => <option key={t.id} value={t.id}>{t.fullName || t.username}</option>)}
+            </select>
+          </Field>
+          <Field label="Day">
+            <select value={form.dayOfWeek} onChange={(e) => setForm({ ...form, dayOfWeek: Number(e.target.value) })}>
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => <option key={d} value={d}>{dayName(d)}</option>)}
+            </select>
           </Field>
           <Field label="Start"><input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></Field>
           <Field label="End"><input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></Field>
