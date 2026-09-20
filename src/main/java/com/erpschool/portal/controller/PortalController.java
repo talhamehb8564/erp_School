@@ -86,9 +86,7 @@ public class PortalController {
         Map<String, Object> m = new HashMap<>();
         m.put("children", children);
         m.put("homework", homeworkService.mine());
-        m.put("fees", children.stream()
-                .flatMap(child -> feeService.studentChallans(child.getId()).stream())
-                .toList());
+        m.put("fees", feeService.challansForStudents(children.stream().map(c -> c.getId()).toList()));
         m.put("unreadNotifications", notificationService.unreadCount());
         return ResponseEntity.ok(ApiResponse.ok(m));
     }

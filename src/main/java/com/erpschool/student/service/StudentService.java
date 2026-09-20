@@ -31,7 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class StudentService {
@@ -185,11 +188,22 @@ public class StudentService {
     @Transactional(readOnly = true)
     public List<StudentDtos.Response> myChildren() {
         UUID tenantId = TenantGuard.requireTenantId(null);
-        return parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
+        List<UUID> studentIds = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
                 .stream()
-                .map(link -> studentRepository.findById(link.getStudentId()).orElse(null))
-                .filter(s -> s != null)
-                .map(s -> StudentDtos.from(s, loadUser(s.getUserId())))
+                .map(ParentStudent::getStudentId)
+                .toList();
+        if (studentIds.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Student> students = studentRepository.findAllById(studentIds).stream()
+                .collect(Collectors.toMap(Student::getId, Function.identity()));
+        List<UUID> userIds = students.values().stream().map(Student::getUserId).filter(Objects::nonNull).toList();
+        Map<UUID, UserResponse> users = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, UserResponse::from));
+        return studentIds.stream()
+                .map(students::get)
+                .filter(Objects::nonNull)
+                .map(s -> StudentDtos.from(s, users.get(s.getUserId())))
                 .toList();
     }
 

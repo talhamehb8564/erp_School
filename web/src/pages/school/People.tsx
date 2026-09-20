@@ -135,7 +135,7 @@ export function UsersPage() {
               {["TEACHER", "PRINCIPAL", "ACCOUNT_OFFICER", "SCHOOL_ADMIN", "PARENT"].map((r) => <option key={r}>{r}</option>)}
             </select>
           </Field>
-          <Button type="submit" kind="brass">Create</Button>
+          <Button type="submit" kind="brass" loadingText="Creating…">Create</Button>
         </Form>
       </Modal>
     </>

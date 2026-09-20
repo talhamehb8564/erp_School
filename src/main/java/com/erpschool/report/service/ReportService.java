@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class ReportService {
@@ -122,13 +123,13 @@ public class ReportService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> examClass(UUID sessionId, UUID classId) {
         UUID tenantId = TenantGuard.requireTenantId(null);
-        List<Student> students = studentRepository.findByTenantId(tenantId, org.springframework.data.domain.Pageable.unpaged())
+        List<Student> students = studentRepository.findByTenantIdAndClassId(tenantId, classId);
+        Map<UUID, List<ExamResult>> byStudent = examResultRepository
+                .findByTenantIdAndExamSessionId(tenantId, sessionId)
                 .stream()
-                .filter(s -> classId.equals(s.getClassId()))
-                .toList();
+                .collect(Collectors.groupingBy(ExamResult::getStudentId));
         return students.stream().map(s -> {
-            List<ExamResult> results = examResultRepository.findByTenantIdAndExamSessionIdAndStudentId(
-                    tenantId, sessionId, s.getId());
+            List<ExamResult> results = byStudent.getOrDefault(s.getId(), List.of());
             BigDecimal total = results.stream().map(ExamResult::getTotalMarks).reduce(BigDecimal.ZERO, BigDecimal::add);
             BigDecimal obtained = results.stream().map(ExamResult::getObtainedMarks).reduce(BigDecimal.ZERO, BigDecimal::add);
             BigDecimal pct = GradeCalculator.percentage(obtained, total);

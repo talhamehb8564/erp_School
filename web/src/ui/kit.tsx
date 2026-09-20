@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, openAuthedFile } from "../api/client";
 import { pretty, statusTone } from "../lib/format";
+import { useToast } from "../lib/toast";
 
 const FormBusy = createContext<{ busy: boolean; label: string }>({ busy: false, label: "Working…" });
 
@@ -52,6 +53,7 @@ export function Button({
   loadingText?: string;
 }) {
   const form = useContext(FormBusy);
+  const toast = useToast();
   const [inner, setInner] = useState(false);
   const submitBusy = type === "submit" && form.busy;
   const busy = Boolean(loading || inner || submitBusy);
@@ -64,6 +66,8 @@ export function Button({
       setInner(true);
       try {
         await result;
+      } catch (e) {
+        toast("err", friendlyMessage(e));
       } finally {
         setInner(false);
       }

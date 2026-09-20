@@ -42,7 +42,7 @@ async function tryRefresh(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
     try {
-      const res = await fetch("/api/v1/auth/refresh", {
+      const res = await fetchWithTimeout("/api/v1/auth/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken }),
@@ -62,7 +62,23 @@ async function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+const REQUEST_TIMEOUT_MS = 20_000;
 const getInflight = new Map<string, Promise<unknown>>();
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new ApiError(0, "The server took too long to respond. Check that Spring Boot is running on port 8080.");
+    }
+    throw new ApiError(0, "Cannot reach the ERP server. Start the Spring Boot API on port 8080.");
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 export async function request<T>(
   path: string,
@@ -93,12 +109,7 @@ async function send<T>(
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  let res: Response;
-  try {
-    res = await fetch(path, { ...init, headers });
-  } catch {
-    throw new ApiError(0, "Cannot reach the ERP server. Start the Spring Boot API on port 8080.");
-  }
+  const res = await fetchWithTimeout(path, { ...init, headers });
   if (res.status === 401 && retry && !path.includes("/auth/login") && !path.includes("/auth/refresh")) {
     const ok = await tryRefresh();
     if (ok) return send<T>(path, init, false);
@@ -167,12 +178,7 @@ export async function openAuthedFile(href: string, retry = true) {
   const headers = new Headers();
   const token = getAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  let res: Response;
-  try {
-    res = await fetch(path, { headers });
-  } catch {
-    throw new ApiError(0, "Cannot reach the ERP server. Start the Spring Boot API on port 8080.");
-  }
+  const res = await fetchWithTimeout(path, { headers });
   if (res.status === 401 && retry) {
     const ok = await tryRefresh();
     if (ok) return openAuthedFile(href, false);

@@ -145,6 +145,18 @@ public class FeeService {
         return created;
     }
 
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> challansForStudents(List<UUID> studentIds) {
+        if (studentIds == null || studentIds.isEmpty()) {
+            return List.of();
+        }
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        return challanRepository.findByTenantIdAndStudentIdInOrderByMonthDesc(tenantId, studentIds)
+                .stream()
+                .map(this::toSummary)
+                .toList();
+    }
+
     @Transactional
     public List<Map<String, Object>> studentChallans(UUID studentId) {
         Student student = studentAccessService.requireStudent(studentId);

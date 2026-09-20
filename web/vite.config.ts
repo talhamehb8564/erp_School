@@ -11,7 +11,7 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: true,
     proxy: {
-      "/api": { target: apiOrigin, changeOrigin: true },
+      "/api": { target: apiOrigin, changeOrigin: true, timeout: 20_000, proxyTimeout: 20_000 },
     },
   },
   preview: {

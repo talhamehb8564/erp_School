@@ -47,9 +47,12 @@ export default function Welcome() {
         <div className="kicker">Choose your portal</div>
         <h2 className="serif" style={{ fontSize: 36, margin: "10px 0 8px" }}>Sign in with your real account</h2>
         <p className="hint">Each card uses the same backend authentication. You will land on the dashboard for your role.</p>
+        {apiOk === null ? (
+          <p className="hint" role="status">Checking API…</p>
+        ) : null}
         {apiOk === false ? (
           <div className="error-box" style={{ textAlign: "left", marginBottom: 16 }}>
-            Spring Boot API is not reachable at /api/v1. {apiMsg}
+            Unable to reach the ERP API. {apiMsg}
           </div>
         ) : null}
         <div className="role-grid">

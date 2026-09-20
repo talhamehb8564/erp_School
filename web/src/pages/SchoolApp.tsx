@@ -8,6 +8,7 @@ import { applyTheme, readTheme, type Theme } from "../lib/theme";
 import { SCHOOL_NAV } from "../lib/nav";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
+import { Button } from "../ui/kit";
 
 export default function SchoolApp() {
   const { user, tenant, locked, logout } = useSession();
@@ -53,9 +54,9 @@ export default function SchoolApp() {
             </NavLink>
           ))}
           <div style={{ flex: 1 }} />
-          <button className="nav-link" style={{ background: "none", border: 0, textAlign: "left" }} onClick={() => void logout()}>
+          <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
             Sign out
-          </button>
+          </Button>
         </aside>
         <div className="main">
           <header className="topbar">

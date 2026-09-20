@@ -143,6 +143,15 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
   display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; color: #d9d1c4;
 }
 .nav-link.active, .nav-link:hover { background: rgba(255,255,255,.08); color: #fff; }
+.sidebar .btn.ghost {
+  width: 100%;
+  justify-content: flex-start;
+  background: none;
+  border: 0;
+  color: #d9d1c4;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
 .nav-sec { margin: 16px 8px 6px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #9aa3; }
 .main { min-width: 0; }
 .topbar {

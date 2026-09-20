@@ -39,9 +39,9 @@ export default function OwnerApp() {
           Subscriptions
         </NavLink>
         <div style={{ flex: 1 }} />
-        <button className="nav-link" style={{ background: "none", border: 0, width: "100%", textAlign: "left" }} onClick={() => void logout()}>
+        <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
           Sign out
-        </button>
+        </Button>
       </aside>
       <div className="main">
         <header className="topbar">

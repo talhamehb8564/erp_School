@@ -68,9 +68,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      const me = await authApi.me();
-      persist(me);
-      await loadTenant(me);
+      let cachedRole: Role | undefined;
+      try {
+        const raw = localStorage.getItem(USER_KEY);
+        cachedRole = raw ? (JSON.parse(raw) as User).role : undefined;
+      } catch {
+        cachedRole = undefined;
+      }
+      if (cachedRole && cachedRole !== "ERP_OWNER") {
+        const [meResult, tenantResult] = await Promise.allSettled([authApi.me(), tenantApi.me()]);
+        if (meResult.status !== "fulfilled") throw meResult.reason;
+        persist(meResult.value);
+        if (tenantResult.status === "fulfilled") {
+          setTenant(tenantResult.value);
+          setForcedLocked(LOCKED_STATUSES.includes(tenantResult.value.status));
+        } else {
+          const e = tenantResult.reason;
+          if (e instanceof ApiError && e.errorCode === "SUBSCRIPTION_INACTIVE") setForcedLocked(true);
+          else setTenant(null);
+        }
+      } else {
+        const me = await authApi.me();
+        persist(me);
+        await loadTenant(me);
+      }
     } catch (e) {
       if (e instanceof ApiError && e.errorCode === "SUBSCRIPTION_INACTIVE") {
         setForcedLocked(true);
