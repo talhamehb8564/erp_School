@@ -84,9 +84,13 @@ public class PortalController {
     @GetMapping("/parent")
     @PreAuthorize("hasRole('PARENT')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> parent() {
+        var children = studentService.myChildren();
         Map<String, Object> m = new HashMap<>();
-        m.put("children", studentService.myChildren());
+        m.put("children", children);
         m.put("homework", homeworkService.mine());
+        m.put("fees", children.stream()
+                .flatMap(child -> feeService.studentChallans(child.getId()).stream())
+                .toList());
         m.put("unreadNotifications", notificationService.unreadCount());
         return ResponseEntity.ok(ApiResponse.ok(m));
     }
@@ -94,9 +98,11 @@ public class PortalController {
     @GetMapping("/student")
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> student() {
+        var profile = studentService.meAsStudent();
         Map<String, Object> m = new HashMap<>();
-        m.put("profile", studentService.meAsStudent());
+        m.put("profile", profile);
         m.put("homework", homeworkService.mine());
+        m.put("fees", feeService.studentChallans(profile.getId()));
         m.put("unreadNotifications", notificationService.unreadCount());
         return ResponseEntity.ok(ApiResponse.ok(m));
     }

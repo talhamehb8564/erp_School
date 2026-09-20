@@ -11,8 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +26,7 @@ public class FileStorageService {
     private static final Set<String> ALLOWED = Set.of(
             "application/pdf",
             "image/jpeg",
+            "image/jpg",
             "image/png",
             "image/webp",
             "image/gif",
@@ -45,9 +49,15 @@ public class FileStorageService {
         if (file == null || file.isEmpty()) {
             throw new BusinessException("FILE_REQUIRED", "File is required");
         }
-        String contentType = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
+        String original = file.getOriginalFilename() == null
+                ? "file"
+                : file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_");
+        String contentType = normalizeContentType(file.getContentType(), original);
         if (!ALLOWED.contains(contentType)) {
             throw new BusinessException("FILE_TYPE", "File type is not allowed: " + contentType);
+        }
+        if ("image/jpg".equals(contentType)) {
+            contentType = "image/jpeg";
         }
         if (file.getSize() > 10 * 1024 * 1024) {
             throw new BusinessException("FILE_TOO_LARGE", "Maximum upload size is 10MB");
@@ -55,10 +65,11 @@ public class FileStorageService {
         try {
             Path dir = root.resolve(tenantId.toString());
             Files.createDirectories(dir);
-            String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_");
             String storedName = UUID.randomUUID() + "-" + original;
             Path dest = dir.resolve(storedName);
-            file.transferTo(dest);
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+            }
             StoredFile entity = new StoredFile();
             entity.setTenantId(tenantId);
             entity.setOriginalName(original);
@@ -86,5 +97,39 @@ public class FileStorageService {
             throw new BusinessException("FILE_PATH", "Invalid file path");
         }
         return dest;
+    }
+
+    private static String normalizeContentType(String raw, String filename) {
+        String contentType = raw == null ? "" : raw.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        if (contentType.isBlank() || "application/octet-stream".equals(contentType)) {
+            contentType = inferFromName(filename);
+        }
+        return contentType;
+    }
+
+    private static String inferFromName(String filename) {
+        String lower = filename == null ? "" : filename.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".pdf")) {
+            return "application/pdf";
+        }
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (lower.endsWith(".png")) {
+            return "image/png";
+        }
+        if (lower.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (lower.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (lower.endsWith(".doc")) {
+            return "application/msword";
+        }
+        if (lower.endsWith(".docx")) {
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        }
+        return "application/octet-stream";
     }
 }

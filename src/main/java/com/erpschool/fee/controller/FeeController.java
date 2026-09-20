@@ -7,6 +7,7 @@ import com.erpschool.fee.entity.FeePaymentProof;
 import com.erpschool.fee.entity.FeeStructure;
 import com.erpschool.fee.service.FeeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -55,7 +56,7 @@ public class FeeController {
 
     @PostMapping("/challans/generate")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> generate(@RequestBody GenerateRequest request) {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> generate(@Valid @RequestBody GenerateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Challans generated", feeService.generateMonthly(
                         request.getClassId(), request.getMonth(), request.getDueDate(),
@@ -71,7 +72,7 @@ public class FeeController {
     @PostMapping("/challans/{id}/proofs")
     @PreAuthorize("hasAnyRole('PARENT','STUDENT','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> proof(
-            @PathVariable UUID id, @RequestBody ProofRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody ProofRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Payment proof submitted",
                 feeService.submitProof(id, request.getSlipUrl(), request.getTransactionRef())));
     }
@@ -79,7 +80,7 @@ public class FeeController {
     @PostMapping("/proofs/{id}/review")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> review(
-            @PathVariable UUID id, @RequestBody ReviewRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody ReviewRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Payment reviewed",
                 feeService.reviewProof(id, Boolean.TRUE.equals(request.getApprove()), request.getRemarks())));
     }

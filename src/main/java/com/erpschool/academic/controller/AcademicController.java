@@ -9,6 +9,7 @@ import com.erpschool.academic.entity.TimetableSlot;
 import com.erpschool.academic.service.AcademicService;
 import com.erpschool.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -57,7 +58,7 @@ public class AcademicController {
     @PostMapping("/classes/{classId}/sections")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
     public ResponseEntity<ApiResponse<Section>> createSection(@PathVariable UUID classId,
-                                                              @RequestBody NameRequest request) {
+                                                              @Valid @RequestBody NameRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Section created", academicService.createSection(classId, request.getName())));
     }
@@ -91,7 +92,7 @@ public class AcademicController {
 
     @PostMapping("/teacher-assignments")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
-    public ResponseEntity<ApiResponse<TeacherAssignment>> assign(@RequestBody AssignmentRequest request) {
+    public ResponseEntity<ApiResponse<TeacherAssignment>> assign(@Valid @RequestBody AssignmentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Teacher assigned", academicService.assignTeacher(
                         request.getTeacherUserId(), request.getClassId(), request.getSectionId(), request.getSubjectId())));
@@ -106,7 +107,7 @@ public class AcademicController {
 
     @PostMapping("/timetable")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
-    public ResponseEntity<ApiResponse<TimetableSlot>> slot(@RequestBody TimetableRequest request) {
+    public ResponseEntity<ApiResponse<TimetableSlot>> slot(@Valid @RequestBody TimetableRequest request) {
         TimetableSlot slot = new TimetableSlot();
         slot.setClassId(request.getClassId());
         slot.setSectionId(request.getSectionId());

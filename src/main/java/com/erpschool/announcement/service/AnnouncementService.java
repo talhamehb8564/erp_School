@@ -43,6 +43,9 @@ public class AnnouncementService {
     public Announcement create(Announcement a) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         a.setTenantId(tenantId);
+        if (a.getAudience() == null || a.getAudience().isBlank()) {
+            a.setAudience("ALL");
+        }
         if (a.getPublishDate() == null) {
             a.setPublishDate(LocalDate.now());
         }
@@ -58,21 +61,46 @@ public class AnnouncementService {
         UserRole role = TenantContext.getRole();
         LocalDate today = LocalDate.now();
         return repository.findByTenantIdOrderByPublishDateDesc(tenantId).stream()
-                .filter(a -> !a.getPublishDate().isAfter(today))
+                .filter(a -> a.getPublishDate() == null || !a.getPublishDate().isAfter(today))
                 .filter(a -> a.getExpiryDate() == null || !a.getExpiryDate().isBefore(today))
                 .filter(a -> visibleTo(a, role))
                 .toList();
     }
 
     private boolean visibleTo(Announcement a, UserRole role) {
-        return switch (a.getAudience()) {
+        String audience = a.getAudience() == null || a.getAudience().isBlank() ? "ALL" : a.getAudience();
+        return switch (audience) {
             case "ALL" -> true;
             case "TEACHERS" -> role == UserRole.TEACHER || isStaff(role);
             case "PARENTS" -> role == UserRole.PARENT || isStaff(role);
             case "STUDENTS" -> role == UserRole.STUDENT || isStaff(role);
-            case "CLASS", "SECTION" -> isStaff(role) || role == UserRole.STUDENT || role == UserRole.PARENT;
+            case "CLASS", "SECTION" -> isStaff(role) || matchesAudience(a);
             default -> isStaff(role);
         };
+    }
+
+    private boolean matchesAudience(Announcement a) {
+        UUID userId = TenantContext.getUserId();
+        UserRole role = TenantContext.getRole();
+        if (role == UserRole.STUDENT) {
+            return studentRepository.findByTenantIdAndUserId(a.getTenantId(), userId)
+                    .map(s -> classMatch(a, s))
+                    .orElse(false);
+        }
+        if (role == UserRole.PARENT) {
+            return parentStudentRepository.findByTenantIdAndParentUserId(a.getTenantId(), userId).stream()
+                    .map(link -> studentRepository.findById(link.getStudentId()).orElse(null))
+                    .filter(s -> s != null)
+                    .anyMatch(s -> classMatch(a, s));
+        }
+        return false;
+    }
+
+    private boolean classMatch(Announcement a, Student s) {
+        if (a.getClassId() != null && !a.getClassId().equals(s.getClassId())) {
+            return false;
+        }
+        return a.getSectionId() == null || a.getSectionId().equals(s.getSectionId());
     }
 
     private boolean isStaff(UserRole role) {
@@ -83,7 +111,8 @@ public class AnnouncementService {
     private void fanout(Announcement a) {
         UUID tenantId = a.getTenantId();
         List<User> targets;
-        switch (a.getAudience()) {
+        String audience = a.getAudience() == null || a.getAudience().isBlank() ? "ALL" : a.getAudience();
+        switch (audience) {
             case "TEACHERS" -> targets = userRepository.findByTenantIdAndRole(tenantId, UserRole.TEACHER);
             case "PARENTS" -> targets = userRepository.findByTenantIdAndRole(tenantId, UserRole.PARENT);
             case "STUDENTS" -> targets = userRepository.findByTenantIdAndRole(tenantId, UserRole.STUDENT);
@@ -95,14 +124,15 @@ public class AnnouncementService {
                     .map(id -> userRepository.findById(id).orElse(null))
                     .filter(u -> u != null)
                     .toList();
+            case "ALL" -> targets = userRepository.findByTenantId(tenantId, org.springframework.data.domain.Pageable.unpaged())
+                    .getContent();
             default -> targets = List.of();
         }
         for (User u : targets) {
             notificationService.notifyUser(tenantId, u.getId(), "ANNOUNCEMENT", a.getTitle(), a.getBody(),
                     "Announcement", a.getId().toString());
         }
-        if ("CLASS".equals(a.getAudience()) || "SECTION".equals(a.getAudience()) || "PARENTS".equals(a.getAudience())
-                || "ALL".equals(a.getAudience())) {
+        if ("CLASS".equals(a.getAudience()) || "SECTION".equals(a.getAudience()) || "PARENTS".equals(a.getAudience())) {
             // parents of class students
             if (a.getClassId() != null) {
                 studentRepository.findByTenantId(tenantId, org.springframework.data.domain.Pageable.unpaged())

@@ -5,6 +5,7 @@ import com.erpschool.homework.entity.Homework;
 import com.erpschool.homework.entity.HomeworkSubmission;
 import com.erpschool.homework.service.HomeworkService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -38,7 +39,7 @@ public class HomeworkController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> create(@RequestBody CreateRequest request) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> create(@Valid @RequestBody CreateRequest request) {
         Homework h = new Homework();
         h.setTeacherUserId(request.getTeacherUserId());
         h.setClassId(request.getClassId());
@@ -66,10 +67,16 @@ public class HomeworkController {
         return ResponseEntity.ok(ApiResponse.ok(homeworkService.mine()));
     }
 
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> get(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(homeworkService.get(id)));
+    }
+
     @PostMapping("/{id}/submissions")
     @PreAuthorize("hasAnyRole('STUDENT','PARENT','SCHOOL_ADMIN')")
     public ResponseEntity<ApiResponse<HomeworkSubmission>> submit(
-            @PathVariable UUID id, @RequestBody SubmitRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody SubmitRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Homework submitted", homeworkService.submit(
                         id, request.getStudentId(), request.getFileUrl(), request.getNotes())));

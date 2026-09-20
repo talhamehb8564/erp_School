@@ -5,6 +5,7 @@ import com.erpschool.exam.entity.ExamResult;
 import com.erpschool.exam.entity.ExamSession;
 import com.erpschool.exam.service.ExamService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -50,7 +51,7 @@ public class ExamController {
     @PostMapping("/sessions/{id}/results")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
     public ResponseEntity<ApiResponse<ExamResult>> upsert(
-            @PathVariable UUID id, @RequestBody ResultRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody ResultRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Result saved", examService.upsertResult(
                 id, request.getStudentId(), request.getSubjectId(),
                 request.getTotalMarks(), request.getObtainedMarks(), request.getRemarks())));

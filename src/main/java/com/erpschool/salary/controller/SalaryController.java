@@ -5,6 +5,7 @@ import com.erpschool.salary.entity.StaffProfile;
 import com.erpschool.salary.entity.StaffSalary;
 import com.erpschool.salary.service.SalaryService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,7 +38,7 @@ public class SalaryController {
 
     @PostMapping("/profiles")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
-    public ResponseEntity<ApiResponse<StaffProfile>> profile(@RequestBody ProfileRequest request) {
+    public ResponseEntity<ApiResponse<StaffProfile>> profile(@Valid @RequestBody ProfileRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Staff salary profile saved",
                 salaryService.upsertProfile(request.getUserId(), request.getBaseSalary())));
     }
@@ -50,7 +51,7 @@ public class SalaryController {
 
     @PostMapping("/generate")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
-    public ResponseEntity<ApiResponse<List<StaffSalary>>> generate(@RequestBody GenerateRequest request) {
+    public ResponseEntity<ApiResponse<List<StaffSalary>>> generate(@Valid @RequestBody GenerateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Monthly salaries generated",
                 salaryService.generateMonth(request.getMonth())));
     }
@@ -62,17 +63,17 @@ public class SalaryController {
         return ResponseEntity.ok(ApiResponse.ok("Salary marked paid", salaryService.markPaid(id, date)));
     }
 
+    @GetMapping("/me")
+    @PreAuthorize("hasAnyRole('SCHOOL_ADMIN','PRINCIPAL','TEACHER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<List<StaffSalary>>> mine() {
+        return ResponseEntity.ok(ApiResponse.ok(salaryService.mine()));
+    }
+
     @GetMapping
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER','PRINCIPAL')")
     public ResponseEntity<ApiResponse<List<StaffSalary>>> month(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
         return ResponseEntity.ok(ApiResponse.ok(salaryService.month(month)));
-    }
-
-    @GetMapping("/me")
-    @PreAuthorize("hasAnyRole('SCHOOL_ADMIN','PRINCIPAL','TEACHER','ACCOUNT_OFFICER')")
-    public ResponseEntity<ApiResponse<List<StaffSalary>>> mine() {
-        return ResponseEntity.ok(ApiResponse.ok(salaryService.mine()));
     }
 
     @Getter

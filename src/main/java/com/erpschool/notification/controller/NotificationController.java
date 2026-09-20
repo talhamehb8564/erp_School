@@ -27,15 +27,15 @@ public class NotificationController {
         this.notificationService = notificationService;
     }
 
+    @GetMapping("/unread-count")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> unread() {
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("unread", notificationService.unreadCount())));
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<Map<String, Object>>>> list(
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(notificationService.mine(pageable)));
-    }
-
-    @GetMapping("/unread-count")
-    public ResponseEntity<ApiResponse<Map<String, Long>>> unread() {
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("unread", notificationService.unreadCount())));
     }
 
     @PostMapping("/{id}/read")

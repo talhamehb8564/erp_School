@@ -55,6 +55,12 @@ public class StudentController {
         return ResponseEntity.ok(ApiResponse.ok(studentService.list(classId, sectionId, pageable)));
     }
 
+    @GetMapping("/students/me")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<StudentDtos.Response>> me() {
+        return ResponseEntity.ok(ApiResponse.ok(studentService.meAsStudent()));
+    }
+
     @GetMapping("/students/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StudentDtos.Response>> get(@PathVariable UUID id) {
@@ -64,7 +70,7 @@ public class StudentController {
     @PutMapping("/students/{id}")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
     public ResponseEntity<ApiResponse<StudentDtos.Response>> update(
-            @PathVariable UUID id, @RequestBody StudentDtos.UpdateRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody StudentDtos.UpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Student updated", studentService.update(id, request)));
     }
 
@@ -75,12 +81,6 @@ public class StudentController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Parent linked",
                         studentService.linkParent(id, request.getParentUserId(), request.getRelationship())));
-    }
-
-    @GetMapping("/students/me")
-    @PreAuthorize("hasRole('STUDENT')")
-    public ResponseEntity<ApiResponse<StudentDtos.Response>> me() {
-        return ResponseEntity.ok(ApiResponse.ok(studentService.meAsStudent()));
     }
 
     @GetMapping("/parents/me/children")

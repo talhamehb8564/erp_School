@@ -104,6 +104,10 @@ Content-Type: application/json
 GET {{base}}/api/v1/homework
 Authorization: Bearer {{accessToken}}
 
+### Homework by id
+GET {{base}}/api/v1/homework/{{homeworkId}}
+Authorization: Bearer {{accessToken}}
+
 ### Submit homework (student/parent)
 POST {{base}}/api/v1/homework/{{homeworkId}}/submissions
 Authorization: Bearer {{accessToken}}

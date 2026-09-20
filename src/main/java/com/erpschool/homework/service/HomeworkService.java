@@ -158,11 +158,27 @@ public class HomeworkService {
                     .flatMap(st -> homeworkRepository
                             .findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(tenantId, st.getClassId(), st.getSectionId())
                             .stream())
-                    .distinct()
+                    .collect(java.util.stream.Collectors.toMap(
+                            Homework::getId, h -> h, (a, b) -> a, java.util.LinkedHashMap::new))
+                    .values()
+                    .stream()
                     .map(this::toMap)
                     .toList();
         }
         throw new ResourceNotFoundException("Use classId and sectionId filters");
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> get(UUID homeworkId) {
+        Homework homework = requireHomework(homeworkId);
+        UserRole role = TenantContext.getRole();
+        if (role == UserRole.TEACHER && !homework.getTeacherUserId().equals(TenantContext.getUserId())) {
+            throw new ForbiddenException("Teachers can only view their own homework");
+        }
+        if (role == UserRole.STUDENT || role == UserRole.PARENT) {
+            forClass(homework.getClassId(), homework.getSectionId());
+        }
+        return toMap(homework);
     }
 
     @Transactional
@@ -174,6 +190,9 @@ public class HomeworkService {
         if (!homework.getClassId().equals(student.getClassId())
                 || !homework.getSectionId().equals(student.getSectionId())) {
             throw new ForbiddenException("Student is not in this homework class/section");
+        }
+        if ((fileUrl == null || fileUrl.isBlank()) && (notes == null || notes.isBlank())) {
+            throw new BusinessException("SUBMISSION_EMPTY", "Provide a file or notes for the submission");
         }
         if (submissionRepository.findByTenantIdAndHomeworkIdAndStudentId(tenantId, homeworkId, studentId).isPresent()) {
             throw new DuplicateResourceException("Homework already submitted");

@@ -4,7 +4,6 @@ import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.service.DocumentSequenceService;
 import com.erpschool.common.util.TenantGuard;
-import com.erpschool.fee.entity.ChallanCharge;
 import com.erpschool.fee.entity.ChallanStatus;
 import com.erpschool.fee.entity.FeeChallan;
 import com.erpschool.fee.entity.FeePaymentProof;
@@ -146,11 +145,21 @@ public class FeeService {
         return created;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<Map<String, Object>> studentChallans(UUID studentId) {
         Student student = studentAccessService.requireStudent(studentId);
+        LocalDate today = LocalDate.now();
         return challanRepository.findByTenantIdAndStudentIdOrderByMonthDesc(student.getTenantId(), studentId)
-                .stream().map(this::toMap).toList();
+                .stream()
+                .map(c -> {
+                    if (c.isPastDue(today)) {
+                        c.setStatus(ChallanStatus.OVERDUE);
+                        c.setUpdatedBy(TenantContext.getUserId());
+                        challanRepository.save(c);
+                    }
+                    return toMap(c);
+                })
+                .toList();
     }
 
     @Transactional

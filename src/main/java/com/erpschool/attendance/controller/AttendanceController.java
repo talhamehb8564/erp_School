@@ -97,6 +97,7 @@ public class AttendanceController {
         @NotNull
         private LocalDate date;
         @NotEmpty
+        @Valid
         private List<Mark> marks;
     }
 

@@ -4,6 +4,7 @@ import com.erpschool.common.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -59,6 +60,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.fail("INVALID_PARAMETER", "Invalid value for parameter '" + ex.getName() + "'"));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        String detail = ex.getMostSpecificCause() == null ? "" : ex.getMostSpecificCause().getMessage();
+        String lower = detail == null ? "" : detail.toLowerCase();
+        if (lower.contains("unique") || lower.contains("duplicate") || lower.contains("uk_")
+                || lower.contains("already exists")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.fail("DUPLICATE_RESOURCE", "A record with the same unique value already exists"));
+        }
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.fail("CONSTRAINT_VIOLATION", "Request violates a database constraint"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

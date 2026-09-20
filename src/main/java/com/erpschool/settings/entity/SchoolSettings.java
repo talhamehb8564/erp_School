@@ -7,6 +7,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -19,6 +21,7 @@ import java.util.UUID;
 public class SchoolSettings {
 
     @Id
+    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
@@ -49,9 +52,11 @@ public class SchoolSettings {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "created_by")
     private UUID createdBy;
 
+    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "updated_by")
     private UUID updatedBy;
 }
