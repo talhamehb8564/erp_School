@@ -133,8 +133,7 @@ public class HomeworkService {
                 throw new com.erpschool.common.exception.ForbiddenException("Cannot view homework for unrelated classes");
             }
         }
-        return homeworkRepository.findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(tenantId, classId, sectionId)
-                .stream().map(this::toMap).toList();
+        return toMaps(homeworkRepository.findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(tenantId, classId, sectionId));
     }
 
     @Transactional(readOnly = true)
@@ -142,8 +141,7 @@ public class HomeworkService {
         UUID tenantId = TenantGuard.requireTenantId(null);
         UserRole role = TenantContext.getRole();
         if (role == UserRole.TEACHER) {
-            return homeworkRepository.findByTenantIdAndTeacherUserIdOrderByDueDateDesc(tenantId, TenantContext.getUserId())
-                    .stream().map(this::toMap).toList();
+            return toMaps(homeworkRepository.findByTenantIdAndTeacherUserIdOrderByDueDateDesc(tenantId, TenantContext.getUserId()));
         }
         if (role == UserRole.STUDENT) {
             Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
@@ -151,11 +149,10 @@ public class HomeworkService {
             return forClass(me.getClassId(), me.getSectionId());
         }
         if (role == UserRole.SCHOOL_ADMIN || role == UserRole.PRINCIPAL || role == UserRole.ERP_OWNER) {
-            return homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId)
-                    .stream().map(this::toMap).toList();
+            return toMaps(homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId));
         }
         if (role == UserRole.PARENT) {
-            return parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
+            List<Homework> parentRows = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
                     .stream()
                     .map(ParentStudent::getStudentId)
                     .map(studentAccessService::requireStudent)
@@ -166,8 +163,8 @@ public class HomeworkService {
                             Homework::getId, h -> h, (a, b) -> a, java.util.LinkedHashMap::new))
                     .values()
                     .stream()
-                    .map(this::toMap)
                     .toList();
+            return toMaps(parentRows);
         }
         throw new ResourceNotFoundException("Use classId and sectionId filters");
     }
@@ -271,7 +268,24 @@ public class HomeworkService {
         return requestedStudentId;
     }
 
+    private List<Map<String, Object>> toMaps(List<Homework> list) {
+        if (list.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<HomeworkAttachment>> byHomework = attachmentRepository
+                .findByHomeworkIdIn(list.stream().map(Homework::getId).toList())
+                .stream()
+                .collect(java.util.stream.Collectors.groupingBy(HomeworkAttachment::getHomeworkId));
+        return list.stream()
+                .map(h -> toMap(h, byHomework.getOrDefault(h.getId(), List.of())))
+                .toList();
+    }
+
     private Map<String, Object> toMap(Homework h) {
+        return toMap(h, attachmentRepository.findByHomeworkId(h.getId()));
+    }
+
+    private Map<String, Object> toMap(Homework h, List<HomeworkAttachment> attachments) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", h.getId());
         m.put("teacherUserId", h.getTeacherUserId());
@@ -282,7 +296,7 @@ public class HomeworkService {
         m.put("description", h.getDescription());
         m.put("dueDate", h.getDueDate());
         m.put("createdAt", h.getCreatedAt());
-        m.put("attachments", attachmentRepository.findByHomeworkId(h.getId()));
+        m.put("attachments", attachments);
         return m;
     }
 

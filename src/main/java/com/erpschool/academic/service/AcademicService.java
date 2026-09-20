@@ -89,6 +89,11 @@ public class AcademicService {
         return sectionRepository.findByTenantIdAndClassIdOrderByNameAsc(tid(), classId);
     }
 
+    @Transactional(readOnly = true)
+    public List<Section> allSections() {
+        return sectionRepository.findByTenantId(tid());
+    }
+
     @Transactional
     public Subject createSubject(String name, String code) {
         UUID tenantId = tid();

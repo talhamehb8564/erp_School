@@ -13,11 +13,12 @@ import { AcademicsPage, CampusesPage, TimetablePage } from "./pages/school/Acade
 import { AttendancePage, ExamsPage, HomeworkPage } from "./pages/school/Teaching";
 import { BillingPage, FeesPage, SalariesPage, SettingsPage } from "./pages/school/Finance";
 import { AnnouncementsPage, CalendarPage, NotificationsPage, ReportsPage } from "./pages/school/Comms";
+import { Loading } from "./ui/kit";
 import type { Role } from "./lib/types";
 
 function Guard({ roles, children }: { roles?: Role[]; children: ReactNode }) {
   const { user, loading } = useSession();
-  if (loading) return <div className="loading">Restoring session…</div>;
+  if (loading) return <Loading label="Restoring session…" />;
   if (!user) return <Navigate to="/" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={homeFor(user)} replace />;
   return <>{children}</>;
@@ -25,7 +26,7 @@ function Guard({ roles, children }: { roles?: Role[]; children: ReactNode }) {
 
 function PublicOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useSession();
-  if (loading) return <div className="loading">Loading…</div>;
+  if (loading) return <Loading />;
   if (user) return <Navigate to={homeFor(user)} replace />;
   return <>{children}</>;
 }
@@ -40,7 +41,7 @@ function RoleGate({ roles, children }: { roles: Role[]; children: ReactNode }) {
 
 function HomeRedirect() {
   const { user, loading } = useSession();
-  if (loading) return <div className="loading">Loading…</div>;
+  if (loading) return <Loading />;
   if (!user) return <Navigate to="/" replace />;
   return <Navigate to={homeFor(user)} replace />;
 }

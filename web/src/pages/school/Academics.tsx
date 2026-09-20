@@ -3,7 +3,7 @@ import { academicApi, campusApi, userApi } from "../../api/services";
 import { useLookups } from "../../lib/lookups";
 import { dayName, fmtTime } from "../../lib/format";
 import { useToast } from "../../lib/toast";
-import { Button, Empty, ErrorBox, Field, Form, Loading, Modal, Table, useAsync } from "../../ui/kit";
+import { Button, Empty, Field, Form, Modal, QueryState, Table, useAsync } from "../../ui/kit";
 import { useSession } from "../../lib/session";
 import { studentApi } from "../../api/services";
 import { useActiveStudentId } from "./ChildSwitch";
@@ -18,19 +18,18 @@ export function CampusesPage() {
     <>
       <div className="page-title"><div><h1>Campuses</h1><p>Physical school sites</p></div>
         <Button kind="brass" onClick={() => setOpen(true)}>Add campus</Button></div>
-      {list.loading ? <Loading /> : list.error ? <ErrorBox error={list.error} /> : (
+      <QueryState status={list} label="campuses">
         <Table headers={["Name", "Code", "City", "Phone"]} rows={(list.data || []).map((c) => [c.name, c.code, c.city || "—", c.phone || "—"])} />
-      )}
+      </QueryState>
       <Modal title="New campus" open={open} onClose={() => setOpen(false)}>
-        <Form onSubmit={async () => {
-          try { await campusApi.create(form); toast("ok", "Campus saved"); setOpen(false); void list.reload(); }
-          catch (e) { toast("err", e instanceof Error ? e.message : "Failed"); }
+        <Form busyLabel="Saving…" onSubmit={async () => {
+          await campusApi.create(form); toast("ok", "Campus saved"); setOpen(false); void list.reload();
         }}>
           <Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
           <Field label="Code"><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required /></Field>
           <Field label="City"><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
           <Field label="Phone"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-          <Button type="submit" kind="brass">Save</Button>
+          <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
         </Form>
       </Modal>
     </>
@@ -40,7 +39,8 @@ export function CampusesPage() {
 export function AcademicsPage() {
   const { user } = useSession();
   const canWrite = user?.role === "SCHOOL_ADMIN";
-  const { classes, subjects, sections, reload } = useLookups();
+  const { classes, subjects, sections, reload, loading, error } = useLookups();
+  const lookupStatus = { data: loading && !classes.length && !subjects.length ? null : classes, error, loading, reload };
   const toast = useToast();
   const [cOpen, setCOpen] = useState(false);
   const [sOpen, setSOpen] = useState(false);
@@ -60,6 +60,7 @@ export function AcademicsPage() {
           </div>
         ) : null}
       </div>
+      <QueryState status={lookupStatus} label="academics">
       <div className="grid two">
         <div className="card">
           <h3>Classes</h3>
@@ -78,33 +79,34 @@ export function AcademicsPage() {
           <Table headers={["Name", "Code"]} rows={subjects.map((s) => [s.name, s.code])} />
         </div>
       </div>
+      </QueryState>
       <Modal title="New class" open={cOpen} onClose={() => setCOpen(false)}>
-        <Form onSubmit={async () => {
+        <Form busyLabel="Saving…" onSubmit={async () => {
           await academicApi.createClass({ name: className, grade });
           toast("ok", "Class created"); setCOpen(false); void reload();
         }}>
           <Field label="Name"><input value={className} onChange={(e) => setClassName(e.target.value)} required /></Field>
           <Field label="Grade"><input value={grade} onChange={(e) => setGrade(e.target.value)} /></Field>
-          <Button type="submit" kind="brass">Save</Button>
+          <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
         </Form>
       </Modal>
       <Modal title="New subject" open={sOpen} onClose={() => setSOpen(false)}>
-        <Form onSubmit={async () => {
+        <Form busyLabel="Saving…" onSubmit={async () => {
           await academicApi.createSubject({ name: subjectName, code });
           toast("ok", "Subject created"); setSOpen(false); void reload();
         }}>
           <Field label="Name"><input value={subjectName} onChange={(e) => setSubjectName(e.target.value)} required /></Field>
           <Field label="Code"><input value={code} onChange={(e) => setCode(e.target.value)} required /></Field>
-          <Button type="submit" kind="brass">Save</Button>
+          <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
         </Form>
       </Modal>
       <Modal title="New section" open={!!sectionFor} onClose={() => setSectionFor("")}>
-        <Form onSubmit={async () => {
+        <Form busyLabel="Saving…" onSubmit={async () => {
           await academicApi.createSection(sectionFor, sectionName);
           toast("ok", "Section created"); setSectionFor(""); void reload();
         }}>
           <Field label="Name"><input value={sectionName} onChange={(e) => setSectionName(e.target.value)} required /></Field>
-          <Button type="submit" kind="brass">Save</Button>
+          <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
         </Form>
       </Modal>
     </>
@@ -154,18 +156,16 @@ export function TimetablePage() {
           </select>
         </div>
       ) : null}
-      {slots.loading ? <Loading /> : slots.error ? <ErrorBox error={slots.error} /> : (
+      <QueryState status={slots} label="timetable">
         <Table
           headers={["Day", "Time", "Class", "Subject"]}
           rows={(slots.data || []).map((s) => [dayName(s.dayOfWeek), `${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`, className(s.classId), subjectName(s.subjectId)])}
         />
-      )}
+      </QueryState>
       <Modal title="Lecture" open={open} onClose={() => setOpen(false)}>
-        <Form onSubmit={async () => {
-          try {
-            await academicApi.createSlot({ ...form, startTime: form.startTime.length === 5 ? form.startTime + ":00" : form.startTime, endTime: form.endTime.length === 5 ? form.endTime + ":00" : form.endTime, dayOfWeek: Number(form.dayOfWeek) });
-            toast("ok", "Lecture created"); setOpen(false); void slots.reload();
-          } catch (e) { toast("err", e instanceof Error ? e.message : "Failed"); }
+        <Form busyLabel="Saving…" onSubmit={async () => {
+          await academicApi.createSlot({ ...form, startTime: form.startTime.length === 5 ? form.startTime + ":00" : form.startTime, endTime: form.endTime.length === 5 ? form.endTime + ":00" : form.endTime, dayOfWeek: Number(form.dayOfWeek) });
+          toast("ok", "Lecture created"); setOpen(false); void slots.reload();
         }}>
           <Field label="Class">
             <select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} required>
@@ -198,7 +198,7 @@ export function TimetablePage() {
           </Field>
           <Field label="Start"><input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></Field>
           <Field label="End"><input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></Field>
-          <Button type="submit" kind="brass">Save</Button>
+          <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
         </Form>
       </Modal>
     </>

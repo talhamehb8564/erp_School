@@ -19,7 +19,7 @@ export default function SchoolApp() {
   useEffect(() => {
     if (!user || locked) return;
     void notificationApi.unread().then((r) => setUnread(r.unread)).catch(() => undefined);
-  }, [user, locked, loc.pathname]);
+  }, [user, locked]);
 
   if (!user) return <Navigate to="/" replace />;
   if (user.role === "ERP_OWNER") return <Navigate to="/admin/app" replace />;

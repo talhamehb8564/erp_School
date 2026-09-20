@@ -2,7 +2,6 @@ package com.erpschool.portal.controller;
 
 import com.erpschool.academic.service.AcademicService;
 import com.erpschool.common.dto.ApiResponse;
-import com.erpschool.fee.entity.ChallanStatus;
 import com.erpschool.fee.service.FeeService;
 import com.erpschool.homework.service.HomeworkService;
 import com.erpschool.notification.service.NotificationService;
@@ -76,7 +75,6 @@ public class PortalController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> account() {
         Map<String, Object> m = new HashMap<>(reportService.schoolDashboard());
         m.put("pendingProofs", feeService.pendingProofs());
-        m.put("unpaidChallans", feeService.byStatus(ChallanStatus.UNPAID));
         m.put("unreadNotifications", notificationService.unreadCount());
         return ResponseEntity.ok(ApiResponse.ok(m));
     }

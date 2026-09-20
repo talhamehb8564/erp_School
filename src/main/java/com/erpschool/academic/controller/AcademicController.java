@@ -69,6 +69,12 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.ok(academicService.sections(classId)));
     }
 
+    @GetMapping("/sections")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<Section>>> allSections() {
+        return ResponseEntity.ok(ApiResponse.ok(academicService.allSections()));
+    }
+
     @PostMapping("/subjects")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
     public ResponseEntity<ApiResponse<Subject>> createSubject(@RequestBody Subject body) {

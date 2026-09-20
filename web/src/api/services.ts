@@ -51,11 +51,12 @@ export const authApi = {
 };
 
 export const tenantApi = {
-  list: (q?: string, status?: string) => {
+  list: (q?: string, status?: string, page = 0) => {
     const p = new URLSearchParams();
     if (q) p.set("q", q);
     if (status) p.set("status", status);
     p.set("size", "50");
+    p.set("page", String(page));
     return api.get<Page<Tenant>>(`${v1}/tenants?${p}`);
   },
   get: (id: string) => api.get<Tenant>(`${v1}/tenants/${id}`),
@@ -67,8 +68,8 @@ export const tenantApi = {
 };
 
 export const userApi = {
-  list: (params: { role?: Role; q?: string; status?: UserStatus; tenantId?: string } = {}) => {
-    const p = new URLSearchParams({ size: "50" });
+  list: (params: { role?: Role; q?: string; status?: UserStatus; tenantId?: string; page?: number } = {}) => {
+    const p = new URLSearchParams({ size: "50", page: String(params.page ?? 0) });
     if (params.role) p.set("role", params.role);
     if (params.q) p.set("q", params.q);
     if (params.status) p.set("status", params.status);
@@ -108,6 +109,7 @@ export const academicApi = {
   classes: () => api.get<SchoolClass[]>(`${v1}/classes`),
   createClass: (body: Record<string, unknown>) => api.post<SchoolClass>(`${v1}/classes`, body),
   sections: (classId: string) => api.get<Section[]>(`${v1}/classes/${classId}/sections`),
+  allSections: () => api.get<Section[]>(`${v1}/sections`),
   createSection: (classId: string, name: string) =>
     api.post<Section>(`${v1}/classes/${classId}/sections`, { name }),
   subjects: () => api.get<Subject[]>(`${v1}/subjects`),
@@ -126,8 +128,8 @@ export const academicApi = {
 };
 
 export const studentApi = {
-  list: (classId?: string, sectionId?: string) => {
-    const p = new URLSearchParams({ size: "50" });
+  list: (classId?: string, sectionId?: string, page = 0) => {
+    const p = new URLSearchParams({ size: "50", page: String(page) });
     if (classId) p.set("classId", classId);
     if (sectionId) p.set("sectionId", sectionId);
     return api.get<Page<StudentUser>>(`${v1}/students?${p}`);

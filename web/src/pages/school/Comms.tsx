@@ -4,7 +4,7 @@ import { useLookups } from "../../lib/lookups";
 import { fmtDate, monthStart, pretty } from "../../lib/format";
 import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
-import { Badge, Bars, Button, Empty, ErrorBox, Field, Form, Loading, Table, useAsync } from "../../ui/kit";
+import { Badge, Bars, Button, Empty, Field, Form, QueryState, Table, useAsync } from "../../ui/kit";
 
 export function AnnouncementsPage() {
   const { user } = useSession();
@@ -18,7 +18,7 @@ export function AnnouncementsPage() {
       <div className="page-title"><div><h1>Announcements</h1><p>Visible according to audience and class</p></div></div>
       {staff ? (
         <div className="card" style={{ marginBottom: 16 }}>
-          <Form onSubmit={async () => { await announcementApi.create(form); toast("ok", "Published"); void list.reload(); }}>
+          <Form busyLabel="Publishing…" onSubmit={async () => { await announcementApi.create(form); toast("ok", "Published"); void list.reload(); }}>
             <Field label="Title"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></Field>
             <Field label="Body"><textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required /></Field>
             <div className="row">
@@ -36,11 +36,12 @@ export function AnnouncementsPage() {
                 </Field>
               ) : null}
             </div>
-            <Button type="submit" kind="brass">Publish</Button>
+            <Button type="submit" kind="brass" loadingText="Publishing…">Publish</Button>
           </Form>
         </div>
       ) : null}
-      {list.loading ? <Loading /> : list.error ? <ErrorBox error={list.error} /> : !(list.data || []).length ? <Empty title="No announcements" /> : (
+      <QueryState status={list} label="announcements">
+      {!(list.data || []).length ? <Empty title="No announcements" /> : (
         <div className="grid">
           {(list.data || []).map((a) => (
             <article className="card" key={a.id}>
@@ -51,6 +52,7 @@ export function AnnouncementsPage() {
           ))}
         </div>
       )}
+      </QueryState>
     </>
   );
 }
@@ -65,18 +67,20 @@ export function CalendarPage() {
     <>
       <div className="page-title"><div><h1>Calendar</h1><p>Holidays, PTM and school events</p></div></div>
       {staff ? (
-        <Form onSubmit={async () => { await calendarApi.create(form); toast("ok", "Event saved"); void list.reload(); }}>
+        <Form busyLabel="Saving…" onSubmit={async () => { await calendarApi.create(form); toast("ok", "Event saved"); void list.reload(); }}>
           <div className="row">
             <input className="search" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
             <select className="search" value={form.eventType} onChange={(e) => setForm({ ...form, eventType: e.target.value })}>
               {["HOLIDAY", "EVENT", "PTM", "EXAM", "ACTIVITY"].map((t) => <option key={t}>{t}</option>)}
             </select>
             <input className="search" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-            <Button type="submit">Add</Button>
+            <Button type="submit" loadingText="Saving…">Add</Button>
           </div>
         </Form>
       ) : null}
-      {list.loading ? <Loading /> : <Table headers={["When", "Type", "Title"]} rows={(list.data || []).map((e) => [fmtDate(e.startDate), pretty(e.eventType), e.title])} />}
+      <QueryState status={list} label="calendar">
+        <Table headers={["When", "Type", "Title"]} rows={(list.data || []).map((e) => [fmtDate(e.startDate), pretty(e.eventType), e.title])} />
+      </QueryState>
     </>
   );
 }
@@ -87,15 +91,15 @@ export function NotificationsPage() {
   return (
     <>
       <div className="page-title"><div><h1>Notifications</h1><p>In-app messages from homework, fees and results</p></div></div>
-      {list.loading ? <Loading /> : list.error ? <ErrorBox error={list.error} /> : (
+      <QueryState status={list} label="notifications">
         <Table
           headers={["When", "Title", ""]}
           rows={(list.data?.content || []).map((n) => [
             fmtDate(n.createdAt), n.title,
-            n.readAt ? "Read" : <Button key={n.id} kind="ghost" onClick={async () => { await notificationApi.read(n.id); toast("ok", "Marked read"); void list.reload(); }}>Mark read</Button>,
+            n.readAt ? "Read" : <Button key={n.id} kind="ghost" loadingText="Updating…" onClick={async () => { await notificationApi.read(n.id); toast("ok", "Marked read"); void list.reload(); }}>Mark read</Button>,
           ])}
         />
-      )}
+      </QueryState>
     </>
   );
 }
@@ -104,7 +108,6 @@ export function ReportsPage() {
   const dash = useAsync(() => reportApi.schoolDashboard());
   const [month, setMonth] = useState(monthStart());
   const fees = useAsync(() => reportApi.feeCollection(month), [month]);
-  if (dash.loading) return <Loading />;
   const m = dash.data || {};
   const billed = Number(fees.data?.billed || 0);
   const collected = Number(fees.data?.collected || 0);
@@ -114,22 +117,24 @@ export function ReportsPage() {
       <div className="grid two">
         <div className="card">
           <h3>Census</h3>
-          <Bars items={[
-            { label: "Students", value: Number(m.students || 0) },
-            { label: "Teachers", value: Number(m.teachers || 0) },
-            { label: "Parents", value: Number(m.parents || 0) },
-            { label: "Unpaid", value: Number(m.unpaidChallans || 0) },
-          ]} />
+          <QueryState status={dash} label="census">
+            <Bars items={[
+              { label: "Students", value: Number(m.students || 0) },
+              { label: "Teachers", value: Number(m.teachers || 0) },
+              { label: "Parents", value: Number(m.parents || 0) },
+              { label: "Unpaid", value: Number(m.unpaidChallans || 0) },
+            ]} />
+          </QueryState>
         </div>
         <div className="card">
           <h3>Fee collection</h3>
           <Field label="Month"><input type="month" value={month.slice(0, 7)} onChange={(e) => setMonth(`${e.target.value}-01`)} /></Field>
-          {fees.loading ? <Loading /> : (
+          <QueryState status={fees} label="fee collection">
             <Bars items={[
               { label: "Billed", value: billed, max: Math.max(billed, collected, 1) },
               { label: "Collected", value: collected, max: Math.max(billed, collected, 1) },
             ]} />
-          )}
+          </QueryState>
         </div>
       </div>
     </>

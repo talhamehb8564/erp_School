@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fileApi, settingsApi, subscriptionApi } from "../api/services";
 import { useSession } from "../lib/session";
-import { Button, Field, Form, Loading } from "../ui/kit";
+import { Button, ErrorBox, Field, Form, Loading } from "../ui/kit";
 import { useToast } from "../lib/toast";
 import { pretty } from "../lib/format";
 
@@ -10,7 +10,6 @@ export default function Locked() {
   const toast = useToast();
   const [ref, setRef] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
   const admin = user?.role === "SCHOOL_ADMIN";
 
   return (
@@ -23,24 +22,18 @@ export default function Locked() {
           proof to reactivate your account.
         </p>
         <p>
-          School: <strong>{tenant?.name}</strong> · Status <strong>{pretty(tenant?.status)}</strong>
+          School: <strong>{tenant?.name || "—"}</strong> · Status <strong>{pretty(tenant?.status)}</strong>
         </p>
         {admin ? (
           <Form
+            busyLabel="Uploading…"
             onSubmit={async () => {
-              if (!file) return;
-              setBusy(true);
-              try {
-                const sub = await subscriptionApi.current();
-                const uploaded = await fileApi.upload(file);
-                await subscriptionApi.submitPayment(sub.id, { slipUrl: uploaded.url, transactionRef: ref || undefined });
-                toast("ok", "Payment proof submitted to the ERP owner.");
-                await reload();
-              } catch (e) {
-                toast("err", e instanceof Error ? e.message : "Upload failed");
-              } finally {
-                setBusy(false);
-              }
+              if (!file) throw new Error("Choose a payment proof file first.");
+              const sub = await subscriptionApi.current();
+              const uploaded = await fileApi.upload(file);
+              await subscriptionApi.submitPayment(sub.id, { slipUrl: uploaded.url, transactionRef: ref || undefined });
+              toast("ok", "Payment proof submitted to the ERP owner.");
+              await reload();
             }}
           >
             <SettingsHint />
@@ -51,16 +44,16 @@ export default function Locked() {
               <input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} required />
             </Field>
             <div className="row">
-              <Button type="submit" kind="brass" disabled={busy || !file}>
-                {busy ? "Uploading…" : "Submit payment proof"}
+              <Button type="submit" kind="brass" disabled={!file} loadingText="Uploading…">
+                Submit payment proof
               </Button>
-              <Button kind="ghost" onClick={() => void logout()}>
+              <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
                 Sign out
               </Button>
             </div>
           </Form>
         ) : (
-          <Button kind="ghost" onClick={() => void logout()}>
+          <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
             Sign out
           </Button>
         )}
@@ -71,7 +64,11 @@ export default function Locked() {
 
 function SettingsHint() {
   const [text, setText] = useState<string>("");
-  useEffect(() => {
+  const [error, setError] = useState<unknown>(null);
+  const [loading, setLoading] = useState(true);
+  const load = () => {
+    setLoading(true);
+    setError(null);
     void settingsApi
       .get()
       .then((s) => {
@@ -80,8 +77,13 @@ function SettingsHint() {
           .join(" · ");
         setText(bits || "Ask the ERP owner for transfer instructions.");
       })
-      .catch(() => setText("Ask the ERP owner for transfer instructions."));
+      .catch((e) => setError(e))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => {
+    load();
   }, []);
-  if (!text) return <Loading />;
+  if (loading) return <Loading label="Loading payment instructions…" />;
+  if (error) return <ErrorBox error={error} onRetry={load} title="Unable to load payment instructions" />;
   return <div className="notice">{text}</div>;
 }

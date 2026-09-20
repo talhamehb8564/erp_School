@@ -4,7 +4,7 @@ import { useLookups } from "../../lib/lookups";
 import { dayName, fmtDate, pretty, today } from "../../lib/format";
 import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
-import { Badge, Button, Empty, ErrorBox, Field, FileLink, Form, Loading, Modal, Table, studentLabel, useAsync } from "../../ui/kit";
+import { Badge, Button, Empty, Field, FileLink, Form, Modal, QueryState, Table, studentLabel, useAsync } from "../../ui/kit";
 import ChildSwitch, { useActiveStudentId } from "./ChildSwitch";
 import type { AttendanceStatus, StudentUser } from "../../lib/types";
 
@@ -51,9 +51,9 @@ export function AttendancePage() {
       <>
         <div className="page-title"><div><h1>Attendance</h1><p>Last 30 days from lecture rolls</p></div></div>
         {user.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
-        {history.loading ? <Loading /> : history.error ? <ErrorBox error={history.error} /> : (
+        <QueryState status={history} label="attendance">
           <Table headers={["Date", "Status", "Remarks"]} rows={(history.data || []).map((r) => [r.attendanceDate, <Badge key={r.id} value={r.status} />, r.remarks || "—"])} />
-        )}
+        </QueryState>
       </>
     );
   }
@@ -74,28 +74,34 @@ export function AttendancePage() {
             </select>
           </>
         ) : null}
-        <select className="search" value={slotId} onChange={(e) => setSlotId(e.target.value)}>
-          <option value="">Select lecture</option>
-          {(slots.data || []).map((s) => (
-            <option key={s.id} value={s.id}>{dayName(s.dayOfWeek)} {s.startTime}</option>
-          ))}
-        </select>
+        <QueryState status={slots} label="lectures">
+          <select className="search" value={slotId} onChange={(e) => setSlotId(e.target.value)}>
+            <option value="">Select lecture</option>
+            {(slots.data || []).map((s) => (
+              <option key={s.id} value={s.id}>{dayName(s.dayOfWeek)} {s.startTime}</option>
+            ))}
+          </select>
+        </QueryState>
         <input className="search" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <Button
           kind="brass"
           disabled={!slotId}
+          loadingText="Saving…"
           onClick={async () => {
             try {
               const items = (roster.data || []).map((st) => ({ studentId: st.id, status: marks[st.id] || "PRESENT" }));
               await attendanceApi.markLecture(slotId, { date, marks: items });
               toast("ok", "Attendance saved");
-            } catch (e) { toast("err", e instanceof Error ? e.message : "Save failed"); }
+            } catch (e) {
+              toast("err", e instanceof Error ? e.message : "Save failed");
+            }
           }}
         >
           Save roll
         </Button>
       </div>
-      {roster.loading ? <Loading /> : roster.error ? <ErrorBox error={roster.error} /> : (
+      {!slotId ? <Empty title="Select a lecture to load the roster" /> : (
+      <QueryState status={roster} label="roster">
         <Table
           headers={["Student", "Status"]}
           rows={(roster.data || []).map((st) => [
@@ -105,6 +111,7 @@ export function AttendancePage() {
             </select>,
           ])}
         />
+      </QueryState>
       )}
     </>
   );
@@ -142,7 +149,7 @@ export function HomeworkPage() {
         ) : null}
       </div>
       {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
-      {list.loading ? <Loading /> : list.error ? <ErrorBox error={list.error} /> : (
+      <QueryState status={list} label="homework">
         <Table
           headers={["Title", "Class", "Subject", "Due", ""]}
           rows={homeworkRows.map((h) => [
@@ -150,13 +157,11 @@ export function HomeworkPage() {
             <Button key={h.id} kind="ghost" onClick={() => setActive(h.id)}>Open</Button>,
           ])}
         />
-      )}
+      </QueryState>
       <Modal title="Assign homework" open={open} onClose={() => setOpen(false)}>
-        <Form onSubmit={async () => {
-          try {
-            await homeworkApi.create(form);
-            toast("ok", "Homework assigned"); setOpen(false); void list.reload();
-          } catch (e) { toast("err", e instanceof Error ? e.message : "Failed"); }
+        <Form busyLabel="Publishing…" onSubmit={async () => {
+          await homeworkApi.create(form);
+          toast("ok", "Homework assigned"); setOpen(false); void list.reload();
         }}>
           <Field label="Class"><select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} required><option value="">Select</option>{classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
           <Field label="Section"><select value={form.sectionId} onChange={(e) => setForm({ ...form, sectionId: e.target.value })} required><option value="">Select</option>{(sections[form.classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
@@ -164,7 +169,7 @@ export function HomeworkPage() {
           <Field label="Title"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></Field>
           <Field label="Description"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
           <Field label="Due"><input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></Field>
-          <Button type="submit" kind="brass">Publish</Button>
+          <Button type="submit" kind="brass" loadingText="Publishing…">Publish</Button>
         </Form>
       </Modal>
       <Modal title="Homework" open={!!active} onClose={() => setActive(null)}>
@@ -176,27 +181,27 @@ export function HomeworkPage() {
           </div>
         ) : null}
         {(user?.role === "STUDENT" || user?.role === "PARENT") && sid ? (
-          <Form onSubmit={async () => {
-            try {
-              let fileUrl: string | undefined;
-              if (file) fileUrl = (await fileApi.upload(file)).url;
-              await homeworkApi.submit(active!, { studentId: sid, fileUrl, notes });
-              toast("ok", "Submitted"); setActive(null); setFile(null); setNotes("");
-            } catch (e) { toast("err", e instanceof Error ? e.message : "Submit failed"); }
+          <Form busyLabel="Submitting…" onSubmit={async () => {
+            let fileUrl: string | undefined;
+            if (file) fileUrl = (await fileApi.upload(file)).url;
+            await homeworkApi.submit(active!, { studentId: sid, fileUrl, notes });
+            toast("ok", "Submitted"); setActive(null); setFile(null); setNotes("");
           }}>
             <Field label="Notes"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
             <Field label="File"><input type="file" accept=".pdf,image/*,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} /></Field>
-            <Button type="submit" kind="brass">Submit work</Button>
+            <Button type="submit" kind="brass" loadingText="Submitting…">Submit work</Button>
           </Form>
-        ) : subs.loading ? <Loading /> : subs.error ? <ErrorBox error={subs.error} /> : (
-          <Table
-            headers={["Student", "Status", "Notes", "File", ""]}
-            rows={(subs.data || []).map((s) => [
-              dir.nameOf(s.studentId), <Badge key={s.id} value={s.status} />, s.notes || "—",
-              <FileLink key={`f${s.id}`} href={s.fileUrl} />,
-              <Button key={`rv${s.id}`} kind="ghost" onClick={async () => { await homeworkApi.review(s.id, "Reviewed"); toast("ok", "Reviewed"); void subs.reload(); }}>Review</Button>,
-            ])}
-          />
+        ) : (
+          <QueryState status={subs} label="submissions">
+            <Table
+              headers={["Student", "Status", "Notes", "File", ""]}
+              rows={(subs.data || []).map((s) => [
+                dir.nameOf(s.studentId), <Badge key={s.id} value={s.status} />, s.notes || "—",
+                <FileLink key={`f${s.id}`} href={s.fileUrl} />,
+                <Button key={`rv${s.id}`} kind="ghost" loadingText="Reviewing…" onClick={async () => { await homeworkApi.review(s.id, "Reviewed"); toast("ok", "Reviewed"); void subs.reload(); }}>Review</Button>,
+              ])}
+            />
+          </QueryState>
         )}
       </Modal>
     </>
@@ -223,36 +228,38 @@ export function ExamsPage() {
       <div className="page-title"><div><h1>Marks & results</h1><p>Offline exam sessions — published results only for families</p></div></div>
       {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
       {(user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? (
-        <Form onSubmit={async () => { await examApi.createSession({ name }); toast("ok", "Session created"); void sessions.reload(); }}>
+        <Form busyLabel="Creating…" onSubmit={async () => { await examApi.createSession({ name }); toast("ok", "Session created"); void sessions.reload(); }}>
           <div className="row">
             <input className="search" placeholder="Mid-term 2026" value={name} onChange={(e) => setName(e.target.value)} />
-            <Button type="submit">Create session</Button>
+            <Button type="submit" loadingText="Creating…">Create session</Button>
           </div>
         </Form>
       ) : null}
+      <QueryState status={sessions} label="exam sessions">
       <Field label="Exam session">
         <select value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
           <option value="">Select</option>
           {(sessions.data || []).map((s) => <option key={s.id} value={s.id}>{s.name} {s.published ? "(published)" : ""}</option>)}
         </select>
       </Field>
+      </QueryState>
       {user?.role === "STUDENT" || user?.role === "PARENT" ? (
-        mine.loading ? <Loading /> : mine.error ? <ErrorBox error={mine.error} /> : mine.data ? (
-          <div className="card">
-            <p>Grade {mine.data.grade} · {mine.data.percentage}% · {pretty(mine.data.passStatus)}</p>
-            <Table headers={["Subject", "Obtained", "Total"]} rows={(mine.data.subjects || []).map((r) => [subjectName(r.subjectId), r.obtainedMarks, r.totalMarks])} />
-          </div>
-        ) : <Empty title="Select a published session" />
+        <QueryState status={mine} label="results">
+          {mine.data ? (
+            <div className="card">
+              <p>Grade {mine.data.grade} · {mine.data.percentage}% · {pretty(mine.data.passStatus)}</p>
+              <Table headers={["Subject", "Obtained", "Total"]} rows={(mine.data.subjects || []).map((r) => [subjectName(r.subjectId), r.obtainedMarks, r.totalMarks])} />
+            </div>
+          ) : <Empty title="Select a published session" />}
+        </QueryState>
       ) : (
         <>
           {(user?.role === "TEACHER" || user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") && sessionId ? (
             <div className="card" style={{ marginBottom: 12 }}>
               <h3>Enter marks</h3>
-              <Form onSubmit={async () => {
-                try {
-                  await examApi.upsertResult(sessionId, { ...mark, totalMarks: Number(mark.totalMarks), obtainedMarks: Number(mark.obtainedMarks) });
-                  toast("ok", "Result saved"); void results.reload();
-                } catch (e) { toast("err", e instanceof Error ? e.message : "Failed"); }
+              <Form busyLabel="Saving marks…" onSubmit={async () => {
+                await examApi.upsertResult(sessionId, { ...mark, totalMarks: Number(mark.totalMarks), obtainedMarks: Number(mark.obtainedMarks) });
+                toast("ok", "Result saved"); void results.reload();
               }}>
                 <Field label="Student">
                   <select value={mark.studentId} onChange={(e) => setMark({ ...mark, studentId: e.target.value })} required>
@@ -270,15 +277,17 @@ export function ExamsPage() {
                   <Field label="Obtained"><input value={mark.obtainedMarks} onChange={(e) => setMark({ ...mark, obtainedMarks: e.target.value })} /></Field>
                   <Field label="Total"><input value={mark.totalMarks} onChange={(e) => setMark({ ...mark, totalMarks: e.target.value })} /></Field>
                 </div>
-                <Button type="submit" kind="brass">Save marks</Button>
+                <Button type="submit" kind="brass" loadingText="Saving…">Save marks</Button>
               </Form>
               {(user.role === "SCHOOL_ADMIN" || user.role === "PRINCIPAL") ? (
-                <Button kind="ok" onClick={async () => { await examApi.publish(sessionId); toast("ok", "Published"); void sessions.reload(); }}>Publish results</Button>
+                <Button kind="ok" loadingText="Publishing…" onClick={async () => { await examApi.publish(sessionId); toast("ok", "Published"); void sessions.reload(); }}>Publish results</Button>
               ) : null}
             </div>
           ) : null}
-          {results.loading ? <Loading /> : results.error ? <ErrorBox error={results.error} /> : (
+          {!sessionId ? <Empty title="Select a session to view results" /> : (
+          <QueryState status={results} label="exam results">
             <Table headers={["Student", "Subject", "Marks", "Grade"]} rows={(results.data || []).map((r) => [dir.nameOf(r.studentId), subjectName(r.subjectId), `${r.obtainedMarks}/${r.totalMarks}`, r.grade || "—"])} />
+          </QueryState>
           )}
         </>
       )}

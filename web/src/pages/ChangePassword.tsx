@@ -11,7 +11,6 @@ export default function ChangePassword() {
   const toast = useToast();
   const [currentPassword, setCurrent] = useState("");
   const [newPassword, setNew] = useState("");
-  const [error, setError] = useState("");
 
   return (
     <div className="auth-page">
@@ -20,16 +19,12 @@ export default function ChangePassword() {
         <h1>Change password</h1>
         <p className="hint">Temporary passwords must be replaced before using the ERP. Upper, lower, digit and special character. 8–72 characters.</p>
         <Form
+          busyLabel="Changing password…"
           onSubmit={async () => {
-            setError("");
-            try {
-              await authApi.changePassword(currentPassword, newPassword);
-              toast("ok", "Password changed. Sign in again.");
-              await logout();
-              nav("/", { replace: true });
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Could not change password");
-            }
+            await authApi.changePassword(currentPassword, newPassword);
+            toast("ok", "Password changed. Sign in again.");
+            await logout();
+            nav("/", { replace: true });
           }}
         >
           <Field label="Current password">
@@ -38,8 +33,7 @@ export default function ChangePassword() {
           <Field label="New password">
             <input type="password" value={newPassword} onChange={(e) => setNew(e.target.value)} required />
           </Field>
-          {error ? <div className="error-box">{error}</div> : null}
-          <Button type="submit" kind="brass">
+          <Button type="submit" kind="brass" loadingText="Changing password…">
             Update password
           </Button>
         </Form>

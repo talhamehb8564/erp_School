@@ -25,8 +25,6 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
   const toast = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
 
   if (user) return <Navigate to={homeFor(user)} replace />;
   if (!expected) return <Navigate to="/" replace />;
@@ -34,7 +32,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <Link to={owner ? "/" : "/"} className="kicker">
+        <Link to="/" className="kicker">
           ← All portals
         </Link>
         <h1>{owner ? "ERP Owner" : ROLE_LABEL[expected]}</h1>
@@ -44,18 +42,11 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
             : "Authenticate against the live /api/v1/auth/login endpoint."}
         </p>
         <Form
+          busyLabel="Signing in…"
           onSubmit={async () => {
-            setBusy(true);
-            setError("");
-            try {
-              const u = await login(username, password, expected);
-              toast("ok", `Signed in as ${u.fullName || u.username}`);
-              nav(homeFor(u), { replace: true });
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Login failed");
-            } finally {
-              setBusy(false);
-            }
+            const u = await login(username, password, expected);
+            toast("ok", `Signed in as ${u.fullName || u.username}`);
+            nav(homeFor(u), { replace: true });
           }}
         >
           <Field label="Username">
@@ -64,10 +55,9 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
           <Field label="Password">
             <input type="password" value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} required />
           </Field>
-          {error ? <div className="error-box">{error}</div> : null}
           <div className="row" style={{ marginTop: 12 }}>
-            <Button type="submit" kind="brass" disabled={busy}>
-              {busy ? "Signing in…" : "Sign in"}
+            <Button type="submit" kind="brass" loadingText="Signing in…">
+              Sign in
             </Button>
           </div>
         </Form>

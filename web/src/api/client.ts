@@ -62,7 +62,27 @@ async function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+const getInflight = new Map<string, Promise<unknown>>();
+
 export async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  retry = true,
+): Promise<T> {
+  const method = (init.method || "GET").toUpperCase();
+  if (method === "GET" && retry) {
+    const existing = getInflight.get(path);
+    if (existing) return existing as Promise<T>;
+    const pending = send<T>(path, init, retry).finally(() => {
+      if (getInflight.get(path) === pending) getInflight.delete(path);
+    });
+    getInflight.set(path, pending);
+    return pending;
+  }
+  return send<T>(path, init, retry);
+}
+
+async function send<T>(
   path: string,
   init: RequestInit = {},
   retry = true,
@@ -81,7 +101,7 @@ export async function request<T>(
   }
   if (res.status === 401 && retry && !path.includes("/auth/login") && !path.includes("/auth/refresh")) {
     const ok = await tryRefresh();
-    if (ok) return request<T>(path, init, false);
+    if (ok) return send<T>(path, init, false);
   }
   const text = await res.text();
   let json: { success?: boolean; data?: T; message?: string; errorCode?: string; errors?: { field: string; message: string }[] } | null = null;
