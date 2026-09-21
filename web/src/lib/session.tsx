@@ -14,7 +14,7 @@ interface Session {
   locked: boolean;
   childId: string | null;
   login: (username: string, password: string, expected?: Role) => Promise<User>;
-  logout: () => Promise<void>;
+  logout: (opts?: { remote?: boolean }) => Promise<void>;
   reload: () => Promise<void>;
   setChildId: (id: string | null) => void;
 }
@@ -139,12 +139,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return payload.user;
   }, []);
 
-  const logout = useCallback(async () => {
-    const rt = getRefreshToken();
-    try {
-      if (rt) await authApi.logout(rt);
-    } catch {
-      /* still clear locally */
+  const logout = useCallback(async (opts?: { remote?: boolean }) => {
+    if (opts?.remote !== false) {
+      const rt = getRefreshToken();
+      try {
+        if (rt) await authApi.logout(rt);
+      } catch {
+        /* still clear locally */
+      }
     }
     clearTokens();
     persist(null);

@@ -133,11 +133,11 @@ public class AuthService {
     public void changePassword(User actor, String currentPassword, String newPassword) {
         User user = userRepository.findById(actor.getId())
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
+        if (currentPassword.equals(newPassword)) {
+            throw new BusinessException("NEW_PASSWORD_SAME", "New password must be different from the current password");
+        }
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             throw new UnauthorizedException("Current password is incorrect");
-        }
-        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
-            throw new BusinessException("NEW_PASSWORD_SAME", "New password must be different from the current password");
         }
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setMustChangePassword(false);

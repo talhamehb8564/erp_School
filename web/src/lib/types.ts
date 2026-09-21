@@ -284,6 +284,14 @@ export interface FeeChallan {
   status: ChallanStatus;
   charges?: unknown[];
   proofs?: FeeProof[];
+  studentName?: string;
+  rollNumber?: string;
+  admissionNumber?: string;
+  classId?: string;
+  sectionId?: string;
+  campusId?: string;
+  campusName?: string;
+  guardianName?: string;
 }
 
 export interface FeeProof {
@@ -294,6 +302,14 @@ export interface FeeProof {
   status?: ChallanStatus;
   remarks?: string;
   reviewedAt?: string;
+  challanNumber?: string;
+  studentId?: string;
+  studentName?: string;
+  rollNumber?: string;
+  month?: string;
+  dueDate?: string;
+  totalPayable?: number;
+  campusName?: string;
 }
 
 export interface StaffProfile {

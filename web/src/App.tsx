@@ -70,6 +70,7 @@ export default function App() {
         <Route path="schools" element={<Schools />} />
         <Route path="schools/:id" element={<SchoolDetail />} />
         <Route path="subscriptions" element={<Subscriptions />} />
+        <Route path="password" element={<ChangePassword />} />
       </Route>
       <Route
         path="/app"

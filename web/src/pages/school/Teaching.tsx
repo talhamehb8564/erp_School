@@ -211,7 +211,7 @@ export function HomeworkPage() {
 
 export function ExamsPage() {
   const { user } = useSession();
-  const { subjects, subjectName } = useLookups();
+  const { subjects, subjectName, className, sections } = useLookups();
   const sessions = useAsync(() => examApi.sessions(), []);
   const toast = useToast();
   const [name, setName] = useState("");
@@ -224,6 +224,7 @@ export function ExamsPage() {
   const dir = useStudentDirectory(user?.role !== "STUDENT" && user?.role !== "PARENT");
   const [mark, setMark] = useState({ studentId: "", subjectId: "", totalMarks: "100", obtainedMarks: "0" });
   const [roll, setRoll] = useState("");
+  const [resultQ, setResultQ] = useState("");
   const [rollHit, setRollHit] = useState<Awaited<ReturnType<typeof examApi.byRoll>> | null>(null);
   const [rollMiss, setRollMiss] = useState("");
 
@@ -329,7 +330,21 @@ export function ExamsPage() {
           ) : null}
           {!sessionId ? <Empty title="Select a session to view results" /> : (
           <QueryState status={results} label="exam results">
-            <Table headers={["Student", "Subject", "Marks", "Grade"]} rows={(results.data || []).map((r) => [dir.nameOf(r.studentId), subjectName(r.subjectId), `${r.obtainedMarks}/${r.totalMarks}`, r.grade || "—"])} />
+            <input className="search" placeholder="Filter by name, roll, class or section" value={resultQ} onChange={(e) => setResultQ(e.target.value)} />
+            <Table
+              headers={["Student", "Roll", "Class", "Section", "Subject", "Marks", "Grade"]}
+              rows={(results.data || []).filter((r) => {
+                const q = resultQ.trim().toLowerCase();
+                if (!q) return true;
+                const s = dir.students.find((x) => x.id === r.studentId);
+                const blob = `${dir.nameOf(r.studentId)} ${s?.rollNumber || ""} ${s?.admissionNumber || ""} ${className(s?.classId)}`.toLowerCase();
+                return blob.includes(q);
+              }).map((r) => {
+                const s = dir.students.find((x) => x.id === r.studentId);
+                const sec = s?.classId && s?.sectionId ? (sections[s.classId] || []).find((x) => x.id === s.sectionId)?.name : undefined;
+                return [dir.nameOf(r.studentId), s?.rollNumber || "—", className(s?.classId), sec || "—", subjectName(r.subjectId), `${r.obtainedMarks}/${r.totalMarks}`, r.grade || "—"];
+              })}
+            />
           </QueryState>
           )}
         </>

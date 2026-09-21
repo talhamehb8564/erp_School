@@ -244,7 +244,8 @@ export const settingsApi = {
 };
 
 export const fileApi = {
-  upload: (file: File) => api.upload<StoredFile>(`${v1}/files`, file),
+  upload: (file: File, onProgress?: (pct: number) => void) =>
+    api.upload<StoredFile>(`${v1}/files`, file, onProgress),
 };
 
 export const notificationApi = {

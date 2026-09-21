@@ -10,6 +10,10 @@ export function friendlyMessage(error: unknown, fallback = "Something went wrong
     if (error.status === 0) return "Cannot reach the ERP server. Start Spring Boot on port 8080.";
     if (error.status === 401) return "Your session expired. Please sign in again.";
     if (error.status >= 500) return "The server could not complete this request. Please try again.";
+    if (error.fields?.length) {
+      const parts = error.fields.map((f) => f.message).filter(Boolean);
+      if (parts.length) return parts.join(" ");
+    }
     if (error.message && !/exception|sql|hibernate|stack/i.test(error.message)) return error.message;
     if (error.status === 403) return "You do not have permission to do that.";
     if (error.status === 404) return "The requested record was not found.";

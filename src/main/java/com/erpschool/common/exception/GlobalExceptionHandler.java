@@ -34,8 +34,11 @@ public class GlobalExceptionHandler {
         List<ApiResponse.FieldError> errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(this::toFieldError)
                 .toList();
+        String message = errors.isEmpty() || errors.get(0).getMessage() == null
+                ? "Request validation failed"
+                : errors.get(0).getMessage();
         return ResponseEntity.badRequest()
-                .body(ApiResponse.fail("VALIDATION_ERROR", "Request validation failed", errors));
+                .body(ApiResponse.fail("VALIDATION_ERROR", message, errors));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -46,8 +49,11 @@ public class GlobalExceptionHandler {
                         .message(v.getMessage())
                         .build())
                 .toList();
+        String message = errors.isEmpty() || errors.get(0).getMessage() == null
+                ? "Request validation failed"
+                : errors.get(0).getMessage();
         return ResponseEntity.badRequest()
-                .body(ApiResponse.fail("VALIDATION_ERROR", "Request validation failed", errors));
+                .body(ApiResponse.fail("VALIDATION_ERROR", message, errors));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

@@ -10,7 +10,7 @@ import type { SchoolSettings } from "../../lib/types";
 
 export function FeesPage() {
   const { user } = useSession();
-  const { classes } = useLookups();
+  const { classes, className } = useLookups();
   const toast = useToast();
   const ops = canOperateFees(user?.role);
   const viewer = canViewFees(user?.role);
@@ -21,36 +21,70 @@ export function FeesPage() {
   const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
   const sid = useActiveStudentId(me.data?.id);
   const mine = useAsync(() => (sid ? feeApi.studentChallans(sid) : Promise.resolve([])), [sid]);
+  const payInfo = useAsync(() => (user?.role === "PARENT" || user?.role === "STUDENT" ? settingsApi.get() : Promise.resolve(null)), [user?.role]);
   const [classId, setClassId] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [month, setMonth] = useState(monthStart());
+  const [dueDate, setDueDate] = useState("");
+  const classStudents = useAsync(() => (ops && classId ? studentApi.list(classId) : Promise.resolve(null)), [ops, classId]);
   const [stForm, setStForm] = useState({ name: "", classId: "", academicYear: "2026-2027", tuitionAmount: "8000" });
   const [proofFor, setProofFor] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [ref, setRef] = useState("");
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
 
   if (user?.role === "PARENT" || user?.role === "STUDENT") {
+    const child = (kids.data || []).find((k) => k.id === sid) || me.data;
     return (
       <>
         <div className="page-title"><div><h1>Fee challans</h1><p>Pay by uploading a bank slip — no online gateway</p></div></div>
         {user.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
+        {payInfo.data && (payInfo.data.bankName || payInfo.data.accountNumber || payInfo.data.paymentInstructions) ? (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3>How to pay</h3>
+            <p>{payInfo.data.bankName ? `${payInfo.data.bankName} · ` : ""}{payInfo.data.accountTitle || ""} {payInfo.data.accountNumber || ""}</p>
+            {payInfo.data.jazzcash ? <p>JazzCash {payInfo.data.jazzcash}</p> : null}
+            {payInfo.data.easypaisa ? <p>Easypaisa {payInfo.data.easypaisa}</p> : null}
+            {payInfo.data.paymentInstructions ? <p className="hint">{payInfo.data.paymentInstructions}</p> : null}
+          </div>
+        ) : null}
         <QueryState status={mine} label="fee challans">
           <Table
-            headers={["Challan", "Month", "Due", "Amount", "Status", ""]}
+            headers={["Name", "Roll", "Class", "Campus", "Challan", "Month", "Due", "Amount", "Status", "Slip", ""]}
             rows={(mine.data || []).map((c) => [
-              c.challanNumber, fmtDate(c.month), fmtDate(c.dueDate), money(c.totalPayable), <Badge key={c.id} value={c.status} />,
-              c.status === "PAID" ? "—" : <Button key={`p${c.id}`} kind="ghost" onClick={() => setProofFor(c.id)}>Upload proof</Button>,
+              c.studentName || child?.user?.fullName || "—",
+              c.rollNumber || child?.rollNumber || "—",
+              className(c.classId || child?.classId),
+              c.campusName || "—",
+              c.challanNumber,
+              fmtDate(c.month),
+              fmtDate(c.dueDate),
+              money(c.totalPayable),
+              <Badge key={c.id} value={c.status} />,
+              c.proofs?.[0]?.slipUrl ? <FileLink key={`sl${c.id}`} href={c.proofs[0].slipUrl} label="View slip" /> : "—",
+              c.status === "PAID" ? "Paid" : <Button key={`p${c.id}`} kind="ghost" onClick={() => { setProofFor(c.id); setFile(null); setRef(""); setUploadPct(null); }}>Upload proof</Button>,
             ])}
           />
         </QueryState>
-        <Modal title="Payment proof" open={!!proofFor} onClose={() => setProofFor(null)}>
+        <Modal title="Payment proof" open={!!proofFor} onClose={() => { setProofFor(null); setFile(null); setUploadPct(null); }}>
           <Form busyLabel="Uploading…" onSubmit={async () => {
             if (!file || !proofFor) throw new Error("Choose a slip file first.");
-            const up = await fileApi.upload(file);
+            setUploadPct(0);
+            const up = await fileApi.upload(file, setUploadPct);
+            if (!up?.url) throw new Error("Upload did not return a file URL.");
             await feeApi.submitProof(proofFor, { slipUrl: up.url, transactionRef: ref });
-            toast("ok", "Proof submitted"); setProofFor(null); void mine.reload();
+            toast("ok", "Proof submitted for verification");
+            setProofFor(null);
+            setFile(null);
+            setUploadPct(null);
+            void mine.reload();
           }}>
             <Field label="Reference"><input value={ref} onChange={(e) => setRef(e.target.value)} /></Field>
-            <Field label="Slip"><input type="file" accept="image/*,.pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} required /></Field>
+            <Field label="Slip screenshot or PDF">
+              <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} required />
+            </Field>
+            {file ? <p className="hint" style={{ margin: 0 }}>{file.name} · {Math.round(file.size / 1024)} KB{file.type ? ` · ${file.type}` : ""}</p> : null}
+            {uploadPct != null ? <p className="hint">Uploading {uploadPct}%</p> : null}
             <Button type="submit" kind="brass" loadingText="Uploading…">Submit</Button>
           </Form>
         </Modal>
@@ -91,16 +125,33 @@ export function FeesPage() {
           <div className="card">
             <h3>Generate monthly challans</h3>
             <Form busyLabel="Generating…" onSubmit={async () => {
-              const created = await feeApi.generate({ classId, month });
-              toast("ok", `${created.length} challans generated`);
+              if (!classId) throw new Error("Select a class.");
+              const created = await feeApi.generate({
+                classId,
+                month,
+                dueDate: dueDate || undefined,
+                studentId: studentId || undefined,
+              });
+              toast("ok", created.length ? `${created.length} challans generated` : "No new challans — already issued for this month");
+              setStudentId("");
+              void pending.reload();
             }}>
               <Field label="Class">
-                <select value={classId} onChange={(e) => setClassId(e.target.value)} required>
+                <select value={classId} onChange={(e) => { setClassId(e.target.value); setStudentId(""); }} required>
                   <option value="">Select</option>
                   {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </Field>
+              <Field label="Student (optional — blank = whole class)">
+                <select value={studentId} onChange={(e) => setStudentId(e.target.value)} disabled={!classId}>
+                  <option value="">All students in class</option>
+                  {(classStudents.data?.content || []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.user?.fullName || s.admissionNumber} · roll {s.rollNumber || "—"}</option>
+                  ))}
+                </select>
+              </Field>
               <Field label="Month"><input type="month" value={month.slice(0, 7)} onChange={(e) => setMonth(`${e.target.value}-01`)} /></Field>
+              <Field label="Due date"><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></Field>
               <Button type="submit" kind="brass" loadingText="Generating…">Generate</Button>
             </Form>
           </div>
@@ -108,7 +159,19 @@ export function FeesPage() {
           <div className="card">
             <h3>Unpaid challans</h3>
             <QueryState status={unpaid} label="unpaid challans">
-              <Table headers={["Challan", "Amount", "Status"]} rows={(unpaid.data || []).map((c) => [c.challanNumber, money(c.totalPayable), pretty(c.status)])} />
+              <Table
+                headers={["Name", "Roll", "Class", "Challan", "Month", "Due", "Amount", "Status"]}
+                rows={(unpaid.data || []).map((c) => [
+                  c.studentName || "—",
+                  c.rollNumber || "—",
+                  className(c.classId),
+                  c.challanNumber,
+                  fmtDate(c.month),
+                  fmtDate(c.dueDate),
+                  money(c.totalPayable),
+                  pretty(c.status),
+                ])}
+              />
             </QueryState>
           </div>
         )}
@@ -119,11 +182,18 @@ export function FeesPage() {
           <QueryState status={pending} label="pending proofs">
             {!(pending.data || []).length ? <Empty title="Nothing to review" /> : (
               <Table
-                headers={["Proof", "Ref", "Slip", "Status", ""]}
+                headers={["Student", "Roll", "Challan", "Month", "Amount", "Ref", "Slip", "Status", ""]}
                 rows={(pending.data || []).map((p) => [
-                  p.id.slice(0, 8), p.transactionRef || "—", <FileLink key={`s${p.id}`} href={p.slipUrl} />, pretty(p.status),
+                  p.studentName || "—",
+                  p.rollNumber || "—",
+                  p.challanNumber || p.challanId?.slice(0, 8) || p.id.slice(0, 8),
+                  fmtDate(p.month),
+                  money(p.totalPayable),
+                  p.transactionRef || "—",
+                  <FileLink key={`s${p.id}`} href={p.slipUrl} label="Open slip" />,
+                  pretty(p.status),
                   <div key={p.id} className="row">
-                    <Button kind="ok" loadingText="Approving…" onClick={async () => { await feeApi.reviewProof(p.id, true); toast("ok", "Approved"); void pending.reload(); }}>Approve</Button>
+                    <Button kind="ok" loadingText="Approving…" onClick={async () => { await feeApi.reviewProof(p.id, true); toast("ok", "Approved — challan PAID"); void pending.reload(); }}>Approve</Button>
                     <Button kind="danger" loadingText="Rejecting…" onClick={async () => { await feeApi.reviewProof(p.id, false, "Rejected"); toast("info", "Rejected"); void pending.reload(); }}>Reject</Button>
                   </div>,
                 ])}
@@ -244,11 +314,13 @@ export function BillingPage() {
               <Form busyLabel="Uploading…" onSubmit={async () => {
                 if (!file) throw new Error("Choose a slip file first.");
                 const up = await fileApi.upload(file);
+                if (!up?.url) throw new Error("Upload did not return a file URL.");
                 await subscriptionApi.submitPayment(s.id, { slipUrl: up.url, transactionRef: ref });
                 toast("ok", "Proof sent to owner"); void sub.reload();
               }}>
                 <Field label="Reference"><input value={ref} onChange={(e) => setRef(e.target.value)} /></Field>
                 <Field label="Slip"><input type="file" accept="image/*,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} required /></Field>
+                {file ? <p className="hint" style={{ margin: 0 }}>{file.name} · {Math.round(file.size / 1024)} KB</p> : null}
                 <Button type="submit" kind="brass" loadingText="Uploading…">Submit proof</Button>
               </Form>
             ) : <p>Latest status is managed by the ERP owner.</p>}

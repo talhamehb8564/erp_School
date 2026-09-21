@@ -4,6 +4,7 @@ import com.erpschool.audit.service.AuditService;
 import com.erpschool.auth.dto.AuthResponse;
 import com.erpschool.auth.repository.RefreshTokenRepository;
 import com.erpschool.auth.service.AuthService;
+import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.UnauthorizedException;
 import com.erpschool.config.AppProperties;
 import com.erpschool.security.JwtService;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -153,5 +155,35 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login("GVS-TCH-0001", "wrong", null))
                 .isInstanceOf(UnauthorizedException.class);
         assertThat(teacher.getFailedLoginAttempts()).isEqualTo(1);
+    }
+
+    @Test
+    void changePasswordUpdatesHashAndRevokesRefreshTokens() {
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        authService.changePassword(teacher, "ChangeMe@123", "NewPass@123");
+
+        assertThat(passwordEncoder.matches("NewPass@123", teacher.getPasswordHash())).isTrue();
+        assertThat(passwordEncoder.matches("ChangeMe@123", teacher.getPasswordHash())).isFalse();
+        assertThat(teacher.isMustChangePassword()).isFalse();
+        verify(refreshTokenRepository).revokeAllForUser(eq(teacher.getId()), any());
+    }
+
+    @Test
+    void changePasswordRejectsWrongCurrentPassword() {
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+
+        assertThatThrownBy(() -> authService.changePassword(teacher, "wrong", "NewPass@123"))
+                .isInstanceOf(UnauthorizedException.class);
+    }
+
+    @Test
+    void changePasswordRejectsUnchangedPassword() {
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+
+        assertThatThrownBy(() -> authService.changePassword(teacher, "ChangeMe@123", "ChangeMe@123"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("different");
     }
 }

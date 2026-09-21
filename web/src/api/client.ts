@@ -110,7 +110,14 @@ async function send<T>(
     headers.set("Content-Type", "application/json");
   }
   const res = await fetchWithTimeout(path, { ...init, headers });
-  if (res.status === 401 && retry && !path.includes("/auth/login") && !path.includes("/auth/refresh")) {
+  if (
+    res.status === 401 &&
+    retry &&
+    !path.includes("/auth/login") &&
+    !path.includes("/auth/refresh") &&
+    !path.includes("/auth/logout") &&
+    !path.includes("/auth/change-password")
+  ) {
     const ok = await tryRefresh();
     if (ok) return send<T>(path, init, false);
   }
@@ -201,10 +208,61 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
-  upload: <T>(path: string, file: File) => {
+  upload: <T>(path: string, file: File, onProgress?: (pct: number) => void) => {
     validateUpload(file);
     const fd = new FormData();
     fd.append("file", file);
-    return request<T>(path, { method: "POST", body: fd });
+    if (!onProgress) return request<T>(path, { method: "POST", body: fd });
+    return uploadWithProgress<T>(path, fd, onProgress);
   },
 };
+
+function uploadWithProgress<T>(path: string, body: FormData, onProgress: (pct: number) => void, retry = true): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path);
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.timeout = REQUEST_TIMEOUT_MS;
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable && ev.total > 0) onProgress(Math.round((ev.loaded / ev.total) * 100));
+    };
+    xhr.onload = () => {
+      void (async () => {
+        if (xhr.status === 401 && retry) {
+          const ok = await tryRefresh();
+          if (ok) {
+            try {
+              resolve(await uploadWithProgress<T>(path, body, onProgress, false));
+            } catch (e) {
+              reject(e);
+            }
+            return;
+          }
+        }
+        const text = xhr.responseText || "";
+        let json: { success?: boolean; data?: T; message?: string; errorCode?: string; errors?: { field: string; message: string }[] } | null = null;
+        if (text) {
+          try {
+            json = JSON.parse(text);
+          } catch {
+            json = null;
+          }
+        }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new ApiError(xhr.status, (json as ApiErrorBody) || text || xhr.statusText));
+          return;
+        }
+        if (json && Object.prototype.hasOwnProperty.call(json, "data")) {
+          resolve(json.data as T);
+          return;
+        }
+        resolve(json as T);
+      })();
+    };
+    xhr.onerror = () => reject(new ApiError(0, "Cannot reach the ERP server. Start the Spring Boot API on port 8080."));
+    xhr.ontimeout = () =>
+      reject(new ApiError(0, "The server took too long to respond. Check that Spring Boot is running on port 8080."));
+    xhr.send(body);
+  });
+}

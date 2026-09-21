@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import ChangePassword from "./ChangePassword";
 import { reportApi, subscriptionApi, tenantApi, userApi } from "../api/services";
 import { fmtDate, money, pretty } from "../lib/format";
 import { useSession } from "../lib/session";
@@ -11,6 +12,7 @@ import type { Tenant, TenantStatus } from "../lib/types";
 
 export default function OwnerApp() {
   const { user, logout } = useSession();
+  const loc = useLocation();
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme());
   const toggleTheme = () => {
@@ -18,6 +20,9 @@ export default function OwnerApp() {
     applyTheme(next);
     setTheme(next);
   };
+  if (user?.mustChangePassword && loc.pathname !== "/admin/app/password") {
+    return <ChangePassword />;
+  }
   return (
     <div className="shell">
       {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}

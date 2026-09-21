@@ -3,7 +3,6 @@ package com.erpschool.fee.controller;
 import com.erpschool.common.dto.ApiResponse;
 import com.erpschool.fee.entity.ChallanStatus;
 import com.erpschool.fee.entity.FeeChallan;
-import com.erpschool.fee.entity.FeePaymentProof;
 import com.erpschool.fee.entity.FeeStructure;
 import com.erpschool.fee.service.FeeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -60,7 +59,7 @@ public class FeeController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Challans generated", feeService.generateMonthly(
                         request.getClassId(), request.getMonth(), request.getDueDate(),
-                        request.getAdditionalCharges(), request.getDiscountAmount())));
+                        request.getAdditionalCharges(), request.getDiscountAmount(), request.getStudentId())));
     }
 
     @GetMapping("/students/{studentId}/challans")
@@ -87,13 +86,13 @@ public class FeeController {
 
     @GetMapping("/proofs/pending")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
-    public ResponseEntity<ApiResponse<List<FeePaymentProof>>> pending() {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> pending() {
         return ResponseEntity.ok(ApiResponse.ok(feeService.pendingProofs()));
     }
 
     @GetMapping("/challans")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER','PRINCIPAL')")
-    public ResponseEntity<ApiResponse<List<FeeChallan>>> byStatus(@RequestParam ChallanStatus status) {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> byStatus(@RequestParam ChallanStatus status) {
         return ResponseEntity.ok(ApiResponse.ok(feeService.byStatus(status)));
     }
 
@@ -114,6 +113,7 @@ public class FeeController {
         private LocalDate dueDate;
         private BigDecimal additionalCharges;
         private BigDecimal discountAmount;
+        private UUID studentId;
     }
 
     @Getter
