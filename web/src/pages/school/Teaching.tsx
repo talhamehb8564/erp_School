@@ -79,7 +79,7 @@ export function AttendancePage() {
           <select className="search" value={slotId} onChange={(e) => setSlotId(e.target.value)}>
             <option value="">Select lecture</option>
             {(slots.data || []).map((s) => (
-              <option key={s.id} value={s.id}>{dayName(s.dayOfWeek)} {s.startTime}</option>
+              <option key={s.id} value={s.id}>{dayName(s.dayOfWeek)} {s.startTime} · {s.subjectName || s.className || s.id.slice(0, 8)}</option>
             ))}
           </select>
         </QueryState>
@@ -310,7 +310,8 @@ export function ExamsPage() {
         <QueryState status={mine} label="results">
           {mine.data ? (
             <div className="card">
-              <p>Grade {mine.data.grade} · {mine.data.percentage}% · {pretty(mine.data.passStatus)}</p>
+              <p>{mine.data.studentName || "—"} · roll {mine.data.rollNumber || "—"} · {className(mine.data.classId)}</p>
+              <p>Grade {mine.data.grade} · {mine.data.obtainedMarks}/{mine.data.totalMarks} · {mine.data.percentage}% · {pretty(mine.data.passStatus)}</p>
               <Table headers={["Subject", "Obtained", "Total"]} rows={(mine.data.subjects || []).map((r) => [subjectName(r.subjectId), r.obtainedMarks, r.totalMarks])} />
             </div>
           ) : <Empty title="Select a published session" />}

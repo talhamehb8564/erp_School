@@ -76,7 +76,10 @@ export function FeesPage() {
               money(c.totalPayable),
               <Badge key={c.id} value={c.status} />,
               c.proofs?.[0]?.slipUrl ? <FileLink key={`sl${c.id}`} href={c.proofs[0].slipUrl} label="View slip" /> : "—",
-              c.status === "PAID" ? "Paid" : <Button key={`p${c.id}`} kind="ghost" onClick={() => { setProofFor(c.id); setFile(null); setRef(""); setUploadPct(null); }}>Upload proof</Button>,
+              <div key={`act${c.id}`} className="row">
+                <Button kind="ghost" onClick={async () => { setSlip(await feeApi.getChallan(c.id)); }}>Fee slip</Button>
+                {c.status === "PAID" ? "Paid" : <Button kind="ghost" onClick={() => { setProofFor(c.id); setFile(null); setRef(""); setUploadPct(null); }}>Upload proof</Button>}
+              </div>,
             ])}
           />
         </QueryState>
@@ -383,15 +386,41 @@ export function SalariesPage() {
       ) : null}
       <QueryState status={monthRows} label="payroll">
         <Table
-          headers={["Staff", "Net", "Status", ""]}
+          headers={["Staff", "Base", "Deductions", "Bonus", "Net", "Status", ""]}
           rows={(monthRows.data || []).map((s) => [
             (users.data?.content || []).find((u) => u.id === s.staffUserId)?.fullName || s.staffUserId.slice(0, 8),
+            money(s.baseSalary),
+            money(s.otherDeductions),
+            money(s.bonuses),
             money(s.netPay),
             <Badge key={s.id} value={s.status} />,
-            !ops || s.status === "PAID" ? pretty(s.status) : <Button key={`pay${s.id}`} loadingText="Updating…" onClick={async () => { await salaryApi.pay(s.id, today()); toast("ok", "Marked paid"); void monthRows.reload(); }}>Mark paid</Button>,
+            !ops || s.status === "PAID" ? pretty(s.status) : (
+              <div key={`pay${s.id}`} className="row">
+                <Button kind="ghost" onClick={() => { setAdjustId(s.id); setDeduct(String(s.otherDeductions ?? "")); setBonus(String(s.bonuses ?? "")); setAdjNotes(""); }}>Adjust</Button>
+                <Button loadingText="Updating…" onClick={async () => { await salaryApi.pay(s.id, today()); toast("ok", "Marked paid"); void monthRows.reload(); }}>Mark paid</Button>
+              </div>
+            ),
           ])}
         />
       </QueryState>
+      <Modal title="Salary deduction / bonus" open={!!adjustId} onClose={() => setAdjustId(null)}>
+        <Form busyLabel="Saving…" onSubmit={async () => {
+          if (!adjustId) return;
+          await salaryApi.adjust(adjustId, {
+            otherDeductions: deduct ? Number(deduct) : 0,
+            bonuses: bonus ? Number(bonus) : 0,
+            notes: adjNotes,
+          });
+          toast("ok", "Salary updated");
+          setAdjustId(null);
+          void monthRows.reload();
+        }}>
+          <Field label="Other deductions"><input value={deduct} onChange={(e) => setDeduct(e.target.value)} /></Field>
+          <Field label="Bonus"><input value={bonus} onChange={(e) => setBonus(e.target.value)} /></Field>
+          <Field label="Notes"><input value={adjNotes} onChange={(e) => setAdjNotes(e.target.value)} /></Field>
+          <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
+        </Form>
+      </Modal>
     </>
   );
 }
@@ -411,6 +440,7 @@ export function SettingsPage() {
             <Field label="Bank name"><input value={current.bankName || ""} onChange={(e) => setForm({ ...form, bankName: e.target.value })} /></Field>
             <Field label="Account title"><input value={current.accountTitle || ""} onChange={(e) => setForm({ ...form, accountTitle: e.target.value })} /></Field>
             <Field label="Account number"><input value={current.accountNumber || ""} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} /></Field>
+            <Field label="IBAN"><input value={current.iban || ""} onChange={(e) => setForm({ ...form, iban: e.target.value })} /></Field>
             <Field label="JazzCash"><input value={current.jazzcash || ""} onChange={(e) => setForm({ ...form, jazzcash: e.target.value })} /></Field>
             <Field label="Easypaisa"><input value={current.easypaisa || ""} onChange={(e) => setForm({ ...form, easypaisa: e.target.value })} /></Field>
             <Field label="Instructions"><textarea value={current.paymentInstructions || ""} onChange={(e) => setForm({ ...form, paymentInstructions: e.target.value })} /></Field>

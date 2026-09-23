@@ -50,6 +50,9 @@ export function AcademicsPage() {
   const [code, setCode] = useState("");
   const [sectionFor, setSectionFor] = useState("");
   const [sectionName, setSectionName] = useState("");
+  const teachers = useAsync(() => (canWrite || user?.role === "PRINCIPAL" ? userApi.list({ role: "TEACHER" }) : Promise.resolve(null)), [canWrite, user?.role]);
+  const assigns = useAsync(() => (canWrite || user?.role === "PRINCIPAL" ? academicApi.assignments() : Promise.resolve([])), [user?.role]);
+  const [asg, setAsg] = useState({ teacherUserId: "", classId: "", sectionId: "", subjectId: "" });
   return (
     <>
       <div className="page-title"><div><h1>Academics</h1><p>Classes, sections and subjects</p></div>
@@ -205,8 +208,20 @@ export function TimetablePage() {
       ) : null}
       <QueryState status={slots} label="timetable">
         <Table
-          headers={["Day", "Time", "Class", "Subject"]}
-          rows={(slots.data || []).map((s) => [dayName(s.dayOfWeek), `${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`, className(s.classId), subjectName(s.subjectId)])}
+          headers={user?.role === "SCHOOL_ADMIN" ? ["Day", "Time", "Class", "Subject", "Teacher", ""] : ["Day", "Time", "Class", "Subject", "Teacher"]}
+          rows={(slots.data || []).map((s) => {
+            const cells = [dayName(s.dayOfWeek), `${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`, s.className || className(s.classId), s.subjectName || subjectName(s.subjectId), s.teacherName || "—"];
+            if (user?.role === "SCHOOL_ADMIN") {
+              cells.push(
+                <Button key={`del${s.id}`} kind="danger" loadingText="Deleting…" onClick={async () => {
+                  await academicApi.deleteSlot(s.id);
+                  toast("ok", "Lecture deleted");
+                  void slots.reload();
+                }}>Delete</Button>,
+              );
+            }
+            return cells;
+          })}
         />
       </QueryState>
       <Modal title="Lecture" open={open} onClose={() => setOpen(false)}>

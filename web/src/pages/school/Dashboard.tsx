@@ -62,7 +62,14 @@ function StaffDash() {
 
 function TeacherDash() {
   const d = useAsync(() => portalApi.teacher());
-  const lectures = (d.data?.todayLectures as { id: string; startTime: string; endTime: string }[]) || [];
+  const lectures = (d.data?.todayLectures as {
+    id: string;
+    startTime: string;
+    endTime: string;
+    className?: string;
+    sectionName?: string;
+    subjectName?: string;
+  }[]) || [];
   const homework = (d.data?.homework as { id: string; title: string; dueDate: string }[]) || [];
   return (
     <>

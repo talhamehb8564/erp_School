@@ -165,6 +165,10 @@ public class StudentService {
         Page<Student> page;
         if (classId != null && sectionId != null) {
             page = studentRepository.findByTenantIdAndClassIdAndSectionId(tenantId, classId, sectionId, pageable);
+        } else if (classId != null) {
+            page = studentRepository.findByTenantIdAndClassId(tenantId, classId, pageable);
+        } else if (sectionId != null) {
+            page = studentRepository.findByTenantIdAndSectionId(tenantId, sectionId, pageable);
         } else {
             page = studentRepository.findByTenantId(tenantId, pageable);
         }

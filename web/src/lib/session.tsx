@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { authApi, tenantApi } from "../api/services";
-import { ApiError, LOCKED_EVENT, clearTokens, getAccessToken, getRefreshToken, setTokens } from "../api/client";
+import { ApiError, LOCKED_EVENT, clearTokens, getAccessToken, getAuthEpoch, getRefreshToken, setTokens } from "../api/client";
 import type { Role, Tenant, User } from "./types";
 import { LOCKED_STATUSES } from "./types";
 
@@ -67,6 +67,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
+    const epoch = getAuthEpoch();
     try {
       let cachedRole: Role | undefined;
       try {
@@ -78,6 +79,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (cachedRole && cachedRole !== "ERP_OWNER") {
         const [meResult, tenantResult] = await Promise.allSettled([authApi.me(), tenantApi.me()]);
         if (meResult.status !== "fulfilled") throw meResult.reason;
+        if (getAuthEpoch() !== epoch) return;
         persist(meResult.value);
         if (tenantResult.status === "fulfilled") {
           setTenant(tenantResult.value);
@@ -89,10 +91,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         const me = await authApi.me();
+        if (getAuthEpoch() !== epoch) return;
         persist(me);
         await loadTenant(me);
       }
     } catch (e) {
+      if (getAuthEpoch() !== epoch) return;
       if (e instanceof ApiError && e.errorCode === "SUBSCRIPTION_INACTIVE") {
         setForcedLocked(true);
       } else {
@@ -136,6 +140,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
     persist(payload.user);
     await loadTenant(payload.user);
+    setLoading(false);
     return payload.user;
   }, []);
 

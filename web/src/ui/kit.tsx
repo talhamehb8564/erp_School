@@ -7,9 +7,18 @@ const FormBusy = createContext<{ busy: boolean; label: string }>({ busy: false, 
 
 export function friendlyMessage(error: unknown, fallback = "Something went wrong. Please try again.") {
   if (error instanceof ApiError) {
-    if (error.status === 0) return "Cannot reach the ERP server. Start Spring Boot on port 8080.";
-    if (error.status === 401) return "Your session expired. Please sign in again.";
-    if (error.status >= 500) return "The server could not complete this request. Please try again.";
+    if (error.status === 0) return error.message || "Cannot reach the ERP server. Start the Spring Boot API on port 8080.";
+    if (error.status === 401) {
+      const msg = (error.message || "").trim();
+      if (msg && !/^(request failed|unauthorized|authentication required)$/i.test(msg)) return msg;
+      return "Your session expired. Please sign in again.";
+    }
+    if (error.status === 503 || error.errorCode === "API_UNAVAILABLE") {
+      return error.message || "Cannot reach the ERP server. Start the Spring Boot API on port 8080.";
+    }
+    if (error.status >= 500) return error.message && !/exception|sql|hibernate|stack/i.test(error.message)
+      ? error.message
+      : "The server could not complete this request. Please try again.";
     if (error.fields?.length) {
       const parts = error.fields.map((f) => f.message).filter(Boolean);
       if (parts.length) return parts.join(" ");

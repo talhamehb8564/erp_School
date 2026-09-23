@@ -19,17 +19,30 @@ export class ApiError extends Error {
   }
 }
 
+const getInflight = new Map<string, Promise<unknown>>();
+let authEpoch = 0;
+
 export function getAccessToken() {
   return localStorage.getItem(ACCESS);
 }
 export function getRefreshToken() {
   return localStorage.getItem(REFRESH);
 }
+export function getAuthEpoch() {
+  return authEpoch;
+}
+function bumpAuth() {
+  authEpoch += 1;
+  getInflight.clear();
+}
+
 export function setTokens(access: string, refresh?: string) {
+  bumpAuth();
   localStorage.setItem(ACCESS, access);
   if (refresh) localStorage.setItem(REFRESH, refresh);
 }
 export function clearTokens() {
+  bumpAuth();
   localStorage.removeItem(ACCESS);
   localStorage.removeItem(REFRESH);
 }
@@ -63,7 +76,6 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
-const getInflight = new Map<string, Promise<unknown>>();
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
   const ctrl = new AbortController();
@@ -87,12 +99,13 @@ export async function request<T>(
 ): Promise<T> {
   const method = (init.method || "GET").toUpperCase();
   if (method === "GET" && retry) {
-    const existing = getInflight.get(path);
+    const key = `${path}|${getAccessToken() || "anon"}`;
+    const existing = getInflight.get(key);
     if (existing) return existing as Promise<T>;
     const pending = send<T>(path, init, retry).finally(() => {
-      if (getInflight.get(path) === pending) getInflight.delete(path);
+      if (getInflight.get(key) === pending) getInflight.delete(key);
     });
-    getInflight.set(path, pending);
+    getInflight.set(key, pending);
     return pending;
   }
   return send<T>(path, init, retry);
@@ -109,6 +122,7 @@ async function send<T>(
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  const startedEpoch = getAuthEpoch();
   const res = await fetchWithTimeout(path, { ...init, headers });
   if (
     res.status === 401 &&
@@ -118,6 +132,9 @@ async function send<T>(
     !path.includes("/auth/logout") &&
     !path.includes("/auth/change-password")
   ) {
+    if (getAuthEpoch() !== startedEpoch) {
+      return send<T>(path, init, false);
+    }
     const ok = await tryRefresh();
     if (ok) return send<T>(path, init, false);
   }

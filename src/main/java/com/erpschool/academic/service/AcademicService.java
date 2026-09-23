@@ -164,11 +164,13 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<TeacherAssignment> teacherAssignments(UUID teacherUserId) {
-        UUID id = teacherUserId != null ? teacherUserId : TenantContext.getUserId();
         if (TenantContext.getRole() == UserRole.TEACHER) {
-            id = TenantContext.getUserId();
+            return assignmentRepository.findByTenantIdAndTeacherUserId(tid(), TenantContext.getUserId());
         }
-        return assignmentRepository.findByTenantIdAndTeacherUserId(tid(), id);
+        if (teacherUserId != null) {
+            return assignmentRepository.findByTenantIdAndTeacherUserId(tid(), teacherUserId);
+        }
+        return assignmentRepository.findByTenantId(tid());
     }
 
     @Transactional

@@ -15,6 +15,10 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 
     Page<Student> findByTenantId(UUID tenantId, Pageable pageable);
 
+    Page<Student> findByTenantIdAndClassId(UUID tenantId, UUID classId, Pageable pageable);
+
+    Page<Student> findByTenantIdAndSectionId(UUID tenantId, UUID sectionId, Pageable pageable);
+
     Page<Student> findByTenantIdAndClassIdAndSectionId(UUID tenantId, UUID classId, UUID sectionId, Pageable pageable);
 
     List<Student> findByTenantIdAndClassIdAndSectionIdAndStatus(
