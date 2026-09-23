@@ -26,6 +26,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Page<User> findByTenantId(UUID tenantId, Pageable pageable);
 
+    java.util.List<User> findByTenantId(UUID tenantId);
+
     @Query("""
             SELECT u FROM User u
             WHERE u.tenantId = :tenantId
