@@ -61,4 +61,8 @@ public class StaffSalary extends TenantAwareEntity {
             finalSalary = BigDecimal.ZERO;
         }
     }
+
+    public BigDecimal getNetPay() {
+        return finalSalary;
+    }
 }

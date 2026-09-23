@@ -1,4 +1,4 @@
-package com.erpschool.settings.entity;
+package com.erpschool.academic.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,43 +11,38 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.UUID;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "school_settings")
-public class SchoolSettings {
+@Table(name = "timetable_settings")
+public class TimetableSettings {
 
     @Id
     @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
-    @Column(name = "payment_instructions", columnDefinition = "TEXT")
-    private String paymentInstructions;
+    @Column(name = "start_time", nullable = false)
+    private LocalTime startTime = LocalTime.of(8, 0);
 
-    @Column(name = "bank_name", length = 150)
-    private String bankName;
+    @Column(name = "end_time", nullable = false)
+    private LocalTime endTime = LocalTime.of(13, 30);
 
-    @Column(name = "account_title", length = 150)
-    private String accountTitle;
+    @Column(name = "lecture_minutes", nullable = false)
+    private int lectureMinutes = 45;
 
-    @Column(name = "account_number", length = 80)
-    private String accountNumber;
+    @Column(name = "break_minutes", nullable = false)
+    private int breakMinutes = 15;
 
-    @Column(length = 34)
-    private String iban;
+    @Column(name = "lectures_per_day", nullable = false)
+    private int lecturesPerDay = 7;
 
-    @Column(length = 40)
-    private String jazzcash;
-
-    @Column(length = 40)
-    private String easypaisa;
-
-    @Column(name = "other_payment_methods", columnDefinition = "TEXT")
-    private String otherPaymentMethods;
+    @Column(name = "working_days", nullable = false, length = 40)
+    private String workingDays = "1,2,3,4,5";
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();

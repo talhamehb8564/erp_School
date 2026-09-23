@@ -3,7 +3,9 @@ package com.erpschool.fee.controller;
 import com.erpschool.common.dto.ApiResponse;
 import com.erpschool.fee.entity.ChallanStatus;
 import com.erpschool.fee.entity.FeeChallan;
+import com.erpschool.fee.entity.FeeChargeType;
 import com.erpschool.fee.entity.FeeStructure;
+import com.erpschool.fee.entity.StudentFeeDiscount;
 import com.erpschool.fee.service.FeeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -41,25 +43,67 @@ public class FeeController {
     }
 
     @PostMapping("/structures")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<FeeStructure>> structure(@RequestBody FeeStructure body) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Fee structure saved", feeService.saveStructure(body)));
     }
 
     @GetMapping("/structures")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER','PRINCIPAL')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER','PRINCIPAL')")
     public ResponseEntity<ApiResponse<List<FeeStructure>>> structures() {
         return ResponseEntity.ok(ApiResponse.ok(feeService.structures()));
     }
 
-    @PostMapping("/challans/generate")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> generate(@Valid @RequestBody GenerateRequest request) {
+    @PostMapping("/charge-types")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<FeeChargeType>> chargeType(@Valid @RequestBody ChargeTypeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("Challans generated", feeService.generateMonthly(
-                        request.getClassId(), request.getMonth(), request.getDueDate(),
-                        request.getAdditionalCharges(), request.getDiscountAmount(), request.getStudentId())));
+                .body(ApiResponse.ok("Charge saved", feeService.saveChargeType(request.getName(), request.getDefaultAmount())));
+    }
+
+    @GetMapping("/charge-types")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<List<FeeChargeType>>> chargeTypes() {
+        return ResponseEntity.ok(ApiResponse.ok(feeService.chargeTypes()));
+    }
+
+    @PostMapping("/students/{studentId}/discounts")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<StudentFeeDiscount>> discount(
+            @PathVariable UUID studentId, @RequestBody DiscountRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Discount applied", feeService.applyDiscount(
+                studentId, request.getPercent(), request.getAmount(), request.getReason())));
+    }
+
+    @GetMapping("/students/{studentId}/discounts")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<List<StudentFeeDiscount>>> discounts(@PathVariable UUID studentId) {
+        return ResponseEntity.ok(ApiResponse.ok(feeService.discountsFor(studentId)));
+    }
+
+    @PostMapping("/challans/generate")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> generate(@Valid @RequestBody GenerateRequest request) {
+        List<FeeService.ChargeLine> lines = request.getCharges() == null ? List.of()
+                : request.getCharges().stream()
+                .map(c -> new FeeService.ChargeLine(c.getName(), c.getAmount()))
+                .toList();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Challans generated", feeService.generate(
+                        request.getClassId(), request.getSectionId(),
+                        request.getStudentIds() == null ? List.of() : request.getStudentIds(),
+                        request.getClassIds() == null ? List.of() : request.getClassIds(),
+                        request.getSectionIds() == null ? List.of() : request.getSectionIds(),
+                        request.getMonth(), request.getDueDate(),
+                        request.getAdditionalCharges(), request.getDiscountAmount(),
+                        request.getDiscountPercent(), lines)));
+    }
+
+    @GetMapping("/challans/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> one(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(feeService.getChallan(id)));
     }
 
     @GetMapping("/students/{studentId}/challans")
@@ -69,7 +113,7 @@ public class FeeController {
     }
 
     @PostMapping("/challans/{id}/proofs")
-    @PreAuthorize("hasAnyRole('PARENT','STUDENT','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('PARENT','STUDENT','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> proof(
             @PathVariable UUID id, @Valid @RequestBody ProofRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Payment proof submitted",
@@ -77,7 +121,7 @@ public class FeeController {
     }
 
     @PostMapping("/proofs/{id}/review")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> review(
             @PathVariable UUID id, @Valid @RequestBody ReviewRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Payment reviewed",
@@ -85,19 +129,19 @@ public class FeeController {
     }
 
     @GetMapping("/proofs/pending")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> pending() {
         return ResponseEntity.ok(ApiResponse.ok(feeService.pendingProofs()));
     }
 
     @GetMapping("/challans")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER','PRINCIPAL')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER','PRINCIPAL')")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> byStatus(@RequestParam ChallanStatus status) {
         return ResponseEntity.ok(ApiResponse.ok(feeService.byStatus(status)));
     }
 
     @PostMapping("/challans/mark-overdue")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<List<FeeChallan>>> markOverdue() {
         return ResponseEntity.ok(ApiResponse.ok("Overdue challans updated", feeService.markOverdue()));
     }
@@ -105,15 +149,42 @@ public class FeeController {
     @Getter
     @Setter
     public static class GenerateRequest {
-        @NotNull
         private UUID classId;
+        private UUID sectionId;
+        private List<UUID> classIds;
+        private List<UUID> sectionIds;
+        private List<UUID> studentIds;
         @NotNull
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         private LocalDate month;
         private LocalDate dueDate;
         private BigDecimal additionalCharges;
         private BigDecimal discountAmount;
-        private UUID studentId;
+        private BigDecimal discountPercent;
+        private List<ChargeLineRequest> charges;
+    }
+
+    @Getter
+    @Setter
+    public static class ChargeLineRequest {
+        private String name;
+        private BigDecimal amount;
+    }
+
+    @Getter
+    @Setter
+    public static class ChargeTypeRequest {
+        @NotBlank
+        private String name;
+        private BigDecimal defaultAmount;
+    }
+
+    @Getter
+    @Setter
+    public static class DiscountRequest {
+        private BigDecimal percent;
+        private BigDecimal amount;
+        private String reason;
     }
 
     @Getter

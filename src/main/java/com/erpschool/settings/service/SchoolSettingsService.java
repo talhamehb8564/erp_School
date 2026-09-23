@@ -42,6 +42,7 @@ public class SchoolSettingsService {
         s.setBankName(incoming.getBankName());
         s.setAccountTitle(incoming.getAccountTitle());
         s.setAccountNumber(incoming.getAccountNumber());
+        s.setIban(incoming.getIban());
         s.setJazzcash(incoming.getJazzcash());
         s.setEasypaisa(incoming.getEasypaisa());
         s.setOtherPaymentMethods(incoming.getOtherPaymentMethods());

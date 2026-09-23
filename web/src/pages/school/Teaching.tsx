@@ -122,9 +122,20 @@ export function HomeworkPage() {
   const { user } = useSession();
   const { classes, sections, subjects, className, subjectName } = useLookups();
   const list = useAsync(() => homeworkApi.list(), []);
+  const assigns = useAsync(() => (user?.role === "TEACHER" ? academicApi.assignments() : Promise.resolve([])), [user?.role]);
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [hwFile, setHwFile] = useState<File | null>(null);
   const [form, setForm] = useState({ classId: "", sectionId: "", subjectId: "", title: "", description: "", dueDate: today() });
+  const teacherClasses = user?.role === "TEACHER"
+    ? classes.filter((c) => (assigns.data || []).some((a) => a.classId === c.id))
+    : classes;
+  const teacherSubjects = user?.role === "TEACHER"
+    ? subjects.filter((s) => (assigns.data || []).some((a) => a.subjectId === s.id && (!form.classId || a.classId === form.classId) && (!form.sectionId || a.sectionId === form.sectionId)))
+    : subjects;
+  const teacherSections = user?.role === "TEACHER"
+    ? (sections[form.classId] || []).filter((s) => (assigns.data || []).some((a) => a.sectionId === s.id && a.classId === form.classId))
+    : (sections[form.classId] || []);
   const [active, setActive] = useState<string | null>(null);
   const subs = useAsync(() => (active && user?.role !== "STUDENT" && user?.role !== "PARENT" ? homeworkApi.submissions(active) : Promise.resolve([])), [active, user?.role]);
   const me = useAsync(() => (user?.role === "STUDENT" ? studentApi.me() : Promise.resolve(null)), [user?.role]);
@@ -161,15 +172,23 @@ export function HomeworkPage() {
       </QueryState>
       <Modal title="Assign homework" open={open} onClose={() => setOpen(false)}>
         <Form busyLabel="Publishing…" onSubmit={async () => {
-          await homeworkApi.create(form);
-          toast("ok", "Homework assigned"); setOpen(false); void list.reload();
+          const attachments = [];
+          if (hwFile) {
+            const up = await fileApi.upload(hwFile);
+            if (!up?.url) throw new Error("File upload did not return a URL.");
+            attachments.push({ fileName: up.fileName || hwFile.name, fileUrl: up.url, contentType: up.contentType || hwFile.type });
+          }
+          await homeworkApi.create({ ...form, attachments });
+          toast("ok", "Homework assigned"); setOpen(false); setHwFile(null); void list.reload();
         }}>
-          <Field label="Class"><select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} required><option value="">Select</option>{classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-          <Field label="Section"><select value={form.sectionId} onChange={(e) => setForm({ ...form, sectionId: e.target.value })} required><option value="">Select</option>{(sections[form.classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-          <Field label="Subject"><select value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })} required><option value="">Select</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+          <Field label="Class"><select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value, sectionId: "", subjectId: "" })} required><option value="">Select</option>{teacherClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+          <Field label="Section"><select value={form.sectionId} onChange={(e) => setForm({ ...form, sectionId: e.target.value, subjectId: "" })} required><option value="">Select</option>{teacherSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+          <Field label="Subject"><select value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })} required><option value="">Select</option>{teacherSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
           <Field label="Title"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></Field>
           <Field label="Description"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
           <Field label="Due"><input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></Field>
+          <Field label="Attachment"><input type="file" accept=".pdf,image/*,.doc,.docx" onChange={(e) => setHwFile(e.target.files?.[0] || null)} /></Field>
+          {hwFile ? <p className="hint">{hwFile.name}</p> : null}
           <Button type="submit" kind="brass" loadingText="Publishing…">Publish</Button>
         </Form>
       </Modal>

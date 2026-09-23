@@ -9,8 +9,10 @@ import type {
   ExamResult,
   ExamSession,
   FeeChallan,
+  FeeChargeType,
   FeeProof,
   FeeStructure,
+  TimetableSettings,
   Homework,
   HomeworkSubmission,
   Notification,
@@ -123,6 +125,13 @@ export const academicApi = {
   timetable: (classId: string, sectionId: string) =>
     api.get<TimetableSlot[]>(`${v1}/timetable?classId=${classId}&sectionId=${sectionId}`),
   createSlot: (body: Record<string, unknown>) => api.post<TimetableSlot>(`${v1}/timetable`, body),
+  updateSlot: (id: string, body: Record<string, unknown>) => api.put<TimetableSlot>(`${v1}/timetable/${id}`, body),
+  deleteSlot: (id: string) => api.del<void>(`${v1}/timetable/${id}`),
+  applyTimetable: (body: Record<string, unknown>) => api.post<TimetableSlot[]>(`${v1}/timetable/apply`, body),
+  copyTimetable: (body: Record<string, unknown>) => api.post<TimetableSlot[]>(`${v1}/timetable/copy`, body),
+  timetableSettings: () => api.get<TimetableSettings>(`${v1}/timetable/settings`),
+  saveTimetableSettings: (body: Record<string, unknown>) =>
+    api.put<TimetableSettings>(`${v1}/timetable/settings`, body),
   teacherTimetable: () => api.get<TimetableSlot[]>(`${v1}/teacher/timetable`),
   teacherToday: () => api.get<TimetableSlot[]>(`${v1}/teacher/timetable/today`),
 };
@@ -208,6 +217,12 @@ export const feeApi = {
   pendingProofs: () => api.get<FeeProof[]>(`${v1}/fees/proofs/pending`),
   byStatus: (status: ChallanStatus) => api.get<FeeChallan[]>(`${v1}/fees/challans?status=${status}`),
   markOverdue: () => api.post<FeeChallan[]>(`${v1}/fees/challans/mark-overdue`),
+  getChallan: (id: string) => api.get<FeeChallan & Record<string, unknown>>(`${v1}/fees/challans/${id}`),
+  chargeTypes: () => api.get<FeeChargeType[]>(`${v1}/fees/charge-types`),
+  saveChargeType: (body: { name: string; defaultAmount: number }) =>
+    api.post<FeeChargeType>(`${v1}/fees/charge-types`, body),
+  applyDiscount: (studentId: string, body: { percent?: number; amount?: number; reason?: string }) =>
+    api.post<unknown>(`${v1}/fees/students/${studentId}/discounts`, body),
 };
 
 export const salaryApi = {
@@ -219,6 +234,8 @@ export const salaryApi = {
   mine: () => api.get<StaffSalary[]>(`${v1}/salaries/me`),
   pay: (id: string, paymentDate?: string) =>
     api.post<StaffSalary>(`${v1}/salaries/${id}/pay`, paymentDate ? { paymentDate } : {}),
+  adjust: (id: string, body: { otherDeductions?: number; bonuses?: number; notes?: string }) =>
+    api.post<StaffSalary>(`${v1}/salaries/${id}/adjust`, body),
 };
 
 export const announcementApi = {

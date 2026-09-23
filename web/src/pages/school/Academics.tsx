@@ -79,6 +79,53 @@ export function AcademicsPage() {
           <Table headers={["Name", "Code"]} rows={subjects.map((s) => [s.name, s.code])} />
         </div>
       </div>
+      <div className="card" style={{ marginTop: 16 }}>
+        <h3>Teacher assignments</h3>
+        <QueryState status={assigns} label="teacher assignments">
+          <Table
+            headers={["Teacher", "Class", "Section", "Subject"]}
+            rows={(assigns.data || []).map((a) => [
+              (teachers.data?.content || []).find((t) => t.id === a.teacherUserId)?.fullName || a.teacherUserId.slice(0, 8),
+              classes.find((c) => c.id === a.classId)?.name || a.classId.slice(0, 8),
+              (sections[a.classId] || []).find((s) => s.id === a.sectionId)?.name || a.sectionId.slice(0, 8),
+              subjects.find((s) => s.id === a.subjectId)?.name || a.subjectId.slice(0, 8),
+            ])}
+          />
+        </QueryState>
+        {canWrite ? (
+          <Form busyLabel="Assigning…" onSubmit={async () => {
+            await academicApi.assignTeacher(asg);
+            toast("ok", "Teacher assigned");
+            void assigns.reload();
+          }}>
+            <Field label="Teacher">
+              <select value={asg.teacherUserId} onChange={(e) => setAsg({ ...asg, teacherUserId: e.target.value })} required>
+                <option value="">Select</option>
+                {(teachers.data?.content || []).map((t) => <option key={t.id} value={t.id}>{t.fullName || t.username}</option>)}
+              </select>
+            </Field>
+            <Field label="Class">
+              <select value={asg.classId} onChange={(e) => setAsg({ ...asg, classId: e.target.value, sectionId: "" })} required>
+                <option value="">Select</option>
+                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Section">
+              <select value={asg.sectionId} onChange={(e) => setAsg({ ...asg, sectionId: e.target.value })} required>
+                <option value="">Select</option>
+                {(sections[asg.classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Subject">
+              <select value={asg.subjectId} onChange={(e) => setAsg({ ...asg, subjectId: e.target.value })} required>
+                <option value="">Select</option>
+                {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </Field>
+            <Button type="submit" kind="brass" loadingText="Assigning…">Assign</Button>
+          </Form>
+        ) : null}
+      </div>
       </QueryState>
       <Modal title="New class" open={cOpen} onClose={() => setCOpen(false)}>
         <Form busyLabel="Saving…" onSubmit={async () => {

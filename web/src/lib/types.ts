@@ -166,6 +166,10 @@ export interface TimetableSlot {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  className?: string;
+  sectionName?: string;
+  subjectName?: string;
+  teacherName?: string;
 }
 
 export interface StudentUser {
@@ -359,9 +363,27 @@ export interface SchoolSettings {
   bankName?: string;
   accountTitle?: string;
   accountNumber?: string;
+  iban?: string;
   jazzcash?: string;
   easypaisa?: string;
   otherPaymentMethods?: string;
+}
+
+export interface FeeChargeType {
+  id: string;
+  name: string;
+  defaultAmount: number;
+  active?: boolean;
+}
+
+export interface TimetableSettings {
+  startTime?: string;
+  endTime?: string;
+  lectureMinutes?: number;
+  breakMinutes?: number;
+  lecturesPerDay?: number;
+  workingDays?: string;
+  suggestedSlots?: { lectureNo: number; startTime: string; endTime: string }[];
 }
 
 export interface Notification {

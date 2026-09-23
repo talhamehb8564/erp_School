@@ -90,7 +90,7 @@ export default function App() {
         <Route path="attendance" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><AttendancePage /></RoleGate>} />
         <Route path="homework" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><HomeworkPage /></RoleGate>} />
         <Route path="exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><ExamsPage /></RoleGate>} />
-        <Route path="fees" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"]}><FeesPage /></RoleGate>} />
+        <Route path="fees" element={<RoleGate roles={["ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"]}><FeesPage /></RoleGate>} />
         <Route path="salaries" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "TEACHER"]}><SalariesPage /></RoleGate>} />
         <Route path="announcements" element={<AnnouncementsPage />} />
         <Route path="calendar" element={<CalendarPage />} />

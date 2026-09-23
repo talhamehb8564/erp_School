@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,12 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
             UUID tenantId, UUID classId, UUID sectionId, StudentStatus status);
 
     List<Student> findByTenantIdAndClassIdAndStatus(UUID tenantId, UUID classId, StudentStatus status);
+
+    List<Student> findByTenantIdAndClassIdInAndStatus(UUID tenantId, Collection<UUID> classIds, StudentStatus status);
+
+    List<Student> findByTenantIdAndSectionIdAndStatus(UUID tenantId, UUID sectionId, StudentStatus status);
+
+    List<Student> findByTenantIdAndSectionIdInAndStatus(UUID tenantId, Collection<UUID> sectionIds, StudentStatus status);
 
     List<Student> findByTenantIdAndClassId(UUID tenantId, UUID classId);
 

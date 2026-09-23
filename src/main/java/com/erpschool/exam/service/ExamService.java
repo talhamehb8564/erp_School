@@ -16,7 +16,9 @@ import com.erpschool.student.repository.ParentStudentRepository;
 import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.student.service.StudentAccessService;
 import com.erpschool.tenant.context.TenantContext;
+import com.erpschool.user.entity.User;
 import com.erpschool.user.entity.UserRole;
+import com.erpschool.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,7 @@ public class ExamService {
     private final StudentRepository studentRepository;
     private final ParentStudentRepository parentStudentRepository;
     private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     public ExamService(
             ExamSessionRepository sessionRepository,
@@ -45,7 +48,8 @@ public class ExamService {
             StudentAccessService studentAccessService,
             StudentRepository studentRepository,
             ParentStudentRepository parentStudentRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            UserRepository userRepository) {
 
         this.sessionRepository = sessionRepository;
         this.resultRepository = resultRepository;
@@ -54,6 +58,7 @@ public class ExamService {
         this.studentRepository = studentRepository;
         this.parentStudentRepository = parentStudentRepository;
         this.notificationService = notificationService;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -307,6 +312,11 @@ public class ExamService {
         m.put("studentId", student.getId());
         m.put("rollNumber", student.getRollNumber());
         m.put("admissionNumber", student.getAdmissionNumber());
+        m.put("classId", student.getClassId());
+        m.put("sectionId", student.getSectionId());
+        if (student.getUserId() != null) {
+            userRepository.findById(student.getUserId()).map(User::getFullName).ifPresent(n -> m.put("studentName", n));
+        }
         m.put("subjects", rows);
         m.put("totalMarks", total);
         m.put("obtainedMarks", obtained);

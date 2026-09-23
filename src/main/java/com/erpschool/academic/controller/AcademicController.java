@@ -17,9 +17,11 @@ import lombok.Setter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,6 +31,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -111,9 +114,79 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.ok(academicService.teacherAssignments(teacherUserId)));
     }
 
+    @GetMapping("/timetable/settings")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> timetableSettings() {
+        return ResponseEntity.ok(ApiResponse.ok(academicService.settingsView()));
+    }
+
+    @PutMapping("/timetable/settings")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<com.erpschool.academic.entity.TimetableSettings>> saveTimetableSettings(
+            @RequestBody com.erpschool.academic.entity.TimetableSettings body) {
+        return ResponseEntity.ok(ApiResponse.ok("Timetable settings saved", academicService.saveSettings(body)));
+    }
+
     @PostMapping("/timetable")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
-    public ResponseEntity<ApiResponse<TimetableSlot>> slot(@Valid @RequestBody TimetableRequest request) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> slot(@Valid @RequestBody TimetableRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Timetable lecture created", academicService.createSlot(toSlot(request))));
+    }
+
+    @PutMapping("/timetable/{id}")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateSlot(
+            @PathVariable UUID id, @Valid @RequestBody TimetableRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Timetable lecture updated", academicService.updateSlot(id, toSlot(request))));
+    }
+
+    @DeleteMapping("/timetable/{id}")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteSlot(@PathVariable UUID id) {
+        academicService.deleteSlot(id);
+        return ResponseEntity.ok(ApiResponse.ok("Timetable lecture deleted", null));
+    }
+
+    @PostMapping("/timetable/apply")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> apply(@Valid @RequestBody ApplyRequest request) {
+        List<TimetableSlot> lectures = request.getLectures() == null ? List.of()
+                : request.getLectures().stream().map(this::toLectureSlot).toList();
+        return ResponseEntity.ok(ApiResponse.ok("Timetable applied", academicService.applyPattern(
+                request.getClassId(), request.getSectionId(), request.getDays(), lectures,
+                Boolean.TRUE.equals(request.getReplace()))));
+    }
+
+    @PostMapping("/timetable/copy")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> copy(@Valid @RequestBody CopyRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Timetable copied", academicService.copyTimetable(
+                request.getFromClassId(), request.getFromSectionId(),
+                request.getToClassId(), request.getToSectionId(), request.getDays())));
+    }
+
+    @GetMapping("/timetable")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> classTimetable(
+            @RequestParam UUID classId, @RequestParam UUID sectionId) {
+        return ResponseEntity.ok(ApiResponse.ok(academicService.classTimetable(classId, sectionId)));
+    }
+
+    @GetMapping("/teacher/timetable")
+    @PreAuthorize("hasRole('TEACHER')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> teacherTimetable() {
+        return ResponseEntity.ok(ApiResponse.ok(academicService.teacherTimetable()));
+    }
+
+    @GetMapping("/teacher/timetable/today")
+    @PreAuthorize("hasRole('TEACHER')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> teacherToday() {
+        int day = LocalDate.now().getDayOfWeek() == DayOfWeek.SUNDAY ? 7 : LocalDate.now().getDayOfWeek().getValue();
+        return ResponseEntity.ok(ApiResponse.ok(academicService.teacherToday(day)));
+    }
+
+    private TimetableSlot toSlot(TimetableRequest request) {
         TimetableSlot slot = new TimetableSlot();
         slot.setClassId(request.getClassId());
         slot.setSectionId(request.getSectionId());
@@ -122,28 +195,19 @@ public class AcademicController {
         slot.setDayOfWeek(request.getDayOfWeek());
         slot.setStartTime(request.getStartTime());
         slot.setEndTime(request.getEndTime());
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("Timetable lecture created", academicService.createSlot(slot)));
+        return slot;
     }
 
-    @GetMapping("/timetable")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<List<TimetableSlot>>> classTimetable(
-            @RequestParam UUID classId, @RequestParam UUID sectionId) {
-        return ResponseEntity.ok(ApiResponse.ok(academicService.classTimetable(classId, sectionId)));
-    }
-
-    @GetMapping("/teacher/timetable")
-    @PreAuthorize("hasRole('TEACHER')")
-    public ResponseEntity<ApiResponse<List<TimetableSlot>>> teacherTimetable() {
-        return ResponseEntity.ok(ApiResponse.ok(academicService.teacherTimetable()));
-    }
-
-    @GetMapping("/teacher/timetable/today")
-    @PreAuthorize("hasRole('TEACHER')")
-    public ResponseEntity<ApiResponse<List<TimetableSlot>>> teacherToday() {
-        int day = LocalDate.now().getDayOfWeek() == DayOfWeek.SUNDAY ? 7 : LocalDate.now().getDayOfWeek().getValue();
-        return ResponseEntity.ok(ApiResponse.ok(academicService.teacherToday(day)));
+    private TimetableSlot toLectureSlot(LectureLine line) {
+        TimetableSlot slot = new TimetableSlot();
+        slot.setClassId(line.getClassId());
+        slot.setSectionId(line.getSectionId());
+        slot.setSubjectId(line.getSubjectId());
+        slot.setTeacherUserId(line.getTeacherUserId());
+        slot.setDayOfWeek(line.getDayOfWeek() == null ? 1 : line.getDayOfWeek());
+        slot.setStartTime(line.getStartTime());
+        slot.setEndTime(line.getEndTime());
+        return slot;
     }
 
     @Getter
@@ -183,5 +247,47 @@ public class AcademicController {
         private LocalTime startTime;
         @NotNull
         private LocalTime endTime;
+    }
+
+    @Getter
+    @Setter
+    public static class ApplyRequest {
+        @NotNull
+        private UUID classId;
+        @NotNull
+        private UUID sectionId;
+        private List<Integer> days;
+        private Boolean replace;
+        private List<LectureLine> lectures;
+    }
+
+    @Getter
+    @Setter
+    public static class LectureLine {
+        @NotNull
+        private UUID subjectId;
+        @NotNull
+        private UUID teacherUserId;
+        @NotNull
+        private LocalTime startTime;
+        @NotNull
+        private LocalTime endTime;
+        private Integer dayOfWeek;
+        private UUID classId;
+        private UUID sectionId;
+    }
+
+    @Getter
+    @Setter
+    public static class CopyRequest {
+        @NotNull
+        private UUID fromClassId;
+        @NotNull
+        private UUID fromSectionId;
+        @NotNull
+        private UUID toClassId;
+        @NotNull
+        private UUID toSectionId;
+        private List<Integer> days;
     }
 }

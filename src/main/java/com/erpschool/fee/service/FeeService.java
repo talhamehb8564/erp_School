@@ -1,21 +1,29 @@
 package com.erpschool.fee.service;
 
+import com.erpschool.audit.service.AuditService;
+import com.erpschool.campus.entity.Campus;
+import com.erpschool.campus.repository.CampusRepository;
 import com.erpschool.common.exception.BusinessException;
+import com.erpschool.common.exception.DuplicateResourceException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.service.DocumentSequenceService;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.fee.entity.ChallanCharge;
 import com.erpschool.fee.entity.ChallanStatus;
 import com.erpschool.fee.entity.FeeChallan;
+import com.erpschool.fee.entity.FeeChargeType;
 import com.erpschool.fee.entity.FeePaymentProof;
 import com.erpschool.fee.entity.FeeStructure;
+import com.erpschool.fee.entity.StudentFeeDiscount;
 import com.erpschool.fee.repository.ChallanChargeRepository;
 import com.erpschool.fee.repository.FeeChallanRepository;
+import com.erpschool.fee.repository.FeeChargeTypeRepository;
 import com.erpschool.fee.repository.FeePaymentProofRepository;
 import com.erpschool.fee.repository.FeeStructureRepository;
-import com.erpschool.campus.entity.Campus;
-import com.erpschool.campus.repository.CampusRepository;
+import com.erpschool.fee.repository.StudentFeeDiscountRepository;
 import com.erpschool.notification.service.NotificationService;
+import com.erpschool.settings.entity.SchoolSettings;
+import com.erpschool.settings.repository.SchoolSettingsRepository;
 import com.erpschool.student.entity.ParentStudent;
 import com.erpschool.student.entity.Student;
 import com.erpschool.student.entity.StudentStatus;
@@ -31,12 +39,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -63,6 +73,10 @@ public class FeeService {
     private final NotificationService notificationService;
     private final UserRepository userRepository;
     private final CampusRepository campusRepository;
+    private final FeeChargeTypeRepository chargeTypeRepository;
+    private final StudentFeeDiscountRepository discountRepository;
+    private final SchoolSettingsRepository schoolSettingsRepository;
+    private final AuditService auditService;
 
     public FeeService(FeeStructureRepository structureRepository,
                       FeeChallanRepository challanRepository,
@@ -75,7 +89,11 @@ public class FeeService {
                       TenantRepository tenantRepository,
                       NotificationService notificationService,
                       UserRepository userRepository,
-                      CampusRepository campusRepository) {
+                      CampusRepository campusRepository,
+                      FeeChargeTypeRepository chargeTypeRepository,
+                      StudentFeeDiscountRepository discountRepository,
+                      SchoolSettingsRepository schoolSettingsRepository,
+                      AuditService auditService) {
         this.structureRepository = structureRepository;
         this.challanRepository = challanRepository;
         this.chargeRepository = chargeRepository;
@@ -88,6 +106,10 @@ public class FeeService {
         this.notificationService = notificationService;
         this.userRepository = userRepository;
         this.campusRepository = campusRepository;
+        this.chargeTypeRepository = chargeTypeRepository;
+        this.discountRepository = discountRepository;
+        this.schoolSettingsRepository = schoolSettingsRepository;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -118,21 +140,29 @@ public class FeeService {
     @Transactional
     public List<Map<String, Object>> generateMonthly(UUID classId, LocalDate month, LocalDate dueDate,
                                                      BigDecimal extraCharges, BigDecimal discount, UUID studentId) {
+        return generate(classId, null, studentId == null ? List.of() : List.of(studentId),
+                classId == null ? List.of() : List.of(classId),
+                List.of(), month, dueDate, extraCharges, discount, null, List.of());
+    }
+
+    @Transactional
+    public List<Map<String, Object>> generate(UUID classId, UUID sectionId, List<UUID> studentIds,
+                                              List<UUID> classIds, List<UUID> sectionIds,
+                                              LocalDate month, LocalDate dueDate,
+                                              BigDecimal extraCharges, BigDecimal discountAmount,
+                                              BigDecimal discountPercent, List<ChargeLine> extraLines) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new BusinessException("School not found"));
+        if (month == null) {
+            throw new BusinessException("Month is required");
+        }
         LocalDate monthStart = month.withDayOfMonth(1);
         LocalDate issue = LocalDate.now();
         LocalDate due = dueDate == null ? monthStart.plusDays(10) : dueDate;
-        FeeStructure structure = structureRepository.findFirstByTenantIdAndClassId(tenantId, classId)
-                .orElseThrow(() -> new BusinessException("No fee structure for this class"));
-        List<Student> students = studentRepository.findByTenantIdAndClassIdAndStatus(
-                tenantId, classId, StudentStatus.ACTIVE);
-        if (studentId != null) {
-            students = students.stream().filter(s -> studentId.equals(s.getId())).toList();
-            if (students.isEmpty()) {
-                throw new BusinessException("STUDENT_NOT_IN_CLASS", "No active student in this class matches the selection");
-            }
+        List<Student> students = resolveStudents(tenantId, classId, sectionId, studentIds, classIds, sectionIds);
+        if (students.isEmpty()) {
+            throw new BusinessException("NO_STUDENTS", "No active students match the selection");
         }
         Set<UUID> alreadyIssued = challanRepository.findByTenantIdAndMonth(tenantId, monthStart).stream()
                 .map(FeeChallan::getStudentId)
@@ -143,15 +173,45 @@ public class FeeService {
                 outstandingByStudent.merge(existing.getStudentId(), existing.getTotalPayable(), BigDecimal::add);
             }
         }
-        Map<UUID, List<ParentStudent>> parentsByStudent = students.isEmpty()
-                ? Map.of()
-                : parentStudentRepository.findByTenantIdAndStudentIdIn(
+        Map<UUID, StudentFeeDiscount> discounts = discountRepository
+                .findByTenantIdAndStudentIdInAndActiveTrue(tenantId, students.stream().map(Student::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(StudentFeeDiscount::getStudentId, d -> d, (a, b) ->
+                        a.getCreatedAt() != null && b.getCreatedAt() != null && a.getCreatedAt().isAfter(b.getCreatedAt()) ? a : b));
+        Map<UUID, List<ParentStudent>> parentsByStudent = parentStudentRepository.findByTenantIdAndStudentIdIn(
                         tenantId, students.stream().map(Student::getId).toList()).stream()
                 .collect(Collectors.groupingBy(ParentStudent::getStudentId));
+        List<ChargeLine> lines = extraLines == null ? List.of() : extraLines.stream()
+                .filter(l -> l.name() != null && !l.name().isBlank() && l.amount() != null)
+                .toList();
+        BigDecimal extraSum = extraCharges == null ? BigDecimal.ZERO : extraCharges;
+        extraSum = extraSum.add(lines.stream().map(ChargeLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add));
         List<FeeChallan> createdRows = new ArrayList<>();
         for (Student student : students) {
             if (alreadyIssued.contains(student.getId())) {
                 continue;
+            }
+            UUID structureClassId = student.getClassId() != null ? student.getClassId() : classId;
+            FeeStructure structure = structureClassId == null ? null
+                    : structureRepository.findFirstByTenantIdAndClassId(tenantId, structureClassId).orElse(null);
+            if (structure == null) {
+                throw new BusinessException("No fee structure for class of student " + (student.getRollNumber() == null
+                        ? student.getAdmissionNumber() : student.getRollNumber()));
+            }
+            BigDecimal tuition = structure.getTuitionAmount() == null ? BigDecimal.ZERO : structure.getTuitionAmount();
+            BigDecimal discount = discountAmount == null ? BigDecimal.ZERO : discountAmount;
+            if (discountPercent != null && discountPercent.signum() > 0) {
+                discount = discount.add(tuition.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            }
+            StudentFeeDiscount stored = discounts.get(student.getId());
+            if (stored != null) {
+                if (stored.getPercent() != null && stored.getPercent().signum() > 0) {
+                    discount = discount.add(tuition.multiply(stored.getPercent())
+                            .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+                }
+                if (stored.getAmount() != null) {
+                    discount = discount.add(stored.getAmount());
+                }
             }
             FeeChallan challan = new FeeChallan();
             challan.setTenantId(tenantId);
@@ -161,14 +221,23 @@ public class FeeService {
             challan.setMonth(monthStart);
             challan.setIssueDate(issue);
             challan.setDueDate(due);
-            challan.setTuitionFee(structure.getTuitionAmount());
+            challan.setTuitionFee(tuition);
             challan.setPreviousOutstanding(outstandingByStudent.getOrDefault(student.getId(), BigDecimal.ZERO));
-            challan.setDiscountAmount(discount == null ? BigDecimal.ZERO : discount);
-            challan.setAdditionalCharges(extraCharges == null ? BigDecimal.ZERO : extraCharges);
+            challan.setDiscountAmount(discount);
+            challan.setAdditionalCharges(extraSum);
             challan.recomputeTotal();
             challan.setStatus(ChallanStatus.UNPAID);
             challan.setCreatedBy(TenantContext.getUserId());
             challan = challanRepository.save(challan);
+            for (ChargeLine line : lines) {
+                ChallanCharge charge = new ChallanCharge();
+                charge.setTenantId(tenantId);
+                charge.setChallanId(challan.getId());
+                charge.setName(line.name().trim());
+                charge.setAmount(line.amount());
+                charge.setCreatedBy(TenantContext.getUserId());
+                chargeRepository.save(charge);
+            }
             notifyChallan(student, challan, parentsByStudent.getOrDefault(student.getId(), List.of()));
             createdRows.add(challan);
         }
@@ -197,6 +266,15 @@ public class FeeService {
             }
         }
         return toMaps(rows);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getChallan(UUID id) {
+        FeeChallan challan = requireChallan(id);
+        studentAccessService.requireStudent(challan.getStudentId());
+        Map<String, Object> m = toMap(challan);
+        m.putAll(schoolHeader(challan.getTenantId()));
+        return m;
     }
 
     @Transactional
@@ -310,6 +388,128 @@ public class FeeService {
             updated.add(challanRepository.save(challan));
         }
         return updated;
+    }
+
+    @Transactional
+    public FeeChargeType saveChargeType(String name, BigDecimal amount) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        if (name == null || name.isBlank()) {
+            throw new BusinessException("Charge name is required");
+        }
+        if (chargeTypeRepository.existsByTenantIdAndNameIgnoreCase(tenantId, name.trim())) {
+            throw new DuplicateResourceException("A charge with this name already exists");
+        }
+        FeeChargeType t = new FeeChargeType();
+        t.setTenantId(tenantId);
+        t.setName(name.trim());
+        t.setDefaultAmount(amount == null ? BigDecimal.ZERO : amount);
+        t.setActive(true);
+        t.setCreatedBy(TenantContext.getUserId());
+        return chargeTypeRepository.save(t);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FeeChargeType> chargeTypes() {
+        return chargeTypeRepository.findByTenantIdAndActiveTrueOrderByNameAsc(TenantGuard.requireTenantId(null));
+    }
+
+    @Transactional
+    public StudentFeeDiscount applyDiscount(UUID studentId, BigDecimal percent, BigDecimal amount, String reason) {
+        Student student = studentAccessService.requireStudent(studentId);
+        if ((percent == null || percent.signum() <= 0) && (amount == null || amount.signum() <= 0)) {
+            throw new BusinessException("Provide a discount percent or amount");
+        }
+        discountRepository.findByTenantIdAndStudentIdOrderByCreatedAtDesc(student.getTenantId(), studentId)
+                .stream().filter(StudentFeeDiscount::isActive).forEach(d -> {
+                    d.setActive(false);
+                    d.setUpdatedBy(TenantContext.getUserId());
+                    discountRepository.save(d);
+                });
+        StudentFeeDiscount row = new StudentFeeDiscount();
+        row.setTenantId(student.getTenantId());
+        row.setStudentId(studentId);
+        row.setPercent(percent);
+        row.setAmount(amount);
+        row.setReason(reason);
+        row.setActive(true);
+        row.setCreatedBy(TenantContext.getUserId());
+        StudentFeeDiscount saved = discountRepository.save(row);
+        auditService.record("FEE_DISCOUNT", "StudentFeeDiscount", saved.getId().toString(), Map.of(
+                "studentId", studentId.toString(),
+                "percent", percent == null ? BigDecimal.ZERO : percent,
+                "amount", amount == null ? BigDecimal.ZERO : amount,
+                "reason", reason == null ? "" : reason
+        ));
+        return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentFeeDiscount> discountsFor(UUID studentId) {
+        Student student = studentAccessService.requireStudent(studentId);
+        return discountRepository.findByTenantIdAndStudentIdOrderByCreatedAtDesc(student.getTenantId(), studentId);
+    }
+
+    private List<Student> resolveStudents(UUID tenantId, UUID classId, UUID sectionId,
+                                          List<UUID> studentIds, List<UUID> classIds, List<UUID> sectionIds) {
+        Map<UUID, Student> unique = new LinkedHashMap<>();
+        if (studentIds != null && !studentIds.isEmpty()) {
+            for (Student s : studentRepository.findAllById(studentIds)) {
+                TenantGuard.assertSameTenant(s.getTenantId());
+                if (s.getStatus() == StudentStatus.ACTIVE) {
+                    unique.put(s.getId(), s);
+                }
+            }
+        }
+        Set<UUID> sections = new HashSet<>();
+        if (sectionId != null) {
+            sections.add(sectionId);
+        }
+        if (sectionIds != null) {
+            sections.addAll(sectionIds);
+        }
+        if (!sections.isEmpty()) {
+            studentRepository.findByTenantIdAndSectionIdInAndStatus(tenantId, sections, StudentStatus.ACTIVE)
+                    .forEach(s -> unique.put(s.getId(), s));
+        }
+        Set<UUID> classes = new HashSet<>();
+        if (classId != null) {
+            classes.add(classId);
+        }
+        if (classIds != null) {
+            classes.addAll(classIds);
+        }
+        if (!classes.isEmpty() && unique.isEmpty() && sections.isEmpty() && (studentIds == null || studentIds.isEmpty())) {
+            studentRepository.findByTenantIdAndClassIdInAndStatus(tenantId, classes, StudentStatus.ACTIVE)
+                    .forEach(s -> unique.put(s.getId(), s));
+        } else if (!classes.isEmpty() && unique.isEmpty()) {
+            studentRepository.findByTenantIdAndClassIdInAndStatus(tenantId, classes, StudentStatus.ACTIVE)
+                    .forEach(s -> unique.put(s.getId(), s));
+        }
+        return new ArrayList<>(unique.values());
+    }
+
+    private Map<String, Object> schoolHeader(UUID tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        SchoolSettings settings = schoolSettingsRepository.findById(tenantId).orElse(null);
+        Map<String, Object> m = new HashMap<>();
+        if (tenant != null) {
+            m.put("schoolName", tenant.getName());
+            m.put("schoolAddress", tenant.getAddressLine());
+            m.put("schoolCity", tenant.getCity());
+            m.put("schoolPhone", tenant.getPhone());
+            m.put("schoolEmail", tenant.getEmail());
+            m.put("schoolLogoUrl", tenant.getLogoUrl());
+        }
+        if (settings != null) {
+            m.put("bankName", settings.getBankName());
+            m.put("accountTitle", settings.getAccountTitle());
+            m.put("accountNumber", settings.getAccountNumber());
+            m.put("iban", settings.getIban());
+            m.put("jazzcash", settings.getJazzcash());
+            m.put("easypaisa", settings.getEasypaisa());
+            m.put("paymentInstructions", settings.getPaymentInstructions());
+        }
+        return m;
     }
 
     private FeeChallan requireChallan(UUID id) {
@@ -446,5 +646,8 @@ public class FeeService {
     }
 
     private record StudentContext(Student student, User user, Campus campus) {
+    }
+
+    public record ChargeLine(String name, BigDecimal amount) {
     }
 }

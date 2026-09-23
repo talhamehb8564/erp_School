@@ -10,7 +10,7 @@ import type { SchoolSettings } from "../../lib/types";
 
 export function FeesPage() {
   const { user } = useSession();
-  const { classes, className } = useLookups();
+  const { classes, className, sections } = useLookups();
   const toast = useToast();
   const ops = canOperateFees(user?.role);
   const viewer = canViewFees(user?.role);
@@ -23,11 +23,25 @@ export function FeesPage() {
   const mine = useAsync(() => (sid ? feeApi.studentChallans(sid) : Promise.resolve([])), [sid]);
   const payInfo = useAsync(() => (user?.role === "PARENT" || user?.role === "STUDENT" ? settingsApi.get() : Promise.resolve(null)), [user?.role]);
   const [classId, setClassId] = useState("");
+  const [sectionId, setSectionId] = useState("");
   const [studentId, setStudentId] = useState("");
   const [month, setMonth] = useState(monthStart());
   const [dueDate, setDueDate] = useState("");
-  const classStudents = useAsync(() => (ops && classId ? studentApi.list(classId) : Promise.resolve(null)), [ops, classId]);
+  const [chargeName, setChargeName] = useState("");
+  const [chargeAmt, setChargeAmt] = useState("");
+  const [extraCharges, setExtraCharges] = useState<{ name: string; amount: number }[]>([]);
+  const [discPercent, setDiscPercent] = useState("");
+  const [discAmount, setDiscAmount] = useState("");
+  const [discStudent, setDiscStudent] = useState("");
+  const [discReason, setDiscReason] = useState("");
+  const chargeTypes = useAsync(() => (ops ? feeApi.chargeTypes() : Promise.resolve([])), [user?.role]);
+  const classStudents = useAsync(
+    () => (ops && classId ? studentApi.list(classId, sectionId || undefined) : Promise.resolve(null)),
+    [ops, classId, sectionId],
+  );
   const [stForm, setStForm] = useState({ name: "", classId: "", academicYear: "2026-2027", tuitionAmount: "8000" });
+  const [picked, setPicked] = useState<string[]>([]);
+  const [slip, setSlip] = useState<(Record<string, unknown> & { id?: string }) | null>(null);
   const [proofFor, setProofFor] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [ref, setRef] = useState("");
@@ -42,7 +56,7 @@ export function FeesPage() {
         {payInfo.data && (payInfo.data.bankName || payInfo.data.accountNumber || payInfo.data.paymentInstructions) ? (
           <div className="card" style={{ marginBottom: 16 }}>
             <h3>How to pay</h3>
-            <p>{payInfo.data.bankName ? `${payInfo.data.bankName} · ` : ""}{payInfo.data.accountTitle || ""} {payInfo.data.accountNumber || ""}</p>
+            <p>{payInfo.data.bankName ? `${payInfo.data.bankName} · ` : ""}{payInfo.data.accountTitle || ""} {payInfo.data.accountNumber || ""}{payInfo.data.iban ? ` · IBAN ${payInfo.data.iban}` : ""}</p>
             {payInfo.data.jazzcash ? <p>JazzCash {payInfo.data.jazzcash}</p> : null}
             {payInfo.data.easypaisa ? <p>Easypaisa {payInfo.data.easypaisa}</p> : null}
             {payInfo.data.paymentInstructions ? <p className="hint">{payInfo.data.paymentInstructions}</p> : null}
@@ -88,6 +102,7 @@ export function FeesPage() {
             <Button type="submit" kind="brass" loadingText="Uploading…">Submit</Button>
           </Form>
         </Modal>
+        <ChallanSlipModal slip={slip} onClose={() => setSlip(null)} className={className} />
       </>
     );
   }
@@ -125,26 +140,54 @@ export function FeesPage() {
           <div className="card">
             <h3>Generate monthly challans</h3>
             <Form busyLabel="Generating…" onSubmit={async () => {
-              if (!classId) throw new Error("Select a class.");
+              if (!classId && !studentId) throw new Error("Select a class, section or student.");
+              const ids = picked.length ? picked : studentId ? [studentId] : undefined;
               const created = await feeApi.generate({
-                classId,
+                classId: classId || undefined,
+                sectionId: sectionId || undefined,
+                studentIds: ids,
                 month,
                 dueDate: dueDate || undefined,
-                studentId: studentId || undefined,
+                charges: extraCharges,
+                discountPercent: discPercent && !(ids && ids.length === 1) ? undefined : discPercent ? Number(discPercent) : undefined,
+                discountAmount: discAmount && !(ids && ids.length === 1) ? undefined : discAmount ? Number(discAmount) : undefined,
               });
               toast("ok", created.length ? `${created.length} challans generated` : "No new challans — already issued for this month");
               setStudentId("");
               void pending.reload();
             }}>
               <Field label="Class">
-                <select value={classId} onChange={(e) => { setClassId(e.target.value); setStudentId(""); }} required>
+                <select value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); setStudentId(""); }}>
                   <option value="">Select</option>
                   {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </Field>
-              <Field label="Student (optional — blank = whole class)">
-                <select value={studentId} onChange={(e) => setStudentId(e.target.value)} disabled={!classId}>
-                  <option value="">All students in class</option>
+              <Field label="Section (optional — blank = whole class)">
+                <select value={sectionId} onChange={(e) => { setSectionId(e.target.value); setStudentId(""); }} disabled={!classId}>
+                  <option value="">All sections</option>
+                  {(sections[classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Student (optional — blank = section/class)">
+                <select value={studentId} onChange={(e) => { setStudentId(e.target.value); setPicked(e.target.value ? [e.target.value] : []); }} disabled={!classId}>
+                  <option value="">All students in selection</option>
+                  {(classStudents.data?.content || []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.user?.fullName || s.admissionNumber} · roll {s.rollNumber || "—"}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Or multi-select students">
+                <select
+                  multiple
+                  size={Math.min(6, Math.max(3, (classStudents.data?.content || []).length || 3))}
+                  value={picked}
+                  disabled={!classId}
+                  onChange={(e) => {
+                    const next = Array.from(e.target.selectedOptions).map((o) => o.value);
+                    setPicked(next);
+                    setStudentId(next.length === 1 ? next[0] : "");
+                  }}
+                >
                   {(classStudents.data?.content || []).map((s) => (
                     <option key={s.id} value={s.id}>{s.user?.fullName || s.admissionNumber} · roll {s.rollNumber || "—"}</option>
                   ))}
@@ -152,7 +195,50 @@ export function FeesPage() {
               </Field>
               <Field label="Month"><input type="month" value={month.slice(0, 7)} onChange={(e) => setMonth(`${e.target.value}-01`)} /></Field>
               <Field label="Due date"><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></Field>
-              <Button type="submit" kind="brass" loadingText="Generating…">Generate</Button>
+              <Field label="One-off discount % (this generate, selected student)">
+                <input value={discPercent} onChange={(e) => setDiscPercent(e.target.value)} placeholder="e.g. 10" disabled={!studentId} />
+              </Field>
+              <Field label="Custom charges this generate">
+                <div className="row">
+                  <input value={chargeName} onChange={(e) => setChargeName(e.target.value)} placeholder="AC / exam / camp" />
+                  <input value={chargeAmt} onChange={(e) => setChargeAmt(e.target.value)} placeholder="Amount" />
+                  <Button kind="ghost" onClick={() => {
+                    if (!chargeName.trim() || !chargeAmt) return;
+                    setExtraCharges((c) => [...c, { name: chargeName.trim(), amount: Number(chargeAmt) }]);
+                    setChargeName(""); setChargeAmt("");
+                  }}>Add</Button>
+                </div>
+                {(chargeTypes.data || []).map((t) => (
+                  <Button key={t.id} kind="ghost" onClick={() => setExtraCharges((c) => [...c, { name: t.name, amount: t.defaultAmount }])}>{t.name}</Button>
+                ))}
+                {extraCharges.length ? <p className="hint">{extraCharges.map((c) => `${c.name} ${c.amount}`).join(" · ")}</p> : null}
+              </Field>
+              <Button type="submit" kind="brass" loadingText="Generating…">Generate & send</Button>
+            </Form>
+            <Form busyLabel="Saving charge…" onSubmit={async () => {
+              if (!chargeName.trim()) throw new Error("Charge name required");
+              await feeApi.saveChargeType({ name: chargeName.trim(), defaultAmount: Number(chargeAmt || 0) });
+              toast("ok", "Charge type saved"); void chargeTypes.reload();
+            }}>
+              <Button type="submit" kind="ghost" loadingText="Saving…">Save as reusable charge</Button>
+            </Form>
+            <Form busyLabel="Applying discount…" onSubmit={async () => {
+              const sid = discStudent || studentId;
+              if (!sid) throw new Error("Select a student for the standing discount.");
+              await feeApi.applyDiscount(sid, { percent: discPercent ? Number(discPercent) : undefined, amount: discAmount ? Number(discAmount) : undefined, reason: discReason });
+              toast("ok", "Standing discount saved for next challans");
+            }}>
+              <Field label="Standing discount student">
+                <select value={discStudent} onChange={(e) => setDiscStudent(e.target.value)}>
+                  <option value="">Use generate student</option>
+                  {(classStudents.data?.content || []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.user?.fullName || s.admissionNumber}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Fixed amount"><input value={discAmount} onChange={(e) => setDiscAmount(e.target.value)} /></Field>
+              <Field label="Reason"><input value={discReason} onChange={(e) => setDiscReason(e.target.value)} /></Field>
+              <Button type="submit" kind="ghost" loadingText="Saving…">Save standing discount</Button>
             </Form>
           </div>
         ) : (
@@ -206,8 +292,44 @@ export function FeesPage() {
   );
 }
 
+function ChallanSlipModal({
+  slip,
+  onClose,
+  className,
+}: {
+  slip: (Record<string, unknown> & { id?: string }) | null;
+  onClose: () => void;
+  className: (id?: string) => string;
+}) {
+  if (!slip) return null;
+  const charges = Array.isArray(slip.charges) ? (slip.charges as { name?: string; amount?: number }[]) : [];
+  return (
+    <Modal title="Fee slip" open onClose={onClose}>
+      <div className="card">
+        <h3>{String(slip.schoolName || "School")}</h3>
+        <p className="hint">{[slip.schoolAddress, slip.schoolCity, slip.schoolPhone].filter(Boolean).join(" · ")}</p>
+        <p>{String(slip.bankName || "")} · {String(slip.accountTitle || "")} {String(slip.accountNumber || "")}{slip.iban ? ` · IBAN ${String(slip.iban)}` : ""}</p>
+        <p>{String(slip.studentName || "—")} · roll {String(slip.rollNumber || "—")} · {className(slip.classId as string | undefined)}</p>
+        <p>Challan {String(slip.challanNumber || "—")} · month {fmtDate(slip.month as string | undefined)} · due {fmtDate(slip.dueDate as string | undefined)}</p>
+        <Table
+          headers={["Line", "Amount"]}
+          rows={[
+            ["Tuition", money(slip.tuitionFee as number)],
+            ["Previous outstanding", money(slip.previousOutstanding as number)],
+            ["Additional charges", money(slip.additionalCharges as number)],
+            ["Discount", money(slip.discountAmount as number)],
+            ...charges.map((c) => [c.name || "Charge", money(c.amount)]),
+            ["Total payable", money(slip.totalPayable as number)],
+          ]}
+        />
+        <p><Badge value={String(slip.status || "")} /></p>
+      </div>
+    </Modal>
+  );
+}
+
 function canOperateFees(role?: string) {
-  return role === "SCHOOL_ADMIN" || role === "ACCOUNT_OFFICER" || role === "ERP_OWNER";
+  return role === "ACCOUNT_OFFICER" || role === "ERP_OWNER";
 }
 
 function canViewFees(role?: string) {
@@ -225,6 +347,10 @@ export function SalariesPage() {
   const users = useAsync(() => (viewer ? userApi.list() : Promise.resolve({ content: [] as { id: string; fullName?: string; username?: string; role?: string }[], page: 0, size: 0, totalElements: 0, totalPages: 0, first: true, last: true })), [user?.role]);
   const [uid, setUid] = useState("");
   const [base, setBase] = useState("50000");
+  const [adjustId, setAdjustId] = useState<string | null>(null);
+  const [deduct, setDeduct] = useState("");
+  const [bonus, setBonus] = useState("");
+  const [adjNotes, setAdjNotes] = useState("");
   if (user?.role === "TEACHER") {
     return (
       <>

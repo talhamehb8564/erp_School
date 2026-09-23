@@ -106,6 +106,28 @@ public class SalaryService {
     }
 
     @Transactional
+    public StaffSalary adjust(UUID id, BigDecimal otherDeductions, BigDecimal bonuses, String notes) {
+        StaffSalary s = salaryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Salary", id));
+        TenantGuard.assertSameTenant(s.getTenantId());
+        if (s.getStatus() == SalaryStatus.PAID) {
+            throw new BusinessException("Cannot change a paid salary");
+        }
+        if (otherDeductions != null) {
+            s.setOtherDeductions(otherDeductions);
+        }
+        if (bonuses != null) {
+            s.setBonuses(bonuses);
+        }
+        if (notes != null) {
+            s.setNotes(notes);
+        }
+        s.recompute();
+        s.setUpdatedBy(TenantContext.getUserId());
+        return salaryRepository.save(s);
+    }
+
+    @Transactional
     public StaffSalary markPaid(UUID id, LocalDate paymentDate) {
         StaffSalary s = salaryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Salary", id));

@@ -37,7 +37,7 @@ public class SalaryController {
     }
 
     @PostMapping("/profiles")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<StaffProfile>> profile(@Valid @RequestBody ProfileRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Staff salary profile saved",
                 salaryService.upsertProfile(request.getUserId(), request.getBaseSalary())));
@@ -50,14 +50,21 @@ public class SalaryController {
     }
 
     @PostMapping("/generate")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<List<StaffSalary>>> generate(@Valid @RequestBody GenerateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Monthly salaries generated",
                 salaryService.generateMonth(request.getMonth())));
     }
 
+    @PostMapping("/{id}/adjust")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<StaffSalary>> adjust(@PathVariable UUID id, @RequestBody AdjustRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Salary updated", salaryService.adjust(
+                id, request.getOtherDeductions(), request.getBonuses(), request.getNotes())));
+    }
+
     @PostMapping("/{id}/pay")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
     public ResponseEntity<ApiResponse<StaffSalary>> pay(@PathVariable UUID id, @RequestBody(required = false) PayRequest request) {
         LocalDate date = request == null ? null : request.getPaymentDate();
         return ResponseEntity.ok(ApiResponse.ok("Salary marked paid", salaryService.markPaid(id, date)));
@@ -96,5 +103,13 @@ public class SalaryController {
     @Setter
     public static class PayRequest {
         private LocalDate paymentDate;
+    }
+
+    @Getter
+    @Setter
+    public static class AdjustRequest {
+        private BigDecimal otherDeductions;
+        private BigDecimal bonuses;
+        private String notes;
     }
 }

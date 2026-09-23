@@ -16,7 +16,7 @@ export const SCHOOL_NAV: NavItem[] = [
   { to: "/app/attendance", label: "Attendance", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"] },
   { to: "/app/homework", label: "Homework", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"] },
   { to: "/app/exams", label: "Marks & results", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"] },
-  { to: "/app/fees", label: "Fees", roles: ["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"] },
+  { to: "/app/fees", label: "Fees", roles: ["ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"] },
   { to: "/app/salaries", label: "Salaries", roles: ["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "TEACHER"] },
   { to: "/app/announcements", label: "Announcements", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT", "ACCOUNT_OFFICER"] },
   { to: "/app/calendar", label: "Calendar", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT", "ACCOUNT_OFFICER"] },
@@ -32,5 +32,5 @@ export function rolesForPath(pathname: string): Role[] | undefined {
   return exact?.roles;
 }
 
-export const FEE_OPERATORS: Role[] = ["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "ERP_OWNER"];
+export const FEE_OPERATORS: Role[] = ["ACCOUNT_OFFICER", "ERP_OWNER"];
 export const ACADEMIC_WRITERS: Role[] = ["SCHOOL_ADMIN", "ERP_OWNER"];
