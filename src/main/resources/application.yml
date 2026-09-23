@@ -3,7 +3,7 @@ spring:
     name: erp-school
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://${PGHOST:ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech}/${PGDATABASE:neondb}?sslmode=${PGSSLMODE:require}}}
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://${PGHOST:ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech}/${PGDATABASE:neondb}?sslmode=${PGSSLMODE:require}&gssEncMode=disable}}
     username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:${PGUSER:neondb_owner}}}
     password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:${PGPASSWORD:}}}
     driver-class-name: org.postgresql.Driver
@@ -12,13 +12,20 @@ spring:
       maximum-pool-size: ${DB_POOL_SIZE:10}
       minimum-idle: 2
       connection-timeout: 30000
-      idle-timeout: 300000
-      max-lifetime: 900000
-      initialization-fail-timeout: 1
+      idle-timeout: 60000
+      max-lifetime: 280000
+      keepalive-time: 30000
+      initialization-fail-timeout: 60000
       connection-test-query: SELECT 1
       data-source-properties:
         ssl: true
         sslmode: require
+        gssEncMode: disable
+        prepareThreshold: 0
+        connectTimeout: 10
+        socketTimeout: 30
+        loginTimeout: 15
+        tcpKeepAlive: true
         ApplicationName: erp-school-phase1
 
   jpa:
@@ -40,6 +47,8 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     validate-on-migrate: true
+    connect-retries: 10
+    connect-retries-interval: 5s
 
   jackson:
     default-property-inclusion: non_null

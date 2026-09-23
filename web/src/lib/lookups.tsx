@@ -27,13 +27,15 @@ export function LookupsProvider({ children, enabled }: { children: React.ReactNo
     setLoading(true);
     setError(null);
     try {
-      const [c, s] = await Promise.all([academicApi.classes(), academicApi.subjects()]);
+      const [c, s, bulkSections] = await Promise.all([
+        academicApi.classes(),
+        academicApi.subjects(),
+        academicApi.allSections().catch(() => [] as Section[]),
+      ]);
       setClasses(c);
       setSubjects(s);
-      let allSections: Section[] = [];
-      try {
-        allSections = await academicApi.allSections();
-      } catch {
+      let allSections = bulkSections;
+      if (!allSections.length && c.length) {
         const nested = await Promise.all(c.map((cl) => academicApi.sections(cl.id).catch(() => [] as Section[])));
         allSections = nested.flat();
       }

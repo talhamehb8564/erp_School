@@ -57,7 +57,7 @@ The app connects to **Neon PostgreSQL only**. There is no H2 / SQLite / PGlite f
 JDBC URL (no password in git):
 
 ```text
-jdbc:postgresql://ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require
+jdbc:postgresql://ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&gssEncMode=disable
 ```
 
 ```bash
@@ -66,7 +66,7 @@ export PGDATABASE=neondb
 export PGUSER=neondb_owner
 export PGPASSWORD='your-neon-password'
 export PGSSLMODE=require
-export DB_URL="jdbc:postgresql://${PGHOST}/${PGDATABASE}?sslmode=require"
+export DB_URL="jdbc:postgresql://${PGHOST}/${PGDATABASE}?sslmode=require&gssEncMode=disable"
 export DB_USERNAME="$PGUSER"
 export DB_PASSWORD="$PGPASSWORD"
 ```
@@ -94,7 +94,7 @@ Flyway applies V1+V2+V3 against Neon. Logs must show:
 
 `Neon connection and Flyway V1+V2+V3 verification succeeded`
 
-If SSL drops (`Connection terminated unexpectedly` / `ECONNRESET`): wake the Neon compute, check IP allowlist, try the non-pooler host. Do not add `channelBinding=require` until connectivity is proven.
+If Flyway fails with SQLState `08001` / `SocketException: Connection reset`: the JDBC driver must not send a GSS encryption probe (`gssEncMode=disable` is applied automatically). Also wake the Neon compute, confirm the password, check the Neon IP allowlist, and prefer IPv4. Do not add `channelBinding=require`. Flyway is retried (10 × 5s); it is never disabled.
 
 - API: http://localhost:8080/api/v1
 - Swagger UI: http://localhost:8080/swagger-ui.html

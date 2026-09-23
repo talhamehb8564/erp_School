@@ -79,7 +79,15 @@ function TeacherDash() {
           <div className="card">
             <h3>Today’s lectures</h3>
             {!lectures.length ? <Empty title="No lectures today" /> : (
-              <Table headers={["Slot", "Start", "End"]} rows={lectures.map((l) => [l.id.slice(0, 8), l.startTime, l.endTime])} />
+              <Table
+                headers={["Class", "Subject", "Start", "End"]}
+                rows={lectures.map((l) => [
+                  [l.className, l.sectionName].filter(Boolean).join(" · ") || "—",
+                  l.subjectName || "—",
+                  l.startTime,
+                  l.endTime,
+                ])}
+              />
             )}
           </div>
           <div className="card">

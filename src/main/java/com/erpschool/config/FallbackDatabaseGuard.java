@@ -3,17 +3,23 @@ package com.erpschool.config;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MapPropertySource;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Fail fast if the datasource is missing, unauthenticated, or an in-memory fallback.
- * This backend is required to use Neon PostgreSQL.
+ * Also normalizes Neon JDBC parameters: IPv4, sslmode=require, gssEncMode=disable
+ * (pgjdbc GSSENCRequest is a common cause of SQLState 08001 / Connection reset).
  */
 public class FallbackDatabaseGuard implements EnvironmentPostProcessor {
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+        System.setProperty("java.net.preferIPv4Stack", "true");
+
         String url = environment.getProperty("spring.datasource.url", "");
         String password = environment.getProperty("spring.datasource.password", "");
         String lower = url.toLowerCase();
@@ -42,10 +48,35 @@ public class FallbackDatabaseGuard implements EnvironmentPostProcessor {
                     "Neon password is not set. Export PGPASSWORD or DB_PASSWORD or SPRING_DATASOURCE_PASSWORD. "
                             + "Do not commit the password to Git.");
         }
-        if (lower.contains("channelbinding=require")) {
-            throw new IllegalStateException(
-                    "channelBinding=require is not allowed on the JDBC URL until Neon connectivity is proven. "
-                            + "Use sslmode=require only.");
+
+        String adjusted = normalizeJdbcUrl(url);
+        if (!adjusted.equals(url)) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("spring.datasource.url", adjusted);
+            environment.getPropertySources().addFirst(new MapPropertySource("erpNeonJdbc", map));
         }
+    }
+
+    static String normalizeJdbcUrl(String url) {
+        String next = stripQueryParam(url, "channelBinding");
+        next = stripQueryParam(next, "channel_binding");
+        next = ensureQueryParam(next, "sslmode", "require");
+        next = ensureQueryParam(next, "gssEncMode", "disable");
+        next = ensureQueryParam(next, "prepareThreshold", "0");
+        return next;
+    }
+
+    private static String stripQueryParam(String url, String key) {
+        return url.replaceAll("(?i)([?&])" + key + "=[^&]*", "$1")
+                .replace("?&", "?")
+                .replaceAll("[?&]$", "")
+                .replace("&&", "&");
+    }
+
+    private static String ensureQueryParam(String url, String key, String value) {
+        if (url.matches("(?i).*[?&]" + key + "=.*")) {
+            return url;
+        }
+        return url + (url.contains("?") ? "&" : "?") + key + "=" + value;
     }
 }
