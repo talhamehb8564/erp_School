@@ -69,6 +69,7 @@ public class NeonConnectionVerifier implements ApplicationRunner {
         requireTable(tables, "subscriptions");
         requireTable(tables, "timetable_slots");
         requireTable(tables, "homework_submissions");
+        requireTable(tables, "exam_date_sheet_entries");
 
         boolean v1 = history.stream().anyMatch(row ->
                 "1".equals(String.valueOf(row.get("version")))

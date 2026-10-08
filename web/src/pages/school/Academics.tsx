@@ -125,6 +125,19 @@ export function AcademicsPage() {
                 {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </Field>
+            <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" onChange={(e) => {
+                if (e.target.checked && asg.classId && asg.teacherUserId && asg.subjectId) {
+                  void academicApi.assignTeacherBulk({
+                    teacherUserId: asg.teacherUserId,
+                    subjectIds: [asg.subjectId],
+                    classIds: [asg.classId],
+                    allSections: true,
+                  }).then(() => { toast("ok", "Assigned to all sections"); void assigns.reload(); });
+                }
+              }} />
+              <span>All sections of this class</span>
+            </label>
             <Button type="submit" kind="brass" loadingText="Assigning…">Assign</Button>
           </Form>
         ) : null}

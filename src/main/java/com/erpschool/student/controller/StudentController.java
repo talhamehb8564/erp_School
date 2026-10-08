@@ -74,6 +74,22 @@ public class StudentController {
         return ResponseEntity.ok(ApiResponse.ok("Student updated", studentService.update(id, request)));
     }
 
+    @PostMapping("/students/promote")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<List<StudentDtos.Response>>> promote(@Valid @RequestBody PromoteRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Students promoted", studentService.promote(
+                request.getFromClassId(), request.getFromSectionId(),
+                request.getToClassId(), request.getToSectionId(), request.getStudentIds())));
+    }
+
+    @PostMapping("/students/{id}/inactivate")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<StudentDtos.Response>> inactivate(
+            @PathVariable UUID id, @RequestBody(required = false) InactivateRequest request) {
+        String reason = request == null ? "OTHER" : request.getReason();
+        return ResponseEntity.ok(ApiResponse.ok("Student inactivated", studentService.inactivate(id, reason)));
+    }
+
     @PostMapping("/students/{id}/parents")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
     public ResponseEntity<ApiResponse<ParentStudent>> linkParent(
@@ -95,5 +111,24 @@ public class StudentController {
         @NotNull
         private UUID parentUserId;
         private String relationship;
+    }
+
+    @Getter
+    @Setter
+    public static class PromoteRequest {
+        @NotNull
+        private UUID fromClassId;
+        private UUID fromSectionId;
+        @NotNull
+        private UUID toClassId;
+        @NotNull
+        private UUID toSectionId;
+        private List<UUID> studentIds;
+    }
+
+    @Getter
+    @Setter
+    public static class InactivateRequest {
+        private String reason;
     }
 }

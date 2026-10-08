@@ -47,6 +47,7 @@ export interface Page<T> {
 export interface User {
   id: string;
   tenantId?: string;
+  campusId?: string;
   username: string;
   email?: string;
   firstName: string;
@@ -81,6 +82,8 @@ export interface Tenant {
   country?: string;
   postalCode?: string;
   logoUrl?: string;
+  primaryColor?: string;
+  accentColor?: string;
   website?: string;
   status: TenantStatus;
   academicYear?: string;
@@ -181,6 +184,8 @@ export interface StudentUser {
   admissionNumber?: string;
   registrationNumber?: string;
   rollNumber?: string;
+  cnic?: string;
+  inactiveReason?: string;
   photoUrl?: string;
   gender?: string;
   dateOfBirth?: string;
@@ -250,6 +255,8 @@ export interface ExamSession {
   endDate?: string;
   published?: boolean;
   publishedAt?: string;
+  announceAt?: string;
+  campusId?: string;
 }
 
 export interface ExamResult {
@@ -367,6 +374,9 @@ export interface SchoolSettings {
   jazzcash?: string;
   easypaisa?: string;
   otherPaymentMethods?: string;
+  logoUrl?: string;
+  primaryColor?: string;
+  accentColor?: string;
 }
 
 export interface FeeChargeType {

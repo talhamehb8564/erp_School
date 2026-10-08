@@ -64,6 +64,29 @@ public class ExamController {
         return ResponseEntity.ok(ApiResponse.ok("Results published", examService.publish(id)));
     }
 
+    @PostMapping("/sessions/{id}/announce-at")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL')")
+    public ResponseEntity<ApiResponse<ExamSession>> announceAt(
+            @PathVariable UUID id, @RequestBody Map<String, String> body) {
+        String raw = body == null ? null : body.get("announceAt");
+        java.time.Instant when = raw == null || raw.isBlank() ? null : java.time.Instant.parse(raw);
+        return ResponseEntity.ok(ApiResponse.ok("Announcement time saved", examService.setAnnounceAt(id, when)));
+    }
+
+    @GetMapping("/sessions/{id}/date-sheet")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<com.erpschool.exam.entity.ExamDateSheetEntry>>> dateSheet(
+            @PathVariable UUID id, @RequestParam(required = false) UUID classId) {
+        return ResponseEntity.ok(ApiResponse.ok(examService.dateSheet(id, classId)));
+    }
+
+    @PostMapping("/sessions/{id}/date-sheet")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL')")
+    public ResponseEntity<ApiResponse<List<com.erpschool.exam.entity.ExamDateSheetEntry>>> saveDateSheet(
+            @PathVariable UUID id, @RequestBody List<com.erpschool.exam.entity.ExamDateSheetEntry> entries) {
+        return ResponseEntity.ok(ApiResponse.ok("Date-sheet saved", examService.replaceDateSheet(id, entries)));
+    }
+
     @GetMapping("/sessions/{id}/results")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
     public ResponseEntity<ApiResponse<List<ExamResult>>> all(@PathVariable UUID id) {

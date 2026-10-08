@@ -107,6 +107,19 @@ public class AcademicController {
                         request.getTeacherUserId(), request.getClassId(), request.getSectionId(), request.getSubjectId())));
     }
 
+    @PostMapping("/teacher-assignments/bulk")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<List<TeacherAssignment>>> assignBulk(@Valid @RequestBody BulkAssignmentRequest request) {
+        List<UUID> subjects = request.getSubjectIds() != null ? request.getSubjectIds()
+                : (request.getSubjectId() == null ? List.of() : List.of(request.getSubjectId()));
+        List<UUID> classes = request.getClassIds() != null ? request.getClassIds()
+                : (request.getClassId() == null ? List.of() : List.of(request.getClassId()));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Teacher assigned", academicService.assignTeacherBulk(
+                        request.getTeacherUserId(), subjects, classes, request.getSectionIds(),
+                        Boolean.TRUE.equals(request.getAllSections()))));
+    }
+
     @GetMapping("/teacher-assignments")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
     public ResponseEntity<ApiResponse<List<TeacherAssignment>>> assignments(
@@ -228,6 +241,19 @@ public class AcademicController {
         private UUID sectionId;
         @NotNull
         private UUID subjectId;
+    }
+
+    @Getter
+    @Setter
+    public static class BulkAssignmentRequest {
+        @NotNull
+        private UUID teacherUserId;
+        private UUID subjectId;
+        private List<UUID> subjectIds;
+        private UUID classId;
+        private List<UUID> classIds;
+        private List<UUID> sectionIds;
+        private Boolean allSections;
     }
 
     @Getter

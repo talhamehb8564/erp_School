@@ -444,6 +444,9 @@ export function SettingsPage() {
             <Field label="JazzCash"><input value={current.jazzcash || ""} onChange={(e) => setForm({ ...form, jazzcash: e.target.value })} /></Field>
             <Field label="Easypaisa"><input value={current.easypaisa || ""} onChange={(e) => setForm({ ...form, easypaisa: e.target.value })} /></Field>
             <Field label="Instructions"><textarea value={current.paymentInstructions || ""} onChange={(e) => setForm({ ...form, paymentInstructions: e.target.value })} /></Field>
+            <Field label="Logo URL"><input value={current.logoUrl || ""} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} /></Field>
+            <Field label="Primary color"><input type="color" value={current.primaryColor || "#1f3a5f"} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
+            <Field label="Accent color"><input type="color" value={current.accentColor || "#c4a574"} onChange={(e) => setForm({ ...form, accentColor: e.target.value })} /></Field>
             <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
           </Form>
         </div>

@@ -308,12 +308,20 @@ export function ExamsPage() {
       </QueryState>
       {user?.role === "STUDENT" || user?.role === "PARENT" ? (
         <QueryState status={mine} label="results">
-          {mine.data ? (
-            <div className="card">
-              <p>{mine.data.studentName || "—"} · roll {mine.data.rollNumber || "—"} · {className(mine.data.classId)}</p>
-              <p>Grade {mine.data.grade} · {mine.data.obtainedMarks}/{mine.data.totalMarks} · {mine.data.percentage}% · {pretty(mine.data.passStatus)}</p>
-              <Table headers={["Subject", "Obtained", "Total"]} rows={(mine.data.subjects || []).map((r) => [subjectName(r.subjectId), r.obtainedMarks, r.totalMarks])} />
-            </div>
+          {mine.data && mine.data.announced === false ? (
+            <ResultCountdown announceAt={mine.data.announceAt} seconds={mine.data.countdownSeconds} />
+          ) : mine.data ? (
+            <Marksheet
+              school={undefined}
+              studentName={mine.data.studentName || "—"}
+              roll={mine.data.rollNumber}
+              grade={mine.data.grade}
+              obtained={mine.data.obtainedMarks}
+              total={mine.data.totalMarks}
+              percentage={mine.data.percentage}
+              passStatus={mine.data.passStatus}
+              rows={(mine.data.subjects || []).map((r) => [subjectName(r.subjectId), r.obtainedMarks, r.totalMarks, r.grade || "—"])}
+            />
           ) : <Empty title="Select a published session" />}
         </QueryState>
       ) : (
@@ -344,7 +352,14 @@ export function ExamsPage() {
                 <Button type="submit" kind="brass" loadingText="Saving…">Save marks</Button>
               </Form>
               {(user.role === "SCHOOL_ADMIN" || user.role === "PRINCIPAL") ? (
-                <Button kind="ok" loadingText="Publishing…" onClick={async () => { await examApi.publish(sessionId); toast("ok", "Published"); void sessions.reload(); }}>Publish results</Button>
+                <div className="row" style={{ marginTop: 8 }}>
+                  <input type="datetime-local" onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    void examApi.setAnnounceAt(sessionId, new Date(v).toISOString()).then(() => toast("ok", "Announcement time saved"));
+                  }} />
+                  <Button kind="ok" loadingText="Publishing…" onClick={async () => { await examApi.publish(sessionId); toast("ok", "Published"); void sessions.reload(); }}>Publish results</Button>
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -370,5 +385,61 @@ export function ExamsPage() {
         </>
       )}
     </>
+  );
+}
+
+function ResultCountdown({ announceAt, seconds }: { announceAt?: string; seconds?: number }) {
+  const [left, setLeft] = useState(seconds ?? 0);
+  useEffect(() => {
+    const tick = () => {
+      if (!announceAt) return;
+      setLeft(Math.max(0, Math.floor((new Date(announceAt).getTime() - Date.now()) / 1000)));
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [announceAt]);
+  const h = Math.floor(left / 3600);
+  const m = Math.floor((left % 3600) / 60);
+  const s = left % 60;
+  return (
+    <div className="card">
+      <p className="kicker">Results sealed</p>
+      <h3>Announcement countdown</h3>
+      <p className="hint">Marks will appear here at the scheduled announcement time.</p>
+      <p style={{ fontSize: 32, margin: "12px 0" }}>
+        {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
+      </p>
+    </div>
+  );
+}
+
+function Marksheet({
+  studentName, roll, grade, obtained, total, percentage, passStatus, rows,
+}: {
+  school?: string;
+  studentName: string;
+  roll?: string;
+  grade?: string;
+  obtained?: number;
+  total?: number;
+  percentage?: number;
+  passStatus?: string;
+  rows: (string | number)[][];
+}) {
+  const { tenant } = useSession();
+  return (
+    <div className="card" style={{ borderColor: tenant?.primaryColor || undefined }}>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        {tenant?.logoUrl ? <img src={tenant.logoUrl} alt="" style={{ height: 48 }} /> : <div className="mark">A</div>}
+        <div>
+          <strong>{tenant?.name || "School"}</strong>
+          <div className="hint">{tenant?.code} · Board-style marksheet</div>
+        </div>
+      </div>
+      <h3 style={{ marginTop: 16 }}>{studentName}</h3>
+      <p>Roll {roll || "—"} · Grade {grade || "—"} · {obtained}/{total} · {percentage}% · {pretty(passStatus)}</p>
+      <Table headers={["Subject", "Obtained", "Total", "Grade"]} rows={rows} />
+    </div>
   );
 }

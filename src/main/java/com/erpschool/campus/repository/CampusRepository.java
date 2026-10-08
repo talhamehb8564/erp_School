@@ -11,4 +11,6 @@ public interface CampusRepository extends JpaRepository<Campus, UUID> {
     List<Campus> findByTenantIdOrderByNameAsc(UUID tenantId);
 
     boolean existsByTenantIdAndCodeIgnoreCase(UUID tenantId, String code);
+
+    java.util.Optional<Campus> findByTenantIdAndCodeIgnoreCase(UUID tenantId, String code);
 }

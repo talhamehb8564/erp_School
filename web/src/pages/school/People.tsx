@@ -18,8 +18,10 @@ export function StudentsPage() {
   const [open, setOpen] = useState(false);
   const toast = useToast();
   const [form, setForm] = useState({
-    firstName: "", lastName: "", classId: "", sectionId: "", parentFirstName: "", parentLastName: "", relationship: "FATHER",
+    firstName: "", lastName: "", cnic: "", classId: "", sectionId: "", parentFirstName: "", parentLastName: "", relationship: "FATHER",
   });
+  const [promo, setPromo] = useState({ fromClassId: "", fromSectionId: "", toClassId: "", toSectionId: "" });
+  const [promoOpen, setPromoOpen] = useState(false);
   const rows = (list.data?.content || []).filter((s) => {
     const n = `${s.user?.fullName || ""} ${s.admissionNumber || ""}`.toLowerCase();
     return !q || n.includes(q.toLowerCase());
@@ -28,7 +30,12 @@ export function StudentsPage() {
     <>
       <div className="page-title">
         <div><h1>Students</h1><p>Enrolment writes a user + student row on Neon</p></div>
-        {canEnrol ? <Button kind="brass" onClick={() => setOpen(true)}>Enrol student</Button> : null}
+        {canEnrol ? (
+          <div className="row">
+            <Button kind="ghost" onClick={() => setPromoOpen(true)}>Promote class</Button>
+            <Button kind="brass" onClick={() => setOpen(true)}>Enrol student</Button>
+          </div>
+        ) : null}
       </div>
       <div className="row" style={{ marginBottom: 12 }}>
         <Search value={q} onChange={setQ} placeholder="Search name or admission no." />
@@ -39,8 +46,20 @@ export function StudentsPage() {
       </div>
       <QueryState status={list} label="students">
         <Table
-          headers={["Admission", "Name", "Class", "Roll", "Status"]}
-          rows={rows.map((s) => [s.admissionNumber, studentLabel(s), className(s.classId), s.rollNumber || "—", <Badge key={s.id} value={s.status} />])}
+          headers={canEnrol ? ["Admission", "Name", "CNIC", "Class", "Roll", "Status", ""] : ["Admission", "Name", "CNIC", "Class", "Roll", "Status"]}
+          rows={rows.map((s) => {
+            const cells = [s.admissionNumber, studentLabel(s), s.cnic || "—", className(s.classId), s.rollNumber || "—", <Badge key={s.id} value={s.status} />];
+            if (canEnrol) {
+              cells.push(
+                <Button key={`in${s.id}`} kind="danger" loadingText="Inactivating…" onClick={async () => {
+                  await studentApi.inactivate(s.id, "UNPAID_FEES");
+                  toast("ok", "Student inactivated");
+                  void list.reload();
+                }}>Inactivate</Button>,
+              );
+            }
+            return cells;
+          })}
         />
         <Pager page={list.data?.page ?? page} totalPages={list.data?.totalPages ?? 0} onChange={setPage} />
       </QueryState>
@@ -58,6 +77,7 @@ export function StudentsPage() {
         >
           <Field label="First name"><input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></Field>
           <Field label="Last name"><input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></Field>
+          <Field label="CNIC / B-Form"><input value={form.cnic} onChange={(e) => setForm({ ...form, cnic: e.target.value })} required placeholder="13 digits" /></Field>
           <Field label="Class">
             <select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value, sectionId: "" })} required>
               <option value="">Select</option>
@@ -73,6 +93,40 @@ export function StudentsPage() {
           <Field label="Parent first name"><input value={form.parentFirstName} onChange={(e) => setForm({ ...form, parentFirstName: e.target.value })} /></Field>
           <Field label="Parent last name"><input value={form.parentLastName} onChange={(e) => setForm({ ...form, parentLastName: e.target.value })} /></Field>
           <Button type="submit" kind="brass" loadingText="Creating…">Save to database</Button>
+        </Form>
+      </Modal>
+      <Modal title="Promote class / section" open={promoOpen} onClose={() => setPromoOpen(false)}>
+        <Form busyLabel="Promoting…" onSubmit={async () => {
+          await studentApi.promote(promo);
+          toast("ok", "Students promoted");
+          setPromoOpen(false);
+          void list.reload();
+        }}>
+          <Field label="From class">
+            <select value={promo.fromClassId} onChange={(e) => setPromo({ ...promo, fromClassId: e.target.value, fromSectionId: "" })} required>
+              <option value="">Select</option>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="From section">
+            <select value={promo.fromSectionId} onChange={(e) => setPromo({ ...promo, fromSectionId: e.target.value })}>
+              <option value="">All sections</option>
+              {(sections[promo.fromClassId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </Field>
+          <Field label="To class">
+            <select value={promo.toClassId} onChange={(e) => setPromo({ ...promo, toClassId: e.target.value, toSectionId: "" })} required>
+              <option value="">Select</option>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="To section">
+            <select value={promo.toSectionId} onChange={(e) => setPromo({ ...promo, toSectionId: e.target.value })} required>
+              <option value="">Select</option>
+              {(sections[promo.toClassId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </Field>
+          <Button type="submit" kind="brass" loadingText="Promoting…">Promote</Button>
         </Form>
       </Modal>
     </>

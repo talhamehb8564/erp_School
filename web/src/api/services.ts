@@ -48,8 +48,14 @@ export const authApi = {
   logout: (refreshToken: string) =>
     api.post<void>(`${v1}/auth/logout`, { refreshToken }),
   me: () => api.get<User>(`${v1}/auth/me`),
-  changePassword: (currentPassword: string, newPassword: string) =>
-    api.post<void>(`${v1}/auth/change-password`, { currentPassword, newPassword }),
+  changePassword: (currentPassword: string, newPassword: string, newUsername?: string) =>
+    api.post<void>(`${v1}/auth/change-password`, { currentPassword, newPassword, newUsername }),
+};
+
+export const setupApi = {
+  status: () => api.get<{ needsSetup: boolean; schoolCount: number; hasOwner: boolean }>(`${v1}/setup/status`),
+  complete: (body: { schoolName: string; branches?: string[] }) =>
+    api.post<{ tenant: { id: string; name: string; code: string }; admin: { username: string; temporaryPassword?: string }; message?: string }>(`${v1}/setup`, body),
 };
 
 export const tenantApi = {
@@ -122,6 +128,8 @@ export const academicApi = {
     api.get<TeacherAssignment[]>(`${v1}/teacher-assignments${teacherUserId ? `?teacherUserId=${teacherUserId}` : ""}`),
   assignTeacher: (body: Record<string, unknown>) =>
     api.post<TeacherAssignment>(`${v1}/teacher-assignments`, body),
+  assignTeacherBulk: (body: Record<string, unknown>) =>
+    api.post<TeacherAssignment[]>(`${v1}/teacher-assignments/bulk`, body),
   timetable: (classId: string, sectionId: string) =>
     api.get<TimetableSlot[]>(`${v1}/timetable?classId=${classId}&sectionId=${sectionId}`),
   createSlot: (body: Record<string, unknown>) => api.post<TimetableSlot>(`${v1}/timetable`, body),
@@ -147,6 +155,8 @@ export const studentApi = {
   me: () => api.get<StudentUser>(`${v1}/students/me`),
   enroll: (body: Record<string, unknown>) => api.post<EnrollResponse>(`${v1}/students`, body),
   update: (id: string, body: Record<string, unknown>) => api.put<StudentUser>(`${v1}/students/${id}`, body),
+  promote: (body: Record<string, unknown>) => api.post<StudentUser[]>(`${v1}/students/promote`, body),
+  inactivate: (id: string, reason: string) => api.post<StudentUser>(`${v1}/students/${id}/inactivate`, { reason }),
   linkParent: (id: string, parentUserId: string, relationship?: string) =>
     api.post<unknown>(`${v1}/students/${id}/parents`, { parentUserId, relationship }),
   children: () => api.get<StudentUser[]>(`${v1}/parents/me/children`),
@@ -196,13 +206,45 @@ export const examApi = {
   publish: (sessionId: string) => api.post<ExamSession>(`${v1}/exams/sessions/${sessionId}/publish`),
   sessionResults: (sessionId: string) => api.get<ExamResult[]>(`${v1}/exams/sessions/${sessionId}/results`),
   studentResult: (sessionId: string, studentId: string) =>
-    api.get<{ session: ExamSession; subjects: ExamResult[]; totalMarks: number; obtainedMarks: number; percentage: number; grade: string; passStatus: string; rollNumber?: string; admissionNumber?: string; studentId?: string }>(
-      `${v1}/exams/sessions/${sessionId}/students/${studentId}`,
-    ),
+    api.get<{
+      session: ExamSession;
+      subjects: ExamResult[];
+      totalMarks: number;
+      obtainedMarks: number;
+      percentage: number;
+      grade: string;
+      passStatus: string;
+      rollNumber?: string;
+      admissionNumber?: string;
+      studentId?: string;
+      studentName?: string;
+      announced?: boolean;
+      announceAt?: string;
+      countdownSeconds?: number;
+    }>(`${v1}/exams/sessions/${sessionId}/students/${studentId}`),
   byRoll: (sessionId: string, rollNumber: string) =>
-    api.get<{ session: ExamSession; subjects: ExamResult[]; totalMarks: number; obtainedMarks: number; percentage: number; grade: string; passStatus: string; rollNumber?: string; admissionNumber?: string; studentId?: string }>(
-      `${v1}/exams/sessions/${sessionId}/results/by-roll?rollNumber=${encodeURIComponent(rollNumber)}`,
+    api.get<{
+      session: ExamSession;
+      subjects: ExamResult[];
+      totalMarks: number;
+      obtainedMarks: number;
+      percentage: number;
+      grade: string;
+      passStatus: string;
+      rollNumber?: string;
+      admissionNumber?: string;
+      studentId?: string;
+      announced?: boolean;
+      announceAt?: string;
+    }>(`${v1}/exams/sessions/${sessionId}/results/by-roll?rollNumber=${encodeURIComponent(rollNumber)}`),
+  setAnnounceAt: (sessionId: string, announceAt: string) =>
+    api.post<ExamSession>(`${v1}/exams/sessions/${sessionId}/announce-at`, { announceAt }),
+  dateSheet: (sessionId: string, classId?: string) =>
+    api.get<{ id: string; classId: string; sectionId?: string; subjectId: string; examDate: string; startTime?: string; endTime?: string }[]>(
+      `${v1}/exams/sessions/${sessionId}/date-sheet${classId ? `?classId=${classId}` : ""}`,
     ),
+  saveDateSheet: (sessionId: string, entries: Record<string, unknown>[]) =>
+    api.post<unknown[]>(`${v1}/exams/sessions/${sessionId}/date-sheet`, entries),
 };
 
 export const feeApi = {

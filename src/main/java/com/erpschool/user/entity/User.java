@@ -32,6 +32,10 @@ public class User extends BaseEntity implements TenantAware {
     @Column(name = "tenant_id")
     private UUID tenantId;
 
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "campus_id")
+    private UUID campusId;
+
     @Column(nullable = false, unique = true, length = 80)
     private String username;
 

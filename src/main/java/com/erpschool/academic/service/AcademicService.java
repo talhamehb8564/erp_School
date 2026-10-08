@@ -83,6 +83,10 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<SchoolClass> classes() {
+        if (com.erpschool.tenant.context.CampusScope.restricts()) {
+            return classRepository.findByTenantIdAndCampusIdOrderByNameAsc(
+                    tid(), com.erpschool.tenant.context.CampusScope.current());
+        }
         return classRepository.findByTenantIdOrderByNameAsc(tid());
     }
 
@@ -160,6 +164,35 @@ public class AcademicService {
         a.setSectionId(sectionId);
         a.setSubjectId(subjectId);
         return assignmentRepository.save(a);
+    }
+
+    @Transactional
+    public List<TeacherAssignment> assignTeacherBulk(UUID teacherUserId,
+                                                     List<UUID> subjectIds,
+                                                     List<UUID> classIds,
+                                                     List<UUID> sectionIds,
+                                                     boolean allSections) {
+        if (subjectIds == null || subjectIds.isEmpty() || classIds == null || classIds.isEmpty()) {
+            throw new BusinessException("Select at least one subject and class");
+        }
+        List<TeacherAssignment> saved = new ArrayList<>();
+        for (UUID subjectId : subjectIds) {
+            for (UUID classId : classIds) {
+                List<Section> sections = Boolean.TRUE.equals(allSections)
+                        ? sectionRepository.findByTenantIdAndClassIdOrderByNameAsc(tid(), classId)
+                        : sectionRepository.findByTenantIdAndClassIdOrderByNameAsc(tid(), classId).stream()
+                        .filter(s -> sectionIds != null && sectionIds.contains(s.getId()))
+                        .toList();
+                for (Section section : sections) {
+                    try {
+                        saved.add(assignTeacher(teacherUserId, classId, section.getId(), subjectId));
+                    } catch (DuplicateResourceException ignored) {
+                        /* already mapped */
+                    }
+                }
+            }
+        }
+        return saved;
     }
 
     @Transactional(readOnly = true)

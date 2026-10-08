@@ -19,6 +19,7 @@ public class JwtService {
 
     public static final String CLAIM_ROLE = "role";
     public static final String CLAIM_TENANT = "tenantId";
+    public static final String CLAIM_CAMPUS = "campusId";
     public static final String CLAIM_USERNAME = "username";
     public static final String CLAIM_TYPE = "typ";
     public static final String TYPE_ACCESS = "access";
@@ -47,6 +48,9 @@ public class JwtService {
         if (user.getTenantId() != null) {
             builder.claim(CLAIM_TENANT, user.getTenantId().toString());
         }
+        if (user.getCampusId() != null) {
+            builder.claim(CLAIM_CAMPUS, user.getCampusId().toString());
+        }
         return builder.signWith(key).compact();
     }
 
@@ -73,6 +77,11 @@ public class JwtService {
 
     public UUID tenantId(Claims claims) {
         String value = claims.get(CLAIM_TENANT, String.class);
+        return value == null ? null : UUID.fromString(value);
+    }
+
+    public UUID campusId(Claims claims) {
+        String value = claims.get(CLAIM_CAMPUS, String.class);
         return value == null ? null : UUID.fromString(value);
     }
 

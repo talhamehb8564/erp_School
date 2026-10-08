@@ -15,6 +15,7 @@ public class UserResponse {
 
     private final UUID id;
     private final UUID tenantId;
+    private final UUID campusId;
     private final String username;
     private final String email;
     private final String firstName;
@@ -31,6 +32,7 @@ public class UserResponse {
         return UserResponse.builder()
                 .id(user.getId())
                 .tenantId(user.getTenantId())
+                .campusId(user.getCampusId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .firstName(user.getFirstName())

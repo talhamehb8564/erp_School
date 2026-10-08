@@ -154,6 +154,12 @@ public class TenantService {
         if (request.getLogoUrl() != null) {
             tenant.setLogoUrl(trimToNull(request.getLogoUrl()));
         }
+        if (request.getPrimaryColor() != null) {
+            tenant.setPrimaryColor(trimToNull(request.getPrimaryColor()));
+        }
+        if (request.getAccentColor() != null) {
+            tenant.setAccentColor(trimToNull(request.getAccentColor()));
+        }
         if (request.getWebsite() != null) {
             tenant.setWebsite(trimToNull(request.getWebsite()));
         }

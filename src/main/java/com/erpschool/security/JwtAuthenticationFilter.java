@@ -41,6 +41,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         && SecurityContextHolder.getContext().getAuthentication() == null) {
                     UUID userId = jwtService.userId(claims);
                     UUID tenantId = jwtService.tenantId(claims);
+                    UUID campusId = jwtService.campusId(claims);
                     String username = claims.get(JwtService.CLAIM_USERNAME, String.class);
                     UserRole role = UserRole.valueOf(claims.get(JwtService.CLAIM_ROLE, String.class));
 
@@ -50,7 +51,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
-                    TenantContext.set(tenantId, userId, username, role);
+                    TenantContext.set(tenantId, userId, username, role, campusId);
                     if (role == UserRole.ERP_OWNER) {
                         String override = request.getHeader("X-Tenant-Id");
                         if (override != null && !override.isBlank()) {

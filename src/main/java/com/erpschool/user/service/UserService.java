@@ -291,6 +291,21 @@ public class UserService {
             user.setEmail(email);
         }
 
+        if (request.getUsername() != null) {
+            String username = request.getUsername().trim();
+            UUID currentUserId = user.getId();
+            userRepository.findByUsernameIgnoreCase(username)
+                    .filter(existing -> !existing.getId().equals(currentUserId))
+                    .ifPresent(existing -> {
+                        throw new DuplicateResourceException("Username is already in use");
+                    });
+            user.setUsername(username);
+        }
+
+        if (request.getCampusId() != null) {
+            user.setCampusId(request.getCampusId());
+        }
+
         user.setUpdatedBy(
                 TenantContext.getUserId()
         );

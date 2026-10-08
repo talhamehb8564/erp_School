@@ -21,4 +21,9 @@ public class UpdateUserRequest {
 
     @Size(max = 30)
     private String phone;
+
+    @Size(min = 3, max = 80)
+    private String username;
+
+    private java.util.UUID campusId;
 }

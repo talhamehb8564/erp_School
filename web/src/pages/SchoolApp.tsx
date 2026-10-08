@@ -22,6 +22,12 @@ export default function SchoolApp() {
     void notificationApi.unread().then((r) => setUnread(r.unread)).catch(() => undefined);
   }, [user, locked]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (tenant?.primaryColor) root.style.setProperty("--accent", tenant.primaryColor);
+    if (tenant?.accentColor) root.style.setProperty("--accent-2", tenant.accentColor);
+  }, [tenant?.primaryColor, tenant?.accentColor]);
+
   if (!user) return <Navigate to="/" replace />;
   if (user.role === "ERP_OWNER") return <Navigate to="/admin/app" replace />;
   if (user.mustChangePassword && loc.pathname !== "/app/password") return <ChangePassword />;

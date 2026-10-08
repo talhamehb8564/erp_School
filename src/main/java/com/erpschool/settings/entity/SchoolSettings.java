@@ -49,6 +49,15 @@ public class SchoolSettings {
     @Column(name = "other_payment_methods", columnDefinition = "TEXT")
     private String otherPaymentMethods;
 
+    @Column(name = "logo_url", length = 500)
+    private String logoUrl;
+
+    @Column(name = "primary_color", length = 16)
+    private String primaryColor;
+
+    @Column(name = "accent_color", length = 16)
+    private String accentColor;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 

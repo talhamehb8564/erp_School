@@ -14,15 +14,21 @@ public final class TenantContext {
     private static final ThreadLocal<UUID> USER_ID = new ThreadLocal<>();
     private static final ThreadLocal<String> USERNAME = new ThreadLocal<>();
     private static final ThreadLocal<UserRole> ROLE = new ThreadLocal<>();
+    private static final ThreadLocal<UUID> CAMPUS_ID = new ThreadLocal<>();
 
     private TenantContext() {
     }
 
     public static void set(UUID tenantId, UUID userId, String username, UserRole role) {
+        set(tenantId, userId, username, role, null);
+    }
+
+    public static void set(UUID tenantId, UUID userId, String username, UserRole role, UUID campusId) {
         TENANT_ID.set(tenantId);
         USER_ID.set(userId);
         USERNAME.set(username);
         ROLE.set(role);
+        CAMPUS_ID.set(campusId);
     }
 
     /** ERP Owner may pin a school for the request via X-Tenant-Id. */
@@ -50,6 +56,10 @@ public final class TenantContext {
         return ROLE.get() == UserRole.ERP_OWNER;
     }
 
+    public static UUID getCampusId() {
+        return CAMPUS_ID.get();
+    }
+
     public static boolean hasTenant() {
         return TENANT_ID.get() != null;
     }
@@ -59,5 +69,6 @@ public final class TenantContext {
         USER_ID.remove();
         USERNAME.remove();
         ROLE.remove();
+        CAMPUS_ID.remove();
     }
 }

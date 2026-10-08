@@ -40,6 +40,12 @@ public class UpdateTenantRequest {
     @Size(max = 500)
     private String logoUrl;
 
+    @Size(max = 16)
+    private String primaryColor;
+
+    @Size(max = 16)
+    private String accentColor;
+
     @Size(max = 200)
     private String website;
 

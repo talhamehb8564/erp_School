@@ -6,8 +6,10 @@ import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.util.GradeCalculator;
 import com.erpschool.common.util.TenantGuard;
+import com.erpschool.exam.entity.ExamDateSheetEntry;
 import com.erpschool.exam.entity.ExamResult;
 import com.erpschool.exam.entity.ExamSession;
+import com.erpschool.exam.repository.ExamDateSheetRepository;
 import com.erpschool.exam.repository.ExamResultRepository;
 import com.erpschool.exam.repository.ExamSessionRepository;
 import com.erpschool.notification.service.NotificationService;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +37,7 @@ public class ExamService {
 
     private final ExamSessionRepository sessionRepository;
     private final ExamResultRepository resultRepository;
+    private final ExamDateSheetRepository dateSheetRepository;
     private final AcademicService academicService;
     private final StudentAccessService studentAccessService;
     private final StudentRepository studentRepository;
@@ -44,6 +48,7 @@ public class ExamService {
     public ExamService(
             ExamSessionRepository sessionRepository,
             ExamResultRepository resultRepository,
+            ExamDateSheetRepository dateSheetRepository,
             AcademicService academicService,
             StudentAccessService studentAccessService,
             StudentRepository studentRepository,
@@ -53,6 +58,7 @@ public class ExamService {
 
         this.sessionRepository = sessionRepository;
         this.resultRepository = resultRepository;
+        this.dateSheetRepository = dateSheetRepository;
         this.academicService = academicService;
         this.studentAccessService = studentAccessService;
         this.studentRepository = studentRepository;
@@ -75,6 +81,56 @@ public class ExamService {
         );
 
         return sessionRepository.save(session);
+    }
+
+    @Transactional
+    public ExamSession setAnnounceAt(UUID sessionId, Instant announceAt) {
+        ExamSession session = requireSession(sessionId);
+        session.setAnnounceAt(announceAt);
+        session.setUpdatedBy(TenantContext.getUserId());
+        return sessionRepository.save(session);
+    }
+
+    @Transactional
+    public List<ExamDateSheetEntry> replaceDateSheet(UUID sessionId, List<ExamDateSheetEntry> entries) {
+        ExamSession session = requireSession(sessionId);
+        UUID tenantId = session.getTenantId();
+        dateSheetRepository.deleteByTenantIdAndExamSessionId(tenantId, sessionId);
+        if (entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+        List<ExamDateSheetEntry> saved = new java.util.ArrayList<>();
+        for (ExamDateSheetEntry incoming : entries) {
+            academicService.requireClass(incoming.getClassId());
+            academicService.requireSubject(incoming.getSubjectId());
+            if (incoming.getSectionId() != null) {
+                academicService.requireSection(incoming.getSectionId());
+            }
+            ExamDateSheetEntry row = new ExamDateSheetEntry();
+            row.setTenantId(tenantId);
+            row.setExamSessionId(sessionId);
+            row.setCampusId(incoming.getCampusId());
+            row.setClassId(incoming.getClassId());
+            row.setSectionId(incoming.getSectionId());
+            row.setSubjectId(incoming.getSubjectId());
+            row.setExamDate(incoming.getExamDate());
+            row.setStartTime(incoming.getStartTime());
+            row.setEndTime(incoming.getEndTime());
+            row.setCreatedBy(TenantContext.getUserId());
+            saved.add(dateSheetRepository.save(row));
+        }
+        return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ExamDateSheetEntry> dateSheet(UUID sessionId, UUID classId) {
+        ExamSession session = requireSession(sessionId);
+        if (classId != null) {
+            return dateSheetRepository.findByTenantIdAndExamSessionIdAndClassIdOrderByExamDateAscStartTimeAsc(
+                    session.getTenantId(), sessionId, classId);
+        }
+        return dateSheetRepository.findByTenantIdAndExamSessionIdOrderByExamDateAscStartTimeAsc(
+                session.getTenantId(), sessionId);
     }
 
     @Transactional(readOnly = true)
@@ -266,13 +322,22 @@ public class ExamService {
         UserRole role =
                 TenantContext.getRole();
 
-        if ((role == UserRole.PARENT
-                || role == UserRole.STUDENT)
-                && !session.isPublished()) {
-
-            throw new ForbiddenException(
-                    "Results are not published yet"
-            );
+        if (role == UserRole.PARENT || role == UserRole.STUDENT) {
+            Instant announceAt = session.getAnnounceAt();
+            if (announceAt != null && Instant.now().isBefore(announceAt)) {
+                Map<String, Object> waiting = new HashMap<>();
+                waiting.put("announced", false);
+                waiting.put("announceAt", announceAt);
+                waiting.put("countdownSeconds", Math.max(0, ChronoUnit.SECONDS.between(Instant.now(), announceAt)));
+                waiting.put("session", session);
+                waiting.put("studentId", student.getId());
+                waiting.put("rollNumber", student.getRollNumber());
+                waiting.put("subjects", List.of());
+                return waiting;
+            }
+            if (!session.isPublished()) {
+                throw new ForbiddenException("Results are not published yet");
+            }
         }
 
         List<ExamResult> rows =
@@ -308,6 +373,8 @@ public class ExamService {
         Map<String, Object> m =
                 new HashMap<>();
 
+        m.put("announced", true);
+        m.put("announceAt", session.getAnnounceAt());
         m.put("session", session);
         m.put("studentId", student.getId());
         m.put("rollNumber", student.getRollNumber());

@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -131,19 +132,36 @@ public class AuthService {
 
     @Transactional
     public void changePassword(User actor, String currentPassword, String newPassword) {
+        changeCredentials(actor, currentPassword, newPassword, null);
+    }
+
+    @Transactional
+    public void changeCredentials(User actor, String currentPassword, String newPassword, String newUsername) {
         User user = userRepository.findById(actor.getId())
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
-        if (currentPassword.equals(newPassword)) {
-            throw new BusinessException("NEW_PASSWORD_SAME", "New password must be different from the current password");
-        }
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             throw new UnauthorizedException("Current password is incorrect");
         }
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-        user.setMustChangePassword(false);
-        user.setPasswordChangedAt(Instant.now());
+        if (newUsername != null && !newUsername.isBlank()) {
+            String username = newUsername.trim();
+            UUID currentUserId = user.getId();
+            userRepository.findByUsernameIgnoreCase(username)
+                    .filter(existing -> !existing.getId().equals(currentUserId))
+                    .ifPresent(existing -> {
+                        throw new BusinessException("Username is already in use");
+                    });
+            user.setUsername(username);
+        }
+        if (newPassword != null && !newPassword.isBlank()) {
+            if (currentPassword.equals(newPassword)) {
+                throw new BusinessException("NEW_PASSWORD_SAME", "New password must be different from the current password");
+            }
+            user.setPasswordHash(passwordEncoder.encode(newPassword));
+            user.setMustChangePassword(false);
+            user.setPasswordChangedAt(Instant.now());
+            refreshTokenRepository.revokeAllForUser(user.getId(), Instant.now());
+        }
         userRepository.save(user);
-        refreshTokenRepository.revokeAllForUser(user.getId(), Instant.now());
         auditService.record(AuditService.PASSWORD_CHANGED, "User", user.getId().toString(), null);
     }
 

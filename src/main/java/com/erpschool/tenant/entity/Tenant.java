@@ -50,6 +50,12 @@ public class Tenant extends BaseEntity {
     @Column(name = "logo_url", length = 500)
     private String logoUrl;
 
+    @Column(name = "primary_color", length = 16)
+    private String primaryColor;
+
+    @Column(name = "accent_color", length = 16)
+    private String accentColor;
+
     @Column(length = 200)
     private String website;
 

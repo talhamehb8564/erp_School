@@ -8,8 +8,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -35,4 +39,11 @@ public class ExamSession extends TenantAwareEntity {
 
     @Column(name = "published_at")
     private Instant publishedAt;
+
+    @Column(name = "announce_at")
+    private Instant announceAt;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.UUID)
+    @Column(name = "campus_id")
+    private java.util.UUID campusId;
 }

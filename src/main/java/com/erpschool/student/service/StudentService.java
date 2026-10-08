@@ -6,7 +6,9 @@ import com.erpschool.common.dto.PageResponse;
 import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.DuplicateResourceException;
 import com.erpschool.common.service.DocumentSequenceService;
+import com.erpschool.common.util.Cnic;
 import com.erpschool.common.util.TenantGuard;
+import com.erpschool.tenant.context.CampusScope;
 import com.erpschool.student.dto.StudentDtos;
 import com.erpschool.student.entity.ParentStudent;
 import com.erpschool.student.entity.Student;
@@ -21,6 +23,7 @@ import com.erpschool.user.dto.CreateUserResponse;
 import com.erpschool.user.dto.UserResponse;
 import com.erpschool.user.entity.User;
 import com.erpschool.user.entity.UserRole;
+import com.erpschool.user.entity.UserStatus;
 import com.erpschool.user.repository.UserRepository;
 import com.erpschool.user.service.UserService;
 import org.springframework.data.domain.Page;
@@ -29,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -77,6 +81,11 @@ public class StudentService {
         academicService.requireClass(request.getClassId());
         academicService.requireSection(request.getSectionId());
 
+        String cnic = Cnic.normalize(request.getCnic());
+        if (studentRepository.findByTenantIdAndCnic(tenantId, cnic).isPresent()) {
+            throw new DuplicateResourceException("A student with this CNIC / B-Form already exists");
+        }
+
         CreateUserRequest studentUserReq = new CreateUserRequest();
         studentUserReq.setTenantId(tenantId);
         studentUserReq.setFirstName(request.getFirstName());
@@ -98,6 +107,7 @@ public class StudentService {
         student.setAdmissionNumber(admission);
         student.setRegistrationNumber(admission);
         student.setRollNumber(request.getRollNumber());
+        student.setCnic(cnic);
         student.setPhotoUrl(request.getPhotoUrl());
         student.setGender(request.getGender());
         student.setDateOfBirth(request.getDateOfBirth());
@@ -108,6 +118,20 @@ public class StudentService {
         student.setGuardianPhone(request.getGuardianPhone());
         student.setCreatedBy(TenantContext.getUserId());
         student = studentRepository.save(student);
+
+        UUID studentUserId = studentAccount.getUser().getId();
+        userRepository.findById(studentUserId).ifPresent(account -> {
+            userRepository.findByUsernameIgnoreCase(cnic)
+                    .filter(existing -> !existing.getId().equals(studentUserId))
+                    .ifPresent(existing -> {
+                        throw new DuplicateResourceException("Username (CNIC) is already in use");
+                    });
+            account.setUsername(cnic);
+            if (request.getCampusId() != null) {
+                account.setCampusId(request.getCampusId());
+            }
+            userRepository.save(account);
+        });
 
         CreateUserResponse parentAccount = null;
         UUID parentUserId = request.getParentUserId();
@@ -163,7 +187,12 @@ public class StudentService {
     public PageResponse<StudentDtos.Response> list(UUID classId, UUID sectionId, Pageable pageable) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         Page<Student> page;
-        if (classId != null && sectionId != null) {
+        UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
+        if (campusId != null && classId != null) {
+            page = studentRepository.findByTenantIdAndCampusIdAndClassId(tenantId, campusId, classId, pageable);
+        } else if (campusId != null) {
+            page = studentRepository.findByTenantIdAndCampusId(tenantId, campusId, pageable);
+        } else if (classId != null && sectionId != null) {
             page = studentRepository.findByTenantIdAndClassIdAndSectionId(tenantId, classId, sectionId, pageable);
         } else if (classId != null) {
             page = studentRepository.findByTenantIdAndClassId(tenantId, classId, pageable);
@@ -234,6 +263,28 @@ public class StudentService {
             s.setSectionId(request.getSectionId());
         }
         if (request.getRollNumber() != null) s.setRollNumber(request.getRollNumber());
+        if (request.getCnic() != null) {
+            String cnic = Cnic.normalize(request.getCnic());
+            UUID studentId = s.getId();
+            studentRepository.findByTenantIdAndCnic(s.getTenantId(), cnic)
+                    .filter(existing -> !existing.getId().equals(studentId))
+                    .ifPresent(existing -> {
+                        throw new DuplicateResourceException("A student with this CNIC / B-Form already exists");
+                    });
+            s.setCnic(cnic);
+            if (s.getUserId() != null) {
+                UUID studentUserId = s.getUserId();
+                userRepository.findById(studentUserId).ifPresent(account -> {
+                    userRepository.findByUsernameIgnoreCase(cnic)
+                            .filter(existing -> !existing.getId().equals(studentUserId))
+                            .ifPresent(existing -> {
+                                throw new DuplicateResourceException("Username (CNIC) is already in use");
+                            });
+                    account.setUsername(cnic);
+                    userRepository.save(account);
+                });
+            }
+        }
         if (request.getPhotoUrl() != null) s.setPhotoUrl(request.getPhotoUrl());
         if (request.getGender() != null) s.setGender(request.getGender());
         if (request.getDateOfBirth() != null) s.setDateOfBirth(request.getDateOfBirth());
@@ -243,6 +294,56 @@ public class StudentService {
         if (request.getStatus() != null) s.setStatus(request.getStatus());
         s.setUpdatedBy(TenantContext.getUserId());
         s = studentRepository.save(s);
+        return StudentDtos.from(s, loadUser(s.getUserId()));
+    }
+
+    @Transactional
+    public List<StudentDtos.Response> promote(UUID fromClassId, UUID fromSectionId, UUID toClassId, UUID toSectionId,
+                                              List<UUID> studentIds) {
+        academicService.requireClass(toClassId);
+        academicService.requireSection(toSectionId);
+        List<Student> targets;
+        if (studentIds != null && !studentIds.isEmpty()) {
+            targets = studentRepository.findAllById(studentIds);
+        } else if (fromSectionId != null) {
+            targets = studentRepository.findByTenantIdAndClassIdAndSectionIdAndStatus(
+                    TenantGuard.requireTenantId(null), fromClassId, fromSectionId, StudentStatus.ACTIVE);
+        } else {
+            targets = studentRepository.findByTenantIdAndClassIdAndStatus(
+                    TenantGuard.requireTenantId(null), fromClassId, StudentStatus.ACTIVE);
+        }
+        List<StudentDtos.Response> out = new ArrayList<>();
+        for (Student s : targets) {
+            studentAccessService.requireStudent(s.getId());
+            s.setClassId(toClassId);
+            s.setSectionId(toSectionId);
+            s.setUpdatedBy(TenantContext.getUserId());
+            s = studentRepository.save(s);
+            out.add(StudentDtos.from(s, loadUser(s.getUserId())));
+        }
+        auditService.record("STUDENTS_PROMOTED", "Student", null, Map.of("count", out.size()));
+        return out;
+    }
+
+    @Transactional
+    public StudentDtos.Response inactivate(UUID id, String reason) {
+        Student s = studentAccessService.requireStudent(id);
+        String code = reason == null ? "OTHER" : reason.trim().toUpperCase();
+        if ("GRADUATED".equals(code) || "GRADE_10_COMPLETE".equals(code)) {
+            s.setStatus(StudentStatus.GRADUATED);
+        } else {
+            s.setStatus(StudentStatus.INACTIVE);
+        }
+        s.setInactiveReason(code);
+        s.setUpdatedBy(TenantContext.getUserId());
+        s = studentRepository.save(s);
+        if (s.getUserId() != null) {
+            userRepository.findById(s.getUserId()).ifPresent(account -> {
+                account.setStatus(UserStatus.INACTIVE);
+                userRepository.save(account);
+            });
+        }
+        auditService.record("STUDENT_INACTIVATED", "Student", s.getId().toString(), Map.of("reason", code));
         return StudentDtos.from(s, loadUser(s.getUserId()));
     }
 

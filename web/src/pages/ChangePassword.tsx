@@ -12,6 +12,7 @@ export default function ChangePassword() {
   const nav = useNavigate();
   const toast = useToast();
   const [currentPassword, setCurrent] = useState("");
+  const [username, setUsername] = useState(user?.username || "");
   const [newPassword, setNew] = useState("");
   const [confirm, setConfirm] = useState("");
 
@@ -19,12 +20,12 @@ export default function ChangePassword() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="kicker">Security</div>
-        <h1>Change password</h1>
+        <h1>Account credentials</h1>
         <p className="hint">
           {user?.mustChangePassword
             ? "Temporary passwords must be replaced before using the ERP."
-            : "Update your password, then sign in again with the new one."}{" "}
-          8–72 characters with upper, lower, digit and a special character.
+            : "Update your username and password, then sign in again."}{" "}
+          8–72 characters with upper, lower, digit and a special character. Students use CNIC / B-Form as username.
         </p>
         <Form
           busyLabel="Changing password…"
@@ -34,12 +35,15 @@ export default function ChangePassword() {
             if (!RULE.test(newPassword)) {
               throw new Error("Password must be 8–72 characters with upper, lower, digit and a special character.");
             }
-            await authApi.changePassword(currentPassword, newPassword);
-            toast("ok", "Password changed. Sign in again with the new password.");
+            await authApi.changePassword(currentPassword, newPassword, username.trim() || undefined);
+            toast("ok", "Credentials updated. Sign in again.");
             await logout({ remote: false });
             nav(user?.role === "ERP_OWNER" ? "/admin" : "/", { replace: true });
           }}
         >
+          <Field label="Username">
+            <input value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} />
+          </Field>
           <Field label="Current password">
             <input type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrent(e.target.value)} required />
           </Field>

@@ -117,6 +117,10 @@ Login accepts **username or email**. School users are generated as `GVS-ADM-0001
 | Parent | `GVS-PAR-0001` | `parent@greenvalley.school` | `ChangeMe@123` |
 | Student | `GVS-STU-0001` | `student@greenvalley.school` | `ChangeMe@123` |
 
+Student usernames are the 13-digit **CNIC / B-Form**. Every role can change their own username and password from **Password**. School Admin can reset anyone.
+
+Branches are campuses. Staff with `campus_id` only see that branch’s classes and students. Demo seed creates **3 branches** (Main, Canal, Cantt) with ~50 students each.
+
 Demo school **GVS** seeds (idempotent on boot when `app.seed.enabled=true`):
 
 - 2 campuses (Main + Canal), Grade 5/6 with sections A/B, 5 subjects

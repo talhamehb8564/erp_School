@@ -32,6 +32,8 @@ public final class StudentDtos {
         private UUID classId;
         @NotNull
         private UUID sectionId;
+        @NotBlank
+        private String cnic;
         private String rollNumber;
         private String photoUrl;
         private String gender;
@@ -55,6 +57,7 @@ public final class StudentDtos {
         private UUID classId;
         private UUID sectionId;
         private String rollNumber;
+        private String cnic;
         private String photoUrl;
         private String gender;
         private LocalDate dateOfBirth;
@@ -80,6 +83,8 @@ public final class StudentDtos {
         private LocalDate dateOfBirth;
         private LocalDate admissionDate;
         private StudentStatus status;
+        private String inactiveReason;
+        private String cnic;
         private String address;
         private String guardianName;
         private String guardianPhone;
@@ -105,11 +110,13 @@ public final class StudentDtos {
                 .admissionNumber(s.getAdmissionNumber())
                 .registrationNumber(s.getRegistrationNumber())
                 .rollNumber(s.getRollNumber())
+                .cnic(s.getCnic())
                 .photoUrl(s.getPhotoUrl())
                 .gender(s.getGender())
                 .dateOfBirth(s.getDateOfBirth())
                 .admissionDate(s.getAdmissionDate())
                 .status(s.getStatus())
+                .inactiveReason(s.getInactiveReason())
                 .address(s.getAddress())
                 .guardianName(s.getGuardianName())
                 .guardianPhone(s.getGuardianPhone())

@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface SchoolClassRepository extends JpaRepository<SchoolClass, UUID> {
     List<SchoolClass> findByTenantIdOrderByNameAsc(UUID tenantId);
+
+    List<SchoolClass> findByTenantIdAndCampusIdOrderByNameAsc(UUID tenantId, UUID campusId);
 }

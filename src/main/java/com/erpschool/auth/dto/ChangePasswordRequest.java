@@ -20,4 +20,7 @@ public class ChangePasswordRequest {
             message = "Password must contain upper, lower, digit and special character"
     )
     private String newPassword;
+
+    @Size(min = 3, max = 80)
+    private String newUsername;
 }
