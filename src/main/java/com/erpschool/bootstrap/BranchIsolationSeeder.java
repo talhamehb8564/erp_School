@@ -17,18 +17,17 @@ import com.erpschool.tenant.repository.TenantRepository;
 import com.erpschool.user.entity.User;
 import com.erpschool.user.entity.UserRole;
 import com.erpschool.user.repository.UserRepository;
+import com.erpschool.common.exception.DuplicateResourceException;
 import com.erpschool.user.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -49,6 +48,7 @@ public class BranchIsolationSeeder implements ApplicationRunner {
     private final UserService userService;
     private final DocumentSequenceService documentSequenceService;
     private final ExamSessionRepository examSessionRepository;
+    private final SeedRetry seedRetry;
 
     public BranchIsolationSeeder(AppProperties properties,
                                  TenantRepository tenantRepository,
@@ -59,7 +59,8 @@ public class BranchIsolationSeeder implements ApplicationRunner {
                                  UserRepository userRepository,
                                  UserService userService,
                                  DocumentSequenceService documentSequenceService,
-                                 ExamSessionRepository examSessionRepository) {
+                                 ExamSessionRepository examSessionRepository,
+                                 SeedRetry seedRetry) {
         this.properties = properties;
         this.tenantRepository = tenantRepository;
         this.campusRepository = campusRepository;
@@ -70,14 +71,22 @@ public class BranchIsolationSeeder implements ApplicationRunner {
         this.userService = userService;
         this.documentSequenceService = documentSequenceService;
         this.examSessionRepository = examSessionRepository;
+        this.seedRetry = seedRetry;
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
         if (!properties.getSeed().isEnabled()) {
             return;
         }
+        try {
+            seedRetry.run("branch-isolation", this::seedBranches);
+        } catch (RuntimeException ex) {
+            log.error("Branch isolation seed incomplete; core demo logins remain usable: {}", ex.getMessage(), ex);
+        }
+    }
+
+    private void seedBranches() {
         Tenant tenant = tenantRepository.findByCodeIgnoreCase(properties.getSeed().getDemoSchoolCode()).orElse(null);
         if (tenant == null) {
             return;
@@ -106,14 +115,9 @@ public class BranchIsolationSeeder implements ApplicationRunner {
         ensureBranchStaff(tenant, cantt, "cantt", password);
 
         fillCampus(tenant, main, playgroup, ensureSection(tenantId, playgroup.getId(), "A"), password, 50);
-        List<SchoolClass> canalClasses = classRepository.findByTenantIdAndCampusIdOrderByNameAsc(tenantId, canal.getId());
-        if (!canalClasses.isEmpty()) {
-            SchoolClass cc = canalClasses.get(0);
-            List<Section> secs = sectionRepository.findByTenantIdAndClassIdOrderByNameAsc(tenantId, cc.getId());
-            if (!secs.isEmpty()) {
-                fillCampus(tenant, canal, cc, secs.get(0), password, 50);
-            }
-        }
+        SchoolClass grade6 = ensureClass(tenantId, canal.getId(), "Grade 6", "6");
+        Section g6a = ensureSection(tenantId, grade6.getId(), "A");
+        fillCampus(tenant, canal, grade6, g6a, password, 50);
         fillCampus(tenant, cantt, grade7, g7a, password, 50);
 
         backfillCnics(tenantId);
@@ -190,30 +194,60 @@ public class BranchIsolationSeeder implements ApplicationRunner {
     }
 
     private User ensureUser(Tenant tenant, UserRole role, String first, String last, String email, String password) {
-        return userRepository.findByEmailIgnoreCase(email).orElseGet(() ->
-                userRepository.findById(userService.createInternal(
-                        tenant.getId(), tenant.getCode(), role, first, last, email, null, password, false
-                ).getUser().getId()).orElseThrow());
+        return userRepository.findByEmailIgnoreCase(email).orElseGet(() -> {
+            try {
+                userService.createInternal(
+                        tenant.getId(), tenant.getCode(), role, first, last, email, null, password, false);
+            } catch (DuplicateResourceException ignored) {
+                // already committed before a pooler reset
+            }
+            return userRepository.findByEmailIgnoreCase(email).orElseThrow();
+        });
     }
 
     private void fillCampus(Tenant tenant, Campus campus, SchoolClass clazz, Section section, String password, int target) {
         UUID tenantId = tenant.getId();
         int safety = 0;
-        int seq = (int) studentRepository.countByTenantId(tenantId) + 1;
+        int seq = 1;
         while (studentRepository.countByTenantIdAndCampusId(tenantId, campus.getId()) < target && safety++ < 80) {
             String email = "stu." + campus.getCode().toLowerCase() + seq + "@greenvalley.school";
+            User account = userRepository.findByEmailIgnoreCase(email).orElse(null);
+            if (account == null) {
+                try {
+                    userService.createInternal(
+                            tenantId, tenant.getCode(), UserRole.STUDENT,
+                            "Student", campus.getCode() + seq, email, null, password, false);
+                } catch (DuplicateResourceException ignored) {
+                    // retry after disconnect
+                }
+                account = userRepository.findByEmailIgnoreCase(email).orElse(null);
+            }
             seq++;
-            if (userRepository.existsByEmailIgnoreCase(email)) {
+            if (account == null) {
                 continue;
             }
-            User account = userRepository.findById(userService.createInternal(
-                    tenantId, tenant.getCode(), UserRole.STUDENT,
-                    "Student", campus.getCode() + seq, email, null, password, false
-            ).getUser().getId()).orElseThrow();
+            boolean userDirty = false;
+            if (account.getCampusId() == null) {
+                account.setCampusId(campus.getId());
+                userDirty = true;
+            }
             String cnic = String.format("3%02d%010d", Math.abs(campus.getCode().hashCode()) % 90, seq);
-            account.setUsername(cnic);
-            account.setCampusId(campus.getId());
-            userRepository.save(account);
+            if (account.getRole() == UserRole.STUDENT
+                    && (account.getUsername() == null || account.getUsername().length() < 13)) {
+                boolean taken = userRepository.findByUsernameIgnoreCase(cnic)
+                        .filter(other -> !other.getId().equals(account.getId()))
+                        .isPresent();
+                if (!taken) {
+                    account.setUsername(cnic);
+                    userDirty = true;
+                }
+            }
+            if (userDirty) {
+                userRepository.save(account);
+            }
+            if (studentRepository.findByTenantIdAndUserId(tenantId, account.getId()).isPresent()) {
+                continue;
+            }
             Student student = new Student();
             student.setTenantId(tenantId);
             student.setUserId(account.getId());

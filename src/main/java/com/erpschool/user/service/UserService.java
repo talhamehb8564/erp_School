@@ -24,7 +24,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.Map;
@@ -38,17 +40,20 @@ public class UserService {
     private final UsernameGenerator usernameGenerator;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final TransactionTemplate writeTx;
 
     public UserService(UserRepository userRepository,
                        TenantRepository tenantRepository,
                        UsernameGenerator usernameGenerator,
                        PasswordEncoder passwordEncoder,
-                       AuditService auditService) {
+                       AuditService auditService,
+                       PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
         this.usernameGenerator = usernameGenerator;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
+        this.writeTx = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -126,8 +131,9 @@ public class UserService {
 
     /**
      * Used by tenant creation / seeder where temporary password may be chosen.
+     * BCrypt runs outside the write transaction so Neon/PgBouncer is not left
+     * idle-in-transaction during seed bursts.
      */
-    @Transactional
     public CreateUserResponse createInternal(
             UUID tenantId,
             String tenantCode,
@@ -156,24 +162,26 @@ public class UserService {
         String password = rawPassword != null
                 ? rawPassword
                 : PasswordGenerator.temporaryPassword();
+        String hash = passwordEncoder.encode(password);
 
-        User user = new User();
-
-        user.setTenantId(tenantId);
-        user.setUsername(username);
-        user.setEmail(blankToNull(email));
-        user.setPasswordHash(
-                passwordEncoder.encode(password)
-        );
-        user.setFirstName(firstName.trim());
-        user.setLastName(lastName.trim());
-        user.setPhone(blankToNull(phone));
-        user.setRole(role);
-        user.setStatus(UserStatus.ACTIVE);
-        user.setMustChangePassword(mustChangePassword);
-        user.setCreatedBy(TenantContext.getUserId());
-
-        user = userRepository.save(user);
+        User user = writeTx.execute(status -> {
+            User created = new User();
+            created.setTenantId(tenantId);
+            created.setUsername(username);
+            created.setEmail(blankToNull(email));
+            created.setPasswordHash(hash);
+            created.setFirstName(firstName.trim());
+            created.setLastName(lastName.trim());
+            created.setPhone(blankToNull(phone));
+            created.setRole(role);
+            created.setStatus(UserStatus.ACTIVE);
+            created.setMustChangePassword(mustChangePassword);
+            created.setCreatedBy(TenantContext.getUserId());
+            return userRepository.save(created);
+        });
+        if (user == null) {
+            throw new IllegalStateException("Failed to persist user " + username);
+        }
 
         return CreateUserResponse.builder()
                 .user(UserResponse.from(user))

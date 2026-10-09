@@ -55,7 +55,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -131,6 +130,7 @@ public class DemoSchoolPopulationSeeder implements ApplicationRunner {
     private final StudentAttendanceRepository studentAttendanceRepository;
     private final SchoolSettingsRepository schoolSettingsRepository;
     private final DocumentSequenceService documentSequenceService;
+    private final SeedRetry seedRetry;
 
     public DemoSchoolPopulationSeeder(AppProperties properties,
                                       TenantRepository tenantRepository,
@@ -155,7 +155,8 @@ public class DemoSchoolPopulationSeeder implements ApplicationRunner {
                                       ExamResultRepository examResultRepository,
                                       StudentAttendanceRepository studentAttendanceRepository,
                                       SchoolSettingsRepository schoolSettingsRepository,
-                                      DocumentSequenceService documentSequenceService) {
+                                      DocumentSequenceService documentSequenceService,
+                                      SeedRetry seedRetry) {
         this.properties = properties;
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
@@ -180,14 +181,22 @@ public class DemoSchoolPopulationSeeder implements ApplicationRunner {
         this.studentAttendanceRepository = studentAttendanceRepository;
         this.schoolSettingsRepository = schoolSettingsRepository;
         this.documentSequenceService = documentSequenceService;
+        this.seedRetry = seedRetry;
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
         if (!properties.getSeed().isEnabled()) {
             return;
         }
+        try {
+            seedRetry.run("demo-population", this::populate);
+        } catch (RuntimeException ex) {
+            log.error("Demo population incomplete; core demo logins remain usable: {}", ex.getMessage(), ex);
+        }
+    }
+
+    private void populate() {
         Tenant tenant = tenantRepository.findByCodeIgnoreCase(properties.getSeed().getDemoSchoolCode()).orElse(null);
         if (tenant == null) {
             return;
@@ -345,7 +354,11 @@ public class DemoSchoolPopulationSeeder implements ApplicationRunner {
     private User ensureUser(UUID tenantId, String tenantCode, UserRole role,
                             String first, String last, String email, String password) {
         return userRepository.findByEmailIgnoreCase(email).orElseGet(() -> {
-            userService.createInternal(tenantId, tenantCode, role, first, last, email, null, password, false);
+            try {
+                userService.createInternal(tenantId, tenantCode, role, first, last, email, null, password, false);
+            } catch (com.erpschool.common.exception.DuplicateResourceException ignored) {
+                // retry after a pooler reset
+            }
             return userRepository.findByEmailIgnoreCase(email).orElseThrow();
         });
     }
