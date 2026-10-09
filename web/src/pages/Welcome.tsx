@@ -42,9 +42,9 @@ export default function Welcome() {
     <div className="welcome">
       <section className="welcome-art">
         <div className="brand-mark">
-          <div className="mark">A</div>
+          <div className="mark">S</div>
           <div>
-            Atrium ERP
+            School ERP
             <div style={{ opacity: 0.7, fontSize: 13, fontWeight: 460 }}>School operating system</div>
           </div>
         </div>

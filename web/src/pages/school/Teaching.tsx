@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { academicApi, attendanceApi, examApi, fileApi, homeworkApi, studentApi, userApi } from "../../api/services";
 import { ApiError } from "../../api/client";
 import { useLookups } from "../../lib/lookups";
@@ -264,6 +264,19 @@ export function HomeworkPage() {
   );
 }
 
+function uniqIds(ids: (string | undefined)[]) {
+  return [...new Set(ids.filter((id): id is string => Boolean(id)))];
+}
+
+function isUpcomingExam(announceAt?: string, seconds?: number, published?: boolean) {
+  if (published) return false;
+  if (!announceAt) return false;
+  const at = new Date(announceAt).getTime();
+  if (Number.isNaN(at) || at <= Date.now()) return false;
+  if (seconds != null && seconds <= 0) return false;
+  return true;
+}
+
 export function ExamsPage() {
   const { user } = useSession();
   const { classes, subjects, subjectName, className, sections } = useLookups();
@@ -291,6 +304,30 @@ export function ExamsPage() {
     const published = sessions.data.find((s) => s.published) || sessions.data[0];
     setSessionId(published.id);
   }, [sessions.data, sessionId]);
+
+  useEffect(() => {
+    if (user?.role !== "TEACHER") return;
+    const rows = assigns.data || [];
+    if (!rows.length) return;
+    setMark((m) => {
+      if (!m.classId) {
+        const a = rows[0];
+        return { ...m, classId: a.classId, sectionId: a.sectionId, subjectId: a.subjectId };
+      }
+      const inClass = rows.filter((a) => a.classId === m.classId);
+      if (!inClass.length) return m;
+      const sectionId = inClass.some((a) => a.sectionId === m.sectionId) ? m.sectionId : inClass[0].sectionId;
+      const subjectId = inClass.some((a) => a.subjectId === m.subjectId) ? m.subjectId : inClass[0].subjectId;
+      if (sectionId === m.sectionId && subjectId === m.subjectId) return m;
+      return { ...m, sectionId, subjectId, studentId: sectionId === m.sectionId ? m.studentId : "" };
+    });
+  }, [assigns.data, user?.role, mark.classId]);
+
+  const selectedSession = (sessions.data || []).find((s) => s.id === sessionId);
+  const teacherUpcoming = isUpcomingExam(selectedSession?.announceAt, undefined, selectedSession?.published);
+  const teacherClassIds = uniqIds((assigns.data || []).map((a) => a.classId));
+  const teacherSectionIds = uniqIds((assigns.data || []).filter((a) => !mark.classId || a.classId === mark.classId).map((a) => a.sectionId));
+  const teacherSubjectIds = uniqIds((assigns.data || []).filter((a) => !mark.classId || a.classId === mark.classId).map((a) => a.subjectId));
 
   return (
     <>
@@ -347,12 +384,12 @@ export function ExamsPage() {
       </QueryState>
       {user?.role === "STUDENT" || user?.role === "PARENT" ? (
         <QueryState status={mine} label="results">
-          {mine.data && mine.data.announced === false ? (
-            <ResultCountdown announceAt={mine.data.announceAt} seconds={mine.data.countdownSeconds} />
-          ) : mine.data?.pending ? (
+          {mine.data && mine.data.announced === false && isUpcomingExam(mine.data.announceAt, mine.data.countdownSeconds, false) ? (
+            <ResultCountdown announceAt={mine.data.announceAt} seconds={mine.data.countdownSeconds} onDone={() => void mine.reload()} />
+          ) : mine.data?.pending || mine.data?.announced === false ? (
             <div className="card">
               <p className="kicker">Results</p>
-              <h3>Result Pending - Awaiting Subject Marks</h3>
+              <h3>Result Pending - Awaiting Subject Submission</h3>
               <p className="hint">Announcement time has passed, but not every subject has marks yet. The marksheet will appear when all teachers have submitted.</p>
             </div>
           ) : mine.data ? (
@@ -374,8 +411,11 @@ export function ExamsPage() {
           {(user?.role === "TEACHER" || user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") && sessionId ? (
             <div className="card" style={{ marginBottom: 12 }}>
               <h3>Enter marks</h3>
-              {sessions.data?.find((s) => s.id === sessionId)?.announceAt ? (
-                <ResultCountdown announceAt={sessions.data.find((s) => s.id === sessionId)?.announceAt} />
+              {teacherUpcoming ? (
+                <ResultCountdown announceAt={selectedSession?.announceAt} onDone={() => void sessions.reload()} />
+              ) : null}
+              {user?.role === "TEACHER" && !assigns.loading && !(assigns.data || []).length ? (
+                <Empty title="No assigned subjects" hint="School Admin must assign your classes and subjects before you can enter marks." />
               ) : null}
               <Form busyLabel="Saving marks…" onSubmit={async () => {
                 await examApi.upsertResult(sessionId, {
@@ -390,13 +430,19 @@ export function ExamsPage() {
                 <Field label="Class">
                   <select value={mark.classId} onChange={(e) => setMark({ ...mark, classId: e.target.value, sectionId: "", studentId: "" })} required>
                     <option value="">Select class</option>
-                    {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {(user?.role === "TEACHER"
+                      ? teacherClassIds.map((id) => ({ id, name: className(id) }))
+                      : classes
+                    ).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </Field>
                 <Field label="Section">
                   <select value={mark.sectionId} onChange={(e) => setMark({ ...mark, sectionId: e.target.value, studentId: "" })} required>
                     <option value="">Select section</option>
-                    {(sections[mark.classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {(user?.role === "TEACHER"
+                      ? teacherSectionIds.map((id) => ({ id, name: (sections[mark.classId] || []).find((s) => s.id === id)?.name || id.slice(0, 8) }))
+                      : (sections[mark.classId] || [])
+                    ).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </Field>
                 <Field label="Student">
@@ -409,7 +455,7 @@ export function ExamsPage() {
                   <select value={mark.subjectId} onChange={(e) => setMark({ ...mark, subjectId: e.target.value })} required>
                     <option value="">Select</option>
                     {(user?.role === "TEACHER"
-                      ? subjects.filter((s) => (assigns.data || []).some((a) => a.subjectId === s.id && (!mark.classId || a.classId === mark.classId)))
+                      ? teacherSubjectIds.map((id) => ({ id, name: subjectName(id) }))
                       : subjects
                     ).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
@@ -467,8 +513,9 @@ export function ExamsPage() {
   );
 }
 
-function ResultCountdown({ announceAt, seconds }: { announceAt?: string; seconds?: number }) {
+function ResultCountdown({ announceAt, seconds, onDone }: { announceAt?: string; seconds?: number; onDone?: () => void }) {
   const [left, setLeft] = useState(seconds ?? 0);
+  const done = useRef(false);
   useEffect(() => {
     const tick = () => {
       if (!announceAt) return;
@@ -478,6 +525,13 @@ function ResultCountdown({ announceAt, seconds }: { announceAt?: string; seconds
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, [announceAt]);
+  useEffect(() => {
+    if (left > 0 || done.current) return;
+    if (!announceAt || new Date(announceAt).getTime() > Date.now()) return;
+    done.current = true;
+    onDone?.();
+  }, [left, announceAt, onDone]);
+  if (left <= 0) return null;
   const h = Math.floor(left / 3600);
   const m = Math.floor((left % 3600) / 60);
   const s = left % 60;
@@ -486,9 +540,11 @@ function ResultCountdown({ announceAt, seconds }: { announceAt?: string; seconds
       <p className="kicker">Results sealed</p>
       <h3>Announcement countdown</h3>
       <p className="hint">Marks will appear here at the scheduled announcement time.</p>
-      <p style={{ fontSize: 32, margin: "12px 0" }}>
-        {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
-      </p>
+      <div className="countdown" aria-live="polite">
+        <div className="countdown-cell"><b>{String(h).padStart(2, "0")}</b><span>Hours</span></div>
+        <div className="countdown-cell"><b>{String(m).padStart(2, "0")}</b><span>Minutes</span></div>
+        <div className="countdown-cell"><b>{String(s).padStart(2, "0")}</b><span>Seconds</span></div>
+      </div>
     </div>
   );
 }
@@ -507,12 +563,18 @@ function Marksheet({
   rows: (string | number)[][];
 }) {
   const { tenant } = useSession();
+  const [broken, setBroken] = useState(false);
+  const school = tenant?.name?.trim() || "School";
   return (
     <div className="card" style={{ borderColor: tenant?.primaryColor || undefined }}>
       <div className="row" style={{ justifyContent: "space-between" }}>
-        {tenant?.logoUrl ? <img src={tenant.logoUrl} alt="" style={{ height: 48 }} /> : <div className="mark">A</div>}
+        {tenant?.logoUrl && !broken ? (
+          <img className="brand-logo" src={tenant.logoUrl} alt="" onError={() => setBroken(true)} />
+        ) : (
+          <div className="mark">{school.charAt(0).toUpperCase()}</div>
+        )}
         <div>
-          <strong>{tenant?.name || "School"}</strong>
+          <strong>{school}</strong>
           <div className="hint">{tenant?.code} · Board-style marksheet</div>
         </div>
       </div>

@@ -5,8 +5,9 @@ import com.erpschool.user.entity.UserRole;
 import java.util.UUID;
 
 /**
- * Branch (campus) isolation for school staff. ERP Owner and users with a null
- * campus_id remain tenant-wide. Tenant filter is never disabled.
+ * Branch (campus) isolation for school staff. ERP Owner and Principal remain
+ * tenant-wide (all campuses). School Admin, Teacher and Account Officer are
+ * limited to their JWT campus when campus_id is set. Tenant filter is never disabled.
  */
 public final class CampusScope {
 
@@ -19,9 +20,12 @@ public final class CampusScope {
 
     public static boolean restricts() {
         UserRole role = TenantContext.getRole();
-        if (role == null || role == UserRole.ERP_OWNER) {
+        if (role == null || role == UserRole.ERP_OWNER || role == UserRole.PRINCIPAL) {
             return false;
         }
-        return TenantContext.getCampusId() != null;
+        if (role == UserRole.SCHOOL_ADMIN || role == UserRole.TEACHER || role == UserRole.ACCOUNT_OFFICER) {
+            return TenantContext.getCampusId() != null;
+        }
+        return false;
     }
 }

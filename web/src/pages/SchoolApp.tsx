@@ -4,7 +4,7 @@ import { auditApi, notificationApi } from "../api/services";
 import { LookupsProvider, useLookups } from "../lib/lookups";
 import { initials } from "../lib/format";
 import { useSession } from "../lib/session";
-import { applyTheme, readTheme, type Theme } from "../lib/theme";
+import { applyBrand, applyTheme, readTheme, type Theme } from "../lib/theme";
 import { SCHOOL_NAV } from "../lib/nav";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
@@ -23,10 +23,14 @@ export default function SchoolApp() {
   }, [user, locked]);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (tenant?.primaryColor) root.style.setProperty("--accent", tenant.primaryColor);
-    if (tenant?.accentColor) root.style.setProperty("--accent-2", tenant.accentColor);
-  }, [tenant?.primaryColor, tenant?.accentColor]);
+    applyBrand(tenant?.primaryColor, tenant?.accentColor);
+    const school = tenant?.name?.trim();
+    document.title = school || "School ERP";
+    return () => {
+      applyBrand(undefined, undefined);
+      document.title = "School ERP";
+    };
+  }, [tenant?.primaryColor, tenant?.accentColor, tenant?.name]);
 
   if (!user) return <Navigate to="/" replace />;
   if (user.role === "ERP_OWNER") return <Navigate to="/admin/app" replace />;
@@ -46,13 +50,7 @@ export default function SchoolApp() {
       <div className="shell" data-role={role}>
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>
-          <div className="brand-mark" style={{ marginBottom: 16 }}>
-            <div className="mark">A</div>
-            <div>
-              {tenant?.name || "Atrium"}
-              <div style={{ fontSize: 12, opacity: 0.65 }}>{tenant?.code}</div>
-            </div>
-          </div>
+          <BrandMark name={tenant?.name || "School"} code={tenant?.code} logoUrl={tenant?.logoUrl} />
           {items.map((i) => (
             <NavLink key={i.to} to={i.to} end={i.to === "/app"} className="nav-link" onClick={() => setOpen(false)}>
               {i.label}
@@ -80,11 +78,30 @@ export default function SchoolApp() {
           </header>
           <div className="content">
             <LookupsAlert />
+            <ActivityBar />
             <Outlet />
           </div>
         </div>
       </div>
     </LookupsProvider>
+  );
+}
+
+function BrandMark({ name, code, logoUrl }: { name: string; code?: string; logoUrl?: string }) {
+  const [broken, setBroken] = useState(false);
+  const letter = (name || "S").trim().charAt(0).toUpperCase() || "S";
+  return (
+    <div className="brand-mark" style={{ marginBottom: 16 }}>
+      {logoUrl && !broken ? (
+        <img className="brand-logo" src={logoUrl} alt="" onError={() => setBroken(true)} />
+      ) : (
+        <div className="mark">{letter}</div>
+      )}
+      <div>
+        {name}
+        {code ? <div style={{ fontSize: 12, opacity: 0.65 }}>{code}</div> : null}
+      </div>
+    </div>
   );
 }
 

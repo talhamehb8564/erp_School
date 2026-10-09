@@ -361,7 +361,7 @@ public class ExamService {
                 pending.put("studentId", student.getId());
                 pending.put("rollNumber", student.getRollNumber());
                 pending.put("subjects", List.of());
-                pending.put("message", "Result Pending / Processing");
+                pending.put("message", "Result Pending - Awaiting Subject Submission");
                 return pending;
             }
         }
