@@ -340,6 +340,8 @@ export interface StaffSalary {
   netPay?: number;
   status: SalaryStatus;
   paymentDate?: string;
+  paymentProofUrl?: string;
+  verifiedAt?: string;
 }
 
 export interface Announcement {
@@ -377,6 +379,19 @@ export interface SchoolSettings {
   logoUrl?: string;
   primaryColor?: string;
   accentColor?: string;
+  absentDeduction?: number;
+  lateDeduction?: number;
+  leaveDeduction?: number;
+  waiveAttendanceDeduction?: boolean;
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  entityType?: string;
+  entityId?: string;
+  username?: string;
+  createdAt?: string;
 }
 
 export interface FeeChargeType {

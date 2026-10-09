@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
-import { notificationApi } from "../api/services";
+import { auditApi, notificationApi } from "../api/services";
 import { LookupsProvider, useLookups } from "../lib/lookups";
 import { initials } from "../lib/format";
 import { useSession } from "../lib/session";
@@ -85,6 +85,26 @@ export default function SchoolApp() {
         </div>
       </div>
     </LookupsProvider>
+  );
+}
+
+function ActivityBar() {
+  const { locked } = useSession();
+  const [items, setItems] = useState<{ id: string; action: string; createdAt?: string }[]>([]);
+  useEffect(() => {
+    if (locked) return;
+    void auditApi.mine().then((page) => setItems(page.content || [])).catch(() => undefined);
+  }, [locked]);
+  if (!items.length) return null;
+  return (
+    <div className="activity-bar" aria-label="Recent activity">
+      {items.slice(0, 8).map((e) => (
+        <span key={e.id} className="activity-chip">
+          {e.action.replaceAll("_", " ")}
+          {e.createdAt ? ` · ${new Date(e.createdAt).toLocaleString()}` : ""}
+        </span>
+      ))}
+    </div>
   );
 }
 

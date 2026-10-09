@@ -55,6 +55,16 @@ public class StaffSalary extends TenantAwareEntity {
     @Column(length = 300)
     private String notes;
 
+    @Column(name = "payment_proof_url", length = 500)
+    private String paymentProofUrl;
+
+    @Column(name = "verified_at")
+    private java.time.Instant verifiedAt;
+
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "verified_by")
+    private UUID verifiedBy;
+
     public void recompute() {
         finalSalary = baseSalary.subtract(attendanceDeductions).subtract(otherDeductions).add(bonuses);
         if (finalSalary.signum() < 0) {

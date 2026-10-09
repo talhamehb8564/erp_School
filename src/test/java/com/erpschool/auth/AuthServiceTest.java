@@ -23,6 +23,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -57,8 +61,22 @@ class AuthServiceTest {
         AppProperties properties = new AppProperties();
         properties.getJwt().setSecret("unit-test-jwt-secret-key-32bytes-min");
         JwtService jwtService = new JwtService(properties);
+        PlatformTransactionManager txManager = new PlatformTransactionManager() {
+            @Override
+            public TransactionStatus getTransaction(TransactionDefinition definition) {
+                return new SimpleTransactionStatus();
+            }
+
+            @Override
+            public void commit(TransactionStatus status) {
+            }
+
+            @Override
+            public void rollback(TransactionStatus status) {
+            }
+        };
         authService = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
-                passwordEncoder, jwtService, properties, auditService);
+                passwordEncoder, jwtService, properties, auditService, txManager);
 
         tenantId = UUID.randomUUID();
         teacher = new User();
@@ -79,7 +97,8 @@ class AuthServiceTest {
         tenant.setId(tenantId);
         tenant.setStatus(TenantStatus.ACTIVE);
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         AuthResponse response = authService.login("GVS-TCH-0001", "ChangeMe@123", null);
@@ -120,7 +139,8 @@ class AuthServiceTest {
         tenant.setId(tenantId);
         tenant.setStatus(TenantStatus.SUSPENDED);
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         AuthResponse response = authService.login("GVS-ADM-0001", "ChangeMe@123", null);
@@ -138,7 +158,8 @@ class AuthServiceTest {
         tenant.setId(tenantId);
         tenant.setStatus(TenantStatus.ACTIVE);
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         AuthResponse response = authService.login("teacher@greenvalley.school", "ChangeMe@123", null);
@@ -150,7 +171,8 @@ class AuthServiceTest {
     @Test
     void loginRejectedForBadPassword() {
         when(userRepository.findByUsernameIgnoreCase("GVS-TCH-0001")).thenReturn(Optional.of(teacher));
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThatThrownBy(() -> authService.login("GVS-TCH-0001", "wrong", null))
                 .isInstanceOf(UnauthorizedException.class);

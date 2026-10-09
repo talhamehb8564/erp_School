@@ -184,11 +184,28 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<StudentDtos.Response> list(UUID classId, UUID sectionId, Pageable pageable) {
+    public PageResponse<StudentDtos.Response> list(UUID classId, UUID sectionId, String academicSession, Pageable pageable) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         Page<Student> page;
         UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
-        if (campusId != null && classId != null) {
+        java.util.Set<UUID> sessionClassIds = null;
+        if (academicSession != null && !academicSession.isBlank()) {
+            sessionClassIds = academicService.classes().stream()
+                    .filter(c -> academicSession.equalsIgnoreCase(c.getAcademicSession()))
+                    .map(com.erpschool.academic.entity.SchoolClass::getId)
+                    .collect(Collectors.toSet());
+            if (sessionClassIds.isEmpty() || (classId != null && !sessionClassIds.contains(classId))) {
+                page = Page.empty(pageable);
+                return emptyStudents(page);
+            }
+        }
+        if (classId == null && sessionClassIds != null) {
+            if (campusId != null) {
+                page = studentRepository.findByTenantIdAndCampusIdAndClassIdIn(tenantId, campusId, sessionClassIds, pageable);
+            } else {
+                page = studentRepository.findByTenantIdAndClassIdIn(tenantId, sessionClassIds, pageable);
+            }
+        } else if (campusId != null && classId != null) {
             page = studentRepository.findByTenantIdAndCampusIdAndClassId(tenantId, campusId, classId, pageable);
         } else if (campusId != null) {
             page = studentRepository.findByTenantIdAndCampusId(tenantId, campusId, pageable);
@@ -213,6 +230,18 @@ public class StudentService {
                 .totalPages(page.getTotalPages())
                 .first(page.isFirst())
                 .last(page.isLast())
+                .build();
+    }
+
+    private static PageResponse<StudentDtos.Response> emptyStudents(Page<Student> page) {
+        return PageResponse.<StudentDtos.Response>builder()
+                .content(List.of())
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalElements(0)
+                .totalPages(0)
+                .first(true)
+                .last(true)
                 .build();
     }
 

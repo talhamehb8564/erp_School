@@ -36,6 +36,7 @@ import type {
   User,
   Role,
   UserStatus,
+  AuditLog,
 } from "../lib/types";
 
 const v1 = "/api/v1";
@@ -145,10 +146,11 @@ export const academicApi = {
 };
 
 export const studentApi = {
-  list: (classId?: string, sectionId?: string, page = 0) => {
+  list: (classId?: string, sectionId?: string, page = 0, academicSession?: string) => {
     const p = new URLSearchParams({ size: "50", page: String(page) });
     if (classId) p.set("classId", classId);
     if (sectionId) p.set("sectionId", sectionId);
+    if (academicSession) p.set("academicSession", academicSession);
     return api.get<Page<StudentUser>>(`${v1}/students?${p}`);
   },
   get: (id: string) => api.get<StudentUser>(`${v1}/students/${id}`),
@@ -274,10 +276,18 @@ export const salaryApi = {
   generate: (month: string) => api.post<StaffSalary[]>(`${v1}/salaries/generate`, { month }),
   month: (month: string) => api.get<StaffSalary[]>(`${v1}/salaries?month=${month}`),
   mine: () => api.get<StaffSalary[]>(`${v1}/salaries/me`),
-  pay: (id: string, paymentDate?: string) =>
-    api.post<StaffSalary>(`${v1}/salaries/${id}/pay`, paymentDate ? { paymentDate } : {}),
+  pay: (id: string, paymentDate?: string, paymentProofUrl?: string) =>
+    api.post<StaffSalary>(`${v1}/salaries/${id}/pay`, {
+      ...(paymentDate ? { paymentDate } : {}),
+      ...(paymentProofUrl ? { paymentProofUrl } : {}),
+    }),
+  verify: (id: string) => api.post<StaffSalary>(`${v1}/salaries/${id}/verify`, {}),
   adjust: (id: string, body: { otherDeductions?: number; bonuses?: number; notes?: string }) =>
     api.post<StaffSalary>(`${v1}/salaries/${id}/adjust`, body),
+};
+
+export const auditApi = {
+  mine: () => api.get<Page<AuditLog>>(`${v1}/audit-logs/me?size=12`),
 };
 
 export const announcementApi = {

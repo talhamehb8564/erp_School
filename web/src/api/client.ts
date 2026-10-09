@@ -75,7 +75,7 @@ async function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 45_000;
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
   const ctrl = new AbortController();
@@ -84,7 +84,7 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
     return await fetch(url, { ...init, signal: ctrl.signal });
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
-      throw new ApiError(0, "The server took too long to respond. Check that Spring Boot is running on port 8080.");
+      throw new ApiError(0, "The request timed out talking to the database. Retry once; if it persists the Neon connection is stalling.");
     }
     throw new ApiError(0, "Cannot reach the ERP server. Start the Spring Boot API on port 8080.");
   } finally {
@@ -279,7 +279,7 @@ function uploadWithProgress<T>(path: string, body: FormData, onProgress: (pct: n
     };
     xhr.onerror = () => reject(new ApiError(0, "Cannot reach the ERP server. Start the Spring Boot API on port 8080."));
     xhr.ontimeout = () =>
-      reject(new ApiError(0, "The server took too long to respond. Check that Spring Boot is running on port 8080."));
+      reject(new ApiError(0, "The request timed out talking to the database. Retry once; if it persists the Neon connection is stalling."));
     xhr.send(body);
   });
 }

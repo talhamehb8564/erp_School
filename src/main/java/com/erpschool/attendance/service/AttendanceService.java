@@ -16,6 +16,8 @@ import com.erpschool.notification.service.NotificationService;
 import com.erpschool.student.entity.Student;
 import com.erpschool.student.entity.StudentStatus;
 import com.erpschool.student.repository.StudentRepository;
+import com.erpschool.settings.entity.SchoolSettings;
+import com.erpschool.settings.repository.SchoolSettingsRepository;
 import com.erpschool.student.service.StudentAccessService;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.user.entity.UserRole;
@@ -39,6 +41,7 @@ public class AttendanceService {
     private final StudentRepository studentRepository;
     private final StudentAccessService studentAccessService;
     private final NotificationService notificationService;
+    private final SchoolSettingsRepository settingsRepository;
 
     public AttendanceService(StudentAttendanceRepository studentAttendanceRepository,
                              TeacherAttendanceRepository teacherAttendanceRepository,
@@ -46,7 +49,8 @@ public class AttendanceService {
                              AcademicService academicService,
                              StudentRepository studentRepository,
                              StudentAccessService studentAccessService,
-                             NotificationService notificationService) {
+                             NotificationService notificationService,
+                             SchoolSettingsRepository settingsRepository) {
         this.studentAttendanceRepository = studentAttendanceRepository;
         this.teacherAttendanceRepository = teacherAttendanceRepository;
         this.salaryDeductionRepository = salaryDeductionRepository;
@@ -54,6 +58,7 @@ public class AttendanceService {
         this.studentRepository = studentRepository;
         this.studentAccessService = studentAccessService;
         this.notificationService = notificationService;
+        this.settingsRepository = settingsRepository;
     }
 
     @Transactional
@@ -136,19 +141,32 @@ public class AttendanceService {
         }
         row = teacherAttendanceRepository.save(row);
 
-        if (deductSalary && status == AttendanceStatus.ABSENT) {
+        SchoolSettings settings = settingsRepository.findById(tenantId).orElse(null);
+        boolean waive = settings != null && settings.isWaiveAttendanceDeduction();
+        BigDecimal ruleAmount = BigDecimal.ZERO;
+        if (settings != null) {
+            ruleAmount = switch (status) {
+                case ABSENT -> nvl(settings.getAbsentDeduction());
+                case LATE -> nvl(settings.getLateDeduction());
+                case LEAVE -> nvl(settings.getLeaveDeduction());
+                default -> BigDecimal.ZERO;
+            };
+        }
+        BigDecimal amount = deductionAmount != null ? deductionAmount : ruleAmount;
+        boolean apply = !waive && status != AttendanceStatus.PRESENT && (deductSalary || amount.signum() > 0);
+        if (apply) {
             SalaryDeduction d = new SalaryDeduction();
             d.setTenantId(tenantId);
             d.setTeacherUserId(teacherUserId);
             d.setTeacherAttendanceId(row.getId());
             d.setDeduct(true);
-            d.setAmount(deductionAmount == null ? BigDecimal.ZERO : deductionAmount);
-            d.setReason("Absent on " + date);
+            d.setAmount(amount);
+            d.setReason(status.name() + " on " + date);
             d.setMonth(date.withDayOfMonth(1));
             d.setCreatedBy(TenantContext.getUserId());
             salaryDeductionRepository.save(d);
             notificationService.notifyUser(tenantId, teacherUserId, "SALARY_DEDUCTION",
-                    "Salary deduction", "Absence on " + date + " will be deducted from salary.",
+                    "Salary deduction", status.name() + " on " + date + " will be deducted from salary.",
                     "TeacherAttendance", row.getId().toString());
         }
         return row;
@@ -163,6 +181,10 @@ public class AttendanceService {
         }
         return teacherAttendanceRepository.findByTenantIdAndTeacherUserIdAndAttendanceDateBetween(
                 tenantId, id, from, to);
+    }
+
+    private static BigDecimal nvl(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     public static int isoDay(LocalDate date) {

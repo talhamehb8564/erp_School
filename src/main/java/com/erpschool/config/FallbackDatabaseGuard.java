@@ -63,6 +63,8 @@ public class FallbackDatabaseGuard implements EnvironmentPostProcessor {
         next = ensureQueryParam(next, "sslmode", "require");
         next = ensureQueryParam(next, "gssEncMode", "disable");
         next = ensureQueryParam(next, "prepareThreshold", "0");
+        next = ensureQueryParam(next, "preferQueryMode", "simple");
+        next = ensureQueryParam(next, "tcpKeepAlive", "true");
         return next;
     }
 

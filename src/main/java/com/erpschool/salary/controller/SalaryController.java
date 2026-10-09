@@ -50,7 +50,7 @@ public class SalaryController {
     }
 
     @PostMapping("/generate")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER','PRINCIPAL')")
     public ResponseEntity<ApiResponse<List<StaffSalary>>> generate(@Valid @RequestBody GenerateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Monthly salaries generated",
                 salaryService.generateMonth(request.getMonth())));
@@ -64,10 +64,17 @@ public class SalaryController {
     }
 
     @PostMapping("/{id}/pay")
-    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER','PRINCIPAL')")
     public ResponseEntity<ApiResponse<StaffSalary>> pay(@PathVariable UUID id, @RequestBody(required = false) PayRequest request) {
         LocalDate date = request == null ? null : request.getPaymentDate();
-        return ResponseEntity.ok(ApiResponse.ok("Salary marked paid", salaryService.markPaid(id, date)));
+        String proof = request == null ? null : request.getPaymentProofUrl();
+        return ResponseEntity.ok(ApiResponse.ok("Salary marked paid", salaryService.markPaid(id, date, proof)));
+    }
+
+    @PostMapping("/{id}/verify")
+    @PreAuthorize("hasAnyRole('SCHOOL_ADMIN','PRINCIPAL','TEACHER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<StaffSalary>> verify(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok("Salary receipt verified", salaryService.verifyMine(id)));
     }
 
     @GetMapping("/me")
@@ -103,6 +110,7 @@ public class SalaryController {
     @Setter
     public static class PayRequest {
         private LocalDate paymentDate;
+        private String paymentProofUrl;
     }
 
     @Getter

@@ -51,8 +51,9 @@ public class StudentController {
     public ResponseEntity<ApiResponse<PageResponse<StudentDtos.Response>>> list(
             @RequestParam(required = false) UUID classId,
             @RequestParam(required = false) UUID sectionId,
+            @RequestParam(required = false) String academicSession,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(studentService.list(classId, sectionId, pageable)));
+        return ResponseEntity.ok(ApiResponse.ok(studentService.list(classId, sectionId, academicSession, pageable)));
     }
 
     @GetMapping("/students/me")

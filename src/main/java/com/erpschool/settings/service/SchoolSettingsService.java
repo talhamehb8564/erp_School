@@ -46,6 +46,13 @@ public class SchoolSettingsService {
         s.setJazzcash(incoming.getJazzcash());
         s.setEasypaisa(incoming.getEasypaisa());
         s.setOtherPaymentMethods(incoming.getOtherPaymentMethods());
+        s.setLogoUrl(incoming.getLogoUrl());
+        s.setPrimaryColor(incoming.getPrimaryColor());
+        s.setAccentColor(incoming.getAccentColor());
+        s.setAbsentDeduction(incoming.getAbsentDeduction());
+        s.setLateDeduction(incoming.getLateDeduction());
+        s.setLeaveDeduction(incoming.getLeaveDeduction());
+        s.setWaiveAttendanceDeduction(incoming.isWaiveAttendanceDeduction());
         s.setUpdatedAt(Instant.now());
         s.setUpdatedBy(TenantContext.getUserId());
         return repository.save(s);

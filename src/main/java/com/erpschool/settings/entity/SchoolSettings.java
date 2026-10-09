@@ -58,6 +58,18 @@ public class SchoolSettings {
     @Column(name = "accent_color", length = 16)
     private String accentColor;
 
+    @Column(name = "absent_deduction", precision = 12, scale = 2)
+    private java.math.BigDecimal absentDeduction = java.math.BigDecimal.ZERO;
+
+    @Column(name = "late_deduction", precision = 12, scale = 2)
+    private java.math.BigDecimal lateDeduction = java.math.BigDecimal.ZERO;
+
+    @Column(name = "leave_deduction", precision = 12, scale = 2)
+    private java.math.BigDecimal leaveDeduction = java.math.BigDecimal.ZERO;
+
+    @Column(name = "waive_attendance_deduction", nullable = false)
+    private boolean waiveAttendanceDeduction = false;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 

@@ -20,7 +20,9 @@ import com.erpschool.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -40,6 +42,8 @@ public class AuthService {
     private final JwtService jwtService;
     private final AppProperties appProperties;
     private final AuditService auditService;
+    private final TransactionTemplate readTx;
+    private final TransactionTemplate writeTx;
 
     public AuthService(UserRepository userRepository,
                        TenantRepository tenantRepository,
@@ -47,7 +51,8 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
                        AppProperties appProperties,
-                       AuditService auditService) {
+                       AuditService auditService,
+                       PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -55,15 +60,25 @@ public class AuthService {
         this.jwtService = jwtService;
         this.appProperties = appProperties;
         this.auditService = auditService;
+        this.readTx = new TransactionTemplate(transactionManager);
+        this.readTx.setReadOnly(true);
+        this.writeTx = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
+    /**
+     * BCrypt and audit run outside the write transaction so Neon/PgBouncer is not
+     * left idle-in-transaction, and REQUIRES_NEW audit does not need a second
+     * pooled connection while {@code users} is still locked.
+     */
     public AuthResponse login(String username, String password, HttpServletRequest request) {
         String identifier = username == null ? "" : username.trim();
-        User user = userRepository.findByUsernameIgnoreCase(identifier).orElse(null);
-        if (user == null && !identifier.isEmpty()) {
-            user = userRepository.findByEmailIgnoreCase(identifier).orElse(null);
-        }
+        User user = readTx.execute(status -> {
+            User found = userRepository.findByUsernameIgnoreCase(identifier).orElse(null);
+            if (found == null && !identifier.isEmpty()) {
+                found = userRepository.findByEmailIgnoreCase(identifier).orElse(null);
+            }
+            return found;
+        });
         if (user == null) {
             auditService.record(null, null, identifier, null, AuditService.LOGIN_FAILED,
                     "User", null, Map.of("reason", "unknown_user"));
@@ -82,22 +97,30 @@ public class AuthService {
             throw new UnauthorizedException("Account is inactive");
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            registerFailure(user);
+            writeTx.executeWithoutResult(status -> registerFailure(user));
             auditService.record(user.getTenantId(), user.getId(), user.getUsername(), user.getRole().name(),
                     AuditService.LOGIN_FAILED, "User", user.getId().toString(), Map.of("reason", "bad_password"));
             throw new UnauthorizedException("Invalid username or password");
         }
         assertTenantAllowsLogin(user);
 
-        user.setFailedLoginAttempts(0);
-        user.setLockedUntil(null);
-        user.setLastLoginAt(Instant.now());
-        userRepository.save(user);
+        AuthResponse response = writeTx.execute(status -> {
+            User persistent = userRepository.findById(user.getId())
+                    .orElseThrow(() -> new UnauthorizedException("Invalid username or password"));
+            persistent.setFailedLoginAttempts(0);
+            persistent.setLockedUntil(null);
+            persistent.setLastLoginAt(Instant.now());
+            userRepository.saveAndFlush(persistent);
+            return issueTokens(persistent, request);
+        });
 
         auditService.record(user.getTenantId(), user.getId(), user.getUsername(), user.getRole().name(),
                 AuditService.LOGIN_SUCCESS, "User", user.getId().toString(), null);
 
-        return issueTokens(user, request);
+        if (response == null) {
+            throw new UnauthorizedException("Unable to complete login");
+        }
+        return response;
     }
 
     @Transactional
@@ -200,13 +223,17 @@ public class AuthService {
     }
 
     private void registerFailure(User user) {
-        int attempts = user.getFailedLoginAttempts() + 1;
-        user.setFailedLoginAttempts(attempts);
+        User persistent = userRepository.findById(user.getId()).orElse(user);
+        int attempts = persistent.getFailedLoginAttempts() + 1;
+        persistent.setFailedLoginAttempts(attempts);
         if (attempts >= MAX_FAILED_ATTEMPTS) {
-            user.setStatus(UserStatus.LOCKED);
-            user.setLockedUntil(Instant.now().plus(LOCK_MINUTES, ChronoUnit.MINUTES));
+            persistent.setStatus(UserStatus.LOCKED);
+            persistent.setLockedUntil(Instant.now().plus(LOCK_MINUTES, ChronoUnit.MINUTES));
         }
-        userRepository.save(user);
+        userRepository.saveAndFlush(persistent);
+        user.setFailedLoginAttempts(persistent.getFailedLoginAttempts());
+        user.setStatus(persistent.getStatus());
+        user.setLockedUntil(persistent.getLockedUntil());
     }
 
     private void assertTenantAllowsLogin(User user) {

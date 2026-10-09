@@ -344,6 +344,7 @@ export function SalariesPage() {
   const toast = useToast();
   const ops = canOperateFees(user?.role);
   const viewer = canViewFees(user?.role);
+  const payrollOps = ops || user?.role === "PRINCIPAL";
   const mine = useAsync(() => salaryApi.mine(), []);
   const month = monthStart();
   const monthRows = useAsync(() => (viewer ? salaryApi.month(month) : Promise.resolve([])), [user?.role, month]);
@@ -359,7 +360,14 @@ export function SalariesPage() {
       <>
         <div className="page-title"><div><h1>My salary</h1></div></div>
         <QueryState status={mine} label="salary">
-          <Table headers={["Month", "Net", "Status"]} rows={(mine.data || []).map((s) => [fmtDate(s.month), money(s.netPay), <Badge key={s.id} value={s.status} />])} />
+          <Table headers={["Month", "Net", "Status", ""]} rows={(mine.data || []).map((s) => [
+            fmtDate(s.month),
+            money(s.netPay),
+            <Badge key={s.id} value={s.status} />,
+            s.status === "PAID" && !s.verifiedAt ? (
+              <Button key={`v${s.id}`} loadingText="Verifying…" onClick={async () => { await salaryApi.verify(s.id); toast("ok", "Receipt verified"); void mine.reload(); }}>Verify</Button>
+            ) : (s.verifiedAt ? "Verified" : "—"),
+          ])} />
         </QueryState>
       </>
     );
@@ -367,9 +375,9 @@ export function SalariesPage() {
   return (
     <>
       <div className="page-title"><div><h1>Payroll</h1><p>Staff profiles and monthly generation</p></div>
-        {ops ? <Button kind="brass" loadingText="Generating…" onClick={async () => { const rows = await salaryApi.generate(month); toast("ok", `${rows.length} salary rows`); void monthRows.reload(); }}>Generate this month</Button> : null}
+        {payrollOps ? <Button kind="brass" loadingText="Generating…" onClick={async () => { const rows = await salaryApi.generate(month); toast("ok", `${rows.length} salary rows`); void monthRows.reload(); }}>Generate this month</Button> : null}
       </div>
-      {ops ? (
+      {payrollOps ? (
         <div className="card" style={{ marginBottom: 16 }}>
           <h3>Salary profile</h3>
           <Form busyLabel="Saving…" onSubmit={async () => { await salaryApi.upsertProfile(uid, Number(base)); toast("ok", "Profile saved"); }}>
@@ -394,10 +402,15 @@ export function SalariesPage() {
             money(s.bonuses),
             money(s.netPay),
             <Badge key={s.id} value={s.status} />,
-            !ops || s.status === "PAID" ? pretty(s.status) : (
+            !payrollOps || s.status === "PAID" ? pretty(s.status) : (
               <div key={`pay${s.id}`} className="row">
                 <Button kind="ghost" onClick={() => { setAdjustId(s.id); setDeduct(String(s.otherDeductions ?? "")); setBonus(String(s.bonuses ?? "")); setAdjNotes(""); }}>Adjust</Button>
-                <Button loadingText="Updating…" onClick={async () => { await salaryApi.pay(s.id, today()); toast("ok", "Marked paid"); void monthRows.reload(); }}>Mark paid</Button>
+                <Button loadingText="Updating…" onClick={async () => {
+                  const proof = window.prompt("Payment proof URL (optional)") || undefined;
+                  await salaryApi.pay(s.id, today(), proof);
+                  toast("ok", "Marked paid");
+                  void monthRows.reload();
+                }}>Mark paid</Button>
               </div>
             ),
           ])}
@@ -447,6 +460,13 @@ export function SettingsPage() {
             <Field label="Logo URL"><input value={current.logoUrl || ""} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} /></Field>
             <Field label="Primary color"><input type="color" value={current.primaryColor || "#1f3a5f"} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
             <Field label="Accent color"><input type="color" value={current.accentColor || "#c4a574"} onChange={(e) => setForm({ ...form, accentColor: e.target.value })} /></Field>
+            <Field label="Absent deduction"><input type="number" value={current.absentDeduction ?? 0} onChange={(e) => setForm({ ...form, absentDeduction: Number(e.target.value) })} /></Field>
+            <Field label="Late deduction"><input type="number" value={current.lateDeduction ?? 0} onChange={(e) => setForm({ ...form, lateDeduction: Number(e.target.value) })} /></Field>
+            <Field label="Leave deduction"><input type="number" value={current.leaveDeduction ?? 0} onChange={(e) => setForm({ ...form, leaveDeduction: Number(e.target.value) })} /></Field>
+            <label className="row" style={{ gap: 8 }}>
+              <input type="checkbox" checked={!!current.waiveAttendanceDeduction} onChange={(e) => setForm({ ...form, waiveAttendanceDeduction: e.target.checked })} />
+              Waive attendance deductions (0%)
+            </label>
             <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
           </Form>
         </div>

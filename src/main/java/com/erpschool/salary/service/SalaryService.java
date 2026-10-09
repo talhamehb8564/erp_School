@@ -10,6 +10,7 @@ import com.erpschool.salary.entity.StaffProfile;
 import com.erpschool.salary.entity.StaffSalary;
 import com.erpschool.salary.repository.StaffProfileRepository;
 import com.erpschool.salary.repository.StaffSalaryRepository;
+import com.erpschool.settings.repository.SchoolSettingsRepository;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.user.entity.User;
 import com.erpschool.user.entity.UserRole;
@@ -34,15 +35,18 @@ public class SalaryService {
     private final StaffSalaryRepository salaryRepository;
     private final SalaryDeductionRepository deductionRepository;
     private final UserRepository userRepository;
+    private final SchoolSettingsRepository settingsRepository;
 
     public SalaryService(StaffProfileRepository profileRepository,
                          StaffSalaryRepository salaryRepository,
                          SalaryDeductionRepository deductionRepository,
-                         UserRepository userRepository) {
+                         UserRepository userRepository,
+                         SchoolSettingsRepository settingsRepository) {
         this.profileRepository = profileRepository;
         this.salaryRepository = salaryRepository;
         this.deductionRepository = deductionRepository;
         this.userRepository = userRepository;
+        this.settingsRepository = settingsRepository;
     }
 
     @Transactional
@@ -75,12 +79,15 @@ public class SalaryService {
     public List<StaffSalary> generateMonth(LocalDate month) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         LocalDate monthStart = month.withDayOfMonth(1);
+        boolean waive = settingsRepository.findById(tenantId)
+                .map(com.erpschool.settings.entity.SchoolSettings::isWaiveAttendanceDeduction)
+                .orElse(false);
         List<StaffSalary> out = new ArrayList<>();
         for (StaffProfile profile : profileRepository.findByTenantId(tenantId)) {
             StaffSalary row = salaryRepository
                     .findByTenantIdAndStaffUserIdAndMonth(tenantId, profile.getUserId(), monthStart)
                     .orElseGet(StaffSalary::new);
-            BigDecimal deductions = deductionRepository
+            BigDecimal deductions = waive ? BigDecimal.ZERO : deductionRepository
                     .findByTenantIdAndTeacherUserIdAndMonth(tenantId, profile.getUserId(), monthStart)
                     .stream()
                     .filter(SalaryDeduction::isDeduct)
@@ -128,12 +135,32 @@ public class SalaryService {
     }
 
     @Transactional
-    public StaffSalary markPaid(UUID id, LocalDate paymentDate) {
+    public StaffSalary markPaid(UUID id, LocalDate paymentDate, String paymentProofUrl) {
         StaffSalary s = salaryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Salary", id));
         TenantGuard.assertSameTenant(s.getTenantId());
         s.setStatus(SalaryStatus.PAID);
         s.setPaymentDate(paymentDate == null ? LocalDate.now() : paymentDate);
+        if (paymentProofUrl != null && !paymentProofUrl.isBlank()) {
+            s.setPaymentProofUrl(paymentProofUrl.trim());
+        }
+        s.setUpdatedBy(TenantContext.getUserId());
+        return salaryRepository.save(s);
+    }
+
+    @Transactional
+    public StaffSalary verifyMine(UUID id) {
+        StaffSalary s = salaryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Salary", id));
+        TenantGuard.assertSameTenant(s.getTenantId());
+        if (!s.getStaffUserId().equals(TenantContext.getUserId())) {
+            throw new BusinessException("You can only verify your own salary");
+        }
+        if (s.getStatus() != SalaryStatus.PAID) {
+            throw new BusinessException("Salary has not been marked paid yet");
+        }
+        s.setVerifiedAt(java.time.Instant.now());
+        s.setVerifiedBy(TenantContext.getUserId());
         s.setUpdatedBy(TenantContext.getUserId());
         return salaryRepository.save(s);
     }

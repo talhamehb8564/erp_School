@@ -12,9 +12,12 @@ export function StudentsPage() {
   const canEnrol = user?.role === "SCHOOL_ADMIN";
   const { classes, sections, className } = useLookups();
   const [classId, setClassId] = useState("");
+  const [session, setSession] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
-  const list = useAsync(() => studentApi.list(classId || undefined, undefined, page), [classId, page]);
+  const sessions = Array.from(new Set(classes.map((c) => c.academicSession).filter(Boolean))) as string[];
+  const visibleClasses = session ? classes.filter((c) => c.academicSession === session) : classes;
+  const list = useAsync(() => studentApi.list(classId || undefined, undefined, page, session || undefined), [classId, page, session]);
   const [open, setOpen] = useState(false);
   const toast = useToast();
   const [form, setForm] = useState({
@@ -39,9 +42,13 @@ export function StudentsPage() {
       </div>
       <div className="row" style={{ marginBottom: 12 }}>
         <Search value={q} onChange={setQ} placeholder="Search name or admission no." />
+        <select className="search" value={session} onChange={(e) => { setSession(e.target.value); setClassId(""); setPage(0); }}>
+          <option value="">All sessions</option>
+          {sessions.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
         <select className="search" value={classId} onChange={(e) => { setClassId(e.target.value); setPage(0); }}>
           <option value="">All classes</option>
-          {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {visibleClasses.map((c) => <option key={c.id} value={c.id}>{c.name}{c.academicSession ? ` (${c.academicSession})` : ""}</option>)}
         </select>
       </div>
       <QueryState status={list} label="students">

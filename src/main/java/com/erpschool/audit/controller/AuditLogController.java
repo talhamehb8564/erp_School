@@ -56,6 +56,17 @@ public class AuditLogController {
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
     }
 
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Recent activity for the signed-in user")
+    public ResponseEntity<ApiResponse<PageResponse<AuditLogResponse>>> mine(
+            @PageableDefault(size = 12) Pageable pageable) {
+        UUID userId = TenantContext.getUserId();
+        var page = auditLogRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                .map(AuditLogResponse::from);
+        return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
+    }
+
     private static String emptyToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }

@@ -14,11 +14,12 @@ class FallbackDatabaseGuardTest {
         assertThat(next).contains("sslmode=require");
         assertThat(next).contains("gssEncMode=disable");
         assertThat(next).contains("prepareThreshold=0");
+        assertThat(next).contains("preferQueryMode=simple");
     }
 
     @Test
     void normalizeJdbcUrlIsIdempotent() {
-        String url = "jdbc:postgresql://host.neon.tech/neondb?sslmode=require&gssEncMode=disable&prepareThreshold=0";
+        String url = "jdbc:postgresql://host.neon.tech/neondb?sslmode=require&gssEncMode=disable&prepareThreshold=0&preferQueryMode=simple&tcpKeepAlive=true";
         assertThat(FallbackDatabaseGuard.normalizeJdbcUrl(url)).isEqualTo(url);
     }
 }

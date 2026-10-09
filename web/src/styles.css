@@ -159,6 +159,18 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
   padding: 16px 22px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
   background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(16px); z-index: 5;
 }
+.activity-bar {
+  display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 4px;
+}
+.activity-chip {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: var(--card);
+}
 .content { padding: 22px; }
 .crumbs { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
 .page-title { display: flex; justify-content: space-between; gap: 12px; align-items: flex-end; margin-bottom: 18px; flex-wrap: wrap; }

@@ -3,18 +3,20 @@ spring:
     name: erp-school
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://${PGHOST:ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech}/${PGDATABASE:neondb}?sslmode=${PGSSLMODE:require}&gssEncMode=disable}}
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://${PGHOST:ep-lively-rain-ay8mipsd-pooler.c-5.us-east-2.aws.neon.tech}/${PGDATABASE:neondb}?sslmode=${PGSSLMODE:require}&gssEncMode=disable&prepareThreshold=0&preferQueryMode=simple}}
     username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:${PGUSER:neondb_owner}}}
     password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:${PGPASSWORD:}}}
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: ErpSchoolHikariPool
-      maximum-pool-size: ${DB_POOL_SIZE:10}
-      minimum-idle: 2
-      connection-timeout: 30000
-      idle-timeout: 60000
-      max-lifetime: 280000
-      keepalive-time: 30000
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+      minimum-idle: 0
+      connection-timeout: 15000
+      validation-timeout: 5000
+      idle-timeout: 30000
+      max-lifetime: 180000
+      keepalive-time: 20000
+      leak-detection-threshold: 20000
       initialization-fail-timeout: 60000
       connection-test-query: SELECT 1
       data-source-properties:
@@ -22,9 +24,10 @@ spring:
         sslmode: require
         gssEncMode: disable
         prepareThreshold: 0
+        preferQueryMode: simple
         connectTimeout: 10
-        socketTimeout: 30
-        loginTimeout: 15
+        socketTimeout: 15
+        loginTimeout: 10
         tcpKeepAlive: true
         ApplicationName: erp-school-phase1
 
@@ -36,6 +39,7 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+          batch_size: 0
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
         type:

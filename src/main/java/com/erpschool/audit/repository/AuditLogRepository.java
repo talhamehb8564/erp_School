@@ -13,6 +13,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
     Page<AuditLog> findByTenantIdOrderByCreatedAtDesc(UUID tenantId, Pageable pageable);
 
+    Page<AuditLog> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
     /**
      * Avoid {@code :tenantId IS NULL OR a.tenantId = :tenantId}. A null UUID bind
      * becomes bytea on PostgreSQL ({@code uuid = bytea} / {@code lower(bytea)}).
