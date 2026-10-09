@@ -352,11 +352,11 @@ export function ExamsPage() {
           ) : mine.data?.pending ? (
             <div className="card">
               <p className="kicker">Results</p>
-              <h3>Result Pending / Processing</h3>
+              <h3>Result Pending - Awaiting Subject Marks</h3>
               <p className="hint">Announcement time has passed, but not every subject has marks yet. The marksheet will appear when all teachers have submitted.</p>
             </div>
           ) : mine.data ? (
-            <Marksheet>
+            <Marksheet
               school={undefined}
               studentName={mine.data.studentName || "—"}
               roll={mine.data.rollNumber}
@@ -374,6 +374,9 @@ export function ExamsPage() {
           {(user?.role === "TEACHER" || user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") && sessionId ? (
             <div className="card" style={{ marginBottom: 12 }}>
               <h3>Enter marks</h3>
+              {sessions.data?.find((s) => s.id === sessionId)?.announceAt ? (
+                <ResultCountdown announceAt={sessions.data.find((s) => s.id === sessionId)?.announceAt} />
+              ) : null}
               <Form busyLabel="Saving marks…" onSubmit={async () => {
                 await examApi.upsertResult(sessionId, {
                   studentId: mark.studentId,

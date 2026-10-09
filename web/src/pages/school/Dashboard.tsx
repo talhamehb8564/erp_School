@@ -142,9 +142,27 @@ function ParentDash() {
   const kids = (d.data?.children as StudentUser[]) || [];
   const all = (d.data?.fees as { studentId?: string; challanNumber: string; totalPayable: number; status: string }[]) || [];
   const fees = childId ? all.filter((f) => f.studentId === childId) : all;
+  const progressMap = (d.data?.progressByChild as Record<string, {
+    attendancePercent?: number; academicPercent?: number; present?: number; absent?: number; late?: number;
+    totalLectures?: number; grade?: string; passStatus?: string;
+  }>) || {};
+  const activeId = childId || kids[0]?.id;
+  const progress = (activeId && progressMap[activeId]) || {};
+  const att = Number(progress.attendancePercent || 0);
+  const aca = Number(progress.academicPercent || 0);
   return (
     <>
-      <div className="page-title"><div><h1>Family</h1><p>One parent login, many children</p></div></div>
+      <div className="hero-strip card">
+        <div>
+          <p className="kicker">Selected child</p>
+          <h1>Family</h1>
+          <p>Attendance {att}% ({progress.present ?? 0} present, {progress.absent ?? 0} absent, {progress.late ?? 0} late). Academic {aca}% · Grade {progress.grade || "—"} · {pretty(progress.passStatus)}.</p>
+        </div>
+        <div className="row">
+          <Donut value={att} max={100} label="Attendance %" />
+          <Donut value={aca} max={100} label="Academics %" />
+        </div>
+      </div>
       <QueryState status={d} label="family dashboard">
         <ChildSwitch childrenList={kids} />
         <div className="card">

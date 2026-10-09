@@ -89,6 +89,11 @@ public class PortalController {
         m.put("homework", homeworkService.mine());
         m.put("fees", feeService.challansForStudents(children.stream().map(c -> c.getId()).toList()));
         m.put("unreadNotifications", notificationService.unreadCount());
+        Map<String, Object> progressByChild = new HashMap<>();
+        for (var child : children) {
+            progressByChild.put(child.getId().toString(), reportService.studentProgress(child.getId()));
+        }
+        m.put("progressByChild", progressByChild);
         return ResponseEntity.ok(ApiResponse.ok(m));
     }
 
