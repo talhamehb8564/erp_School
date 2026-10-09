@@ -4,6 +4,7 @@ import com.erpschool.announcement.entity.Announcement;
 import com.erpschool.announcement.repository.AnnouncementRepository;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.notification.service.NotificationService;
+import com.erpschool.student.entity.ParentStudent;
 import com.erpschool.student.entity.Student;
 import com.erpschool.student.repository.ParentStudentRepository;
 import com.erpschool.student.repository.StudentRepository;
@@ -60,40 +61,43 @@ public class AnnouncementService {
         UUID tenantId = TenantGuard.requireTenantId(null);
         UserRole role = TenantContext.getRole();
         LocalDate today = LocalDate.now();
+        List<Student> audienceStudents = audienceStudents(tenantId, role);
         return repository.findByTenantIdOrderByPublishDateDesc(tenantId).stream()
                 .filter(a -> a.getPublishDate() == null || !a.getPublishDate().isAfter(today))
                 .filter(a -> a.getExpiryDate() == null || !a.getExpiryDate().isBefore(today))
-                .filter(a -> visibleTo(a, role))
+                .filter(a -> visibleTo(a, role, audienceStudents))
                 .toList();
     }
 
-    private boolean visibleTo(Announcement a, UserRole role) {
+    private boolean visibleTo(Announcement a, UserRole role, List<Student> audienceStudents) {
         String audience = a.getAudience() == null || a.getAudience().isBlank() ? "ALL" : a.getAudience();
         return switch (audience) {
             case "ALL" -> true;
             case "TEACHERS" -> role == UserRole.TEACHER || isStaff(role);
             case "PARENTS" -> role == UserRole.PARENT || isStaff(role);
             case "STUDENTS" -> role == UserRole.STUDENT || isStaff(role);
-            case "CLASS", "SECTION" -> isStaff(role) || matchesAudience(a);
+            case "CLASS", "SECTION" -> isStaff(role) || audienceStudents.stream().anyMatch(s -> classMatch(a, s));
             default -> isStaff(role);
         };
     }
 
-    private boolean matchesAudience(Announcement a) {
-        UUID userId = TenantContext.getUserId();
-        UserRole role = TenantContext.getRole();
+    private List<Student> audienceStudents(UUID tenantId, UserRole role) {
         if (role == UserRole.STUDENT) {
-            return studentRepository.findByTenantIdAndUserId(a.getTenantId(), userId)
-                    .map(s -> classMatch(a, s))
-                    .orElse(false);
+            return studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
+                    .map(List::of)
+                    .orElse(List.of());
         }
         if (role == UserRole.PARENT) {
-            return parentStudentRepository.findByTenantIdAndParentUserId(a.getTenantId(), userId).stream()
-                    .map(link -> studentRepository.findById(link.getStudentId()).orElse(null))
-                    .filter(s -> s != null)
-                    .anyMatch(s -> classMatch(a, s));
+            List<UUID> ids = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
+                    .stream()
+                    .map(ParentStudent::getStudentId)
+                    .toList();
+            if (ids.isEmpty()) {
+                return List.of();
+            }
+            return studentRepository.findAllById(ids);
         }
-        return false;
+        return List.of();
     }
 
     private boolean classMatch(Announcement a, Student s) {

@@ -2,6 +2,7 @@ package com.erpschool.settings.service;
 
 import com.erpschool.campus.entity.Campus;
 import com.erpschool.campus.repository.CampusRepository;
+import com.erpschool.common.cache.CatalogCache;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.settings.entity.SchoolSettings;
 import com.erpschool.settings.repository.SchoolSettingsRepository;
@@ -21,13 +22,16 @@ public class SchoolSettingsService {
     private final SchoolSettingsRepository repository;
     private final TenantRepository tenantRepository;
     private final CampusRepository campusRepository;
+    private final CatalogCache catalogCache;
 
     public SchoolSettingsService(SchoolSettingsRepository repository,
                                  TenantRepository tenantRepository,
-                                 CampusRepository campusRepository) {
+                                 CampusRepository campusRepository,
+                                 CatalogCache catalogCache) {
         this.repository = repository;
         this.tenantRepository = tenantRepository;
         this.campusRepository = campusRepository;
+        this.catalogCache = catalogCache;
     }
 
     @Transactional(readOnly = true)
@@ -71,6 +75,7 @@ public class SchoolSettingsService {
         if (CampusScope.restricts()) {
             campusRepository.findById(CampusScope.current()).ifPresent(campus -> applyCampus(campus, saved));
         }
+        catalogCache.evictTenant(tenantId);
         return saved;
     }
 

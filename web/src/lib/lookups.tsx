@@ -56,18 +56,20 @@ export function LookupsProvider({ children, enabled }: { children: React.ReactNo
     void reload();
   }, [enabled, reload]);
 
+  const classMap = useMemo(() => new Map(classes.map((c) => [c.id, c.name])), [classes]);
+  const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
   const value = useMemo<Lookups>(
     () => ({
       classes,
       subjects,
       sections,
-      className: (id) => classes.find((c) => c.id === id)?.name || id?.slice(0, 8) || "—",
-      subjectName: (id) => subjects.find((s) => s.id === id)?.name || id?.slice(0, 8) || "—",
+      className: (id) => (id && classMap.get(id)) || id?.slice(0, 8) || "—",
+      subjectName: (id) => (id && subjectMap.get(id)) || id?.slice(0, 8) || "—",
       loading,
       error,
       reload,
     }),
-    [classes, subjects, sections, loading, error, reload],
+    [classes, subjects, sections, classMap, subjectMap, loading, error, reload],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

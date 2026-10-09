@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useSession } from "../../lib/session";
 import { portalApi, reportApi } from "../../api/services";
 import { Badge, Bars, Donut, Empty, QueryState, Stat, Table, useAsync } from "../../ui/kit";
@@ -74,7 +75,7 @@ function TeacherDash() {
   const progress = (d.data?.progress as { attendancePercent?: number; present?: number; absent?: number; late?: number; totalDays?: number }) || {};
   const att = Number(progress.attendancePercent || 0);
   return (
-    <>
+    <QueryState status={d} label="teacher desk">
       <div className="hero-strip card">
         <div>
           <p className="kicker">Your month</p>
@@ -83,7 +84,6 @@ function TeacherDash() {
         </div>
         <Donut value={att} max={100} label="Attendance %" />
       </div>
-      <QueryState status={d} label="teacher desk">
         <div className="grid two">
           <div className="card">
             <h3>Today’s lectures</h3>
@@ -106,8 +106,7 @@ function TeacherDash() {
             )}
           </div>
         </div>
-      </QueryState>
-    </>
+    </QueryState>
   );
 }
 
@@ -139,19 +138,22 @@ function AccountDash() {
 function ParentDash() {
   const { childId } = useSession();
   const d = useAsync(() => portalApi.parent());
-  const kids = (d.data?.children as StudentUser[]) || [];
-  const all = (d.data?.fees as { studentId?: string; challanNumber: string; totalPayable: number; status: string }[]) || [];
+  const kids = useMemo(() => (d.data?.children as StudentUser[]) || [], [d.data]);
+  const all = useMemo(
+    () => (d.data?.fees as { studentId?: string; challanNumber: string; totalPayable: number; status: string }[]) || [],
+    [d.data],
+  );
   const fees = childId ? all.filter((f) => f.studentId === childId) : all;
-  const progressMap = (d.data?.progressByChild as Record<string, {
+  const progressMap = useMemo(() => (d.data?.progressByChild as Record<string, {
     attendancePercent?: number; academicPercent?: number; present?: number; absent?: number; late?: number;
     totalLectures?: number; grade?: string; passStatus?: string;
-  }>) || {};
+  }>) || {}, [d.data]);
   const activeId = childId || kids[0]?.id;
   const progress = (activeId && progressMap[activeId]) || {};
   const att = Number(progress.attendancePercent || 0);
   const aca = Number(progress.academicPercent || 0);
   return (
-    <>
+    <QueryState status={d} label="family dashboard">
       <div className="hero-strip card">
         <div>
           <p className="kicker">Selected child</p>
@@ -163,7 +165,6 @@ function ParentDash() {
           <Donut value={aca} max={100} label="Academics %" />
         </div>
       </div>
-      <QueryState status={d} label="family dashboard">
         <ChildSwitch childrenList={kids} />
         <div className="card">
           <h3>Fee challans</h3>
@@ -171,8 +172,7 @@ function ParentDash() {
             <Table headers={["Challan", "Amount", "Status"]} rows={fees.map((f) => [f.challanNumber, money(f.totalPayable), pretty(f.status)])} />
           )}
         </div>
-      </QueryState>
-    </>
+    </QueryState>
   );
 }
 
@@ -187,7 +187,7 @@ function StudentDash() {
   const att = Number(progress.attendancePercent || 0);
   const aca = Number(progress.academicPercent || 0);
   return (
-    <>
+    <QueryState status={d} label="student dashboard">
       <div className="hero-strip card">
         <div>
           <p className="kicker">This month</p>
@@ -199,7 +199,6 @@ function StudentDash() {
           <Donut value={aca} max={100} label="Academics %" />
         </div>
       </div>
-      <QueryState status={d} label="student dashboard">
         <div className="grid two">
           <div className="card">
             <h3>Homework</h3>
@@ -210,7 +209,6 @@ function StudentDash() {
             {!fees.length ? <Empty title="No challans" /> : <Table headers={["Challan", "Amount", "Status"]} rows={fees.map((f) => [f.challanNumber, money(f.totalPayable), pretty(f.status)])} />}
           </div>
         </div>
-      </QueryState>
-    </>
+    </QueryState>
   );
 }

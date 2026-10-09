@@ -123,11 +123,11 @@ public class HomeworkService {
             }
         }
         if (role == UserRole.PARENT) {
-            boolean linked = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
+            List<UUID> linkedIds = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
                     .stream()
                     .map(ParentStudent::getStudentId)
-                    .map(id -> studentRepository.findById(id).orElse(null))
-                    .filter(s -> s != null)
+                    .toList();
+            boolean linked = !linkedIds.isEmpty() && studentRepository.findAllById(linkedIds).stream()
                     .anyMatch(s -> classId.equals(s.getClassId()) && sectionId.equals(s.getSectionId()));
             if (!linked) {
                 throw new com.erpschool.common.exception.ForbiddenException("Cannot view homework for unrelated classes");
@@ -152,13 +152,29 @@ public class HomeworkService {
             return toMaps(homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId));
         }
         if (role == UserRole.PARENT) {
-            List<Homework> parentRows = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
+            List<UUID> linkedIds = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
                     .stream()
                     .map(ParentStudent::getStudentId)
-                    .map(studentAccessService::requireStudent)
-                    .flatMap(st -> homeworkRepository
-                            .findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(tenantId, st.getClassId(), st.getSectionId())
-                            .stream())
+                    .toList();
+            if (linkedIds.isEmpty()) {
+                return List.of();
+            }
+            java.util.Set<String> classSections = new java.util.HashSet<>();
+            java.util.Set<UUID> classIds = new java.util.HashSet<>();
+            for (Student st : studentRepository.findAllById(linkedIds)) {
+                if (st.getClassId() == null || st.getSectionId() == null) {
+                    continue;
+                }
+                classIds.add(st.getClassId());
+                classSections.add(st.getClassId() + ":" + st.getSectionId());
+            }
+            if (classIds.isEmpty()) {
+                return List.of();
+            }
+            List<Homework> parentRows = homeworkRepository
+                    .findByTenantIdAndClassIdInOrderByDueDateDesc(tenantId, classIds)
+                    .stream()
+                    .filter(h -> classSections.contains(h.getClassId() + ":" + h.getSectionId()))
                     .collect(java.util.stream.Collectors.toMap(
                             Homework::getId, h -> h, (a, b) -> a, java.util.LinkedHashMap::new))
                     .values()

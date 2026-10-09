@@ -1,6 +1,7 @@
 package com.erpschool.tenant.service;
 
 import com.erpschool.audit.service.AuditService;
+import com.erpschool.common.cache.CatalogCache;
 import com.erpschool.common.dto.PageResponse;
 import com.erpschool.common.exception.DuplicateResourceException;
 import com.erpschool.common.exception.ForbiddenException;
@@ -31,13 +32,16 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final UserService userService;
     private final AuditService auditService;
+    private final CatalogCache catalogCache;
 
     public TenantService(TenantRepository tenantRepository,
                          UserService userService,
-                         AuditService auditService) {
+                         AuditService auditService,
+                         CatalogCache catalogCache) {
         this.tenantRepository = tenantRepository;
         this.userService = userService;
         this.auditService = auditService;
+        this.catalogCache = catalogCache;
     }
 
     @Transactional
@@ -115,7 +119,8 @@ public class TenantService {
         if (TenantContext.isErpOwner() || TenantContext.getTenantId() == null) {
             throw new ForbiddenException("ERP owner is not bound to a school. Use GET /api/v1/tenants/{id}");
         }
-        return TenantResponse.from(findVisible(TenantContext.getTenantId()));
+        UUID tenantId = TenantContext.getTenantId();
+        return catalogCache.get(tenantId + ":tenant", () -> TenantResponse.from(findVisible(tenantId)));
     }
 
     @Transactional
@@ -177,6 +182,7 @@ public class TenantService {
         }
         tenant.setUpdatedBy(TenantContext.getUserId());
         tenant = tenantRepository.save(tenant);
+        catalogCache.evictTenant(tenant.getId());
         auditService.record(AuditService.TENANT_UPDATED, "Tenant", tenant.getId().toString(),
                 Map.of("code", tenant.getCode()));
         return TenantResponse.from(tenant);
@@ -190,6 +196,7 @@ public class TenantService {
         tenant.setStatus(request.getStatus());
         tenant.setUpdatedBy(TenantContext.getUserId());
         tenant = tenantRepository.save(tenant);
+        catalogCache.evictTenant(tenant.getId());
         auditService.record(AuditService.TENANT_STATUS_CHANGED, "Tenant", tenant.getId().toString(),
                 Map.of("from", previous.name(), "to", request.getStatus().name(),
                         "reason", request.getReason() == null ? "" : request.getReason()));

@@ -84,16 +84,13 @@ public class PortalController {
     @PreAuthorize("hasRole('PARENT')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> parent() {
         var children = studentService.myChildren();
+        var childIds = children.stream().map(c -> c.getId()).toList();
         Map<String, Object> m = new HashMap<>();
         m.put("children", children);
         m.put("homework", homeworkService.mine());
-        m.put("fees", feeService.challansForStudents(children.stream().map(c -> c.getId()).toList()));
+        m.put("fees", feeService.challansForStudents(childIds));
         m.put("unreadNotifications", notificationService.unreadCount());
-        Map<String, Object> progressByChild = new HashMap<>();
-        for (var child : children) {
-            progressByChild.put(child.getId().toString(), reportService.studentProgress(child.getId()));
-        }
-        m.put("progressByChild", progressByChild);
+        m.put("progressByChild", reportService.studentProgressBatch(childIds));
         return ResponseEntity.ok(ApiResponse.ok(m));
     }
 

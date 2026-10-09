@@ -20,6 +20,9 @@ export class ApiError extends Error {
 }
 
 const getInflight = new Map<string, Promise<unknown>>();
+const getTtlCache = new Map<string, { exp: number; data: unknown }>();
+const GET_TTL_MS = 15_000;
+const CACHEABLE_GET = /^\/api\/v1\/(classes|subjects|sections|campuses|tenants\/me|settings|teacher-assignments)(\?|$)/;
 let authEpoch = 0;
 
 export function getAccessToken() {
@@ -34,6 +37,7 @@ export function getAuthEpoch() {
 function bumpAuth() {
   authEpoch += 1;
   getInflight.clear();
+  getTtlCache.clear();
 }
 
 export function setTokens(access: string, refresh?: string) {
@@ -98,11 +102,23 @@ export async function request<T>(
   retry = true,
 ): Promise<T> {
   const method = (init.method || "GET").toUpperCase();
+  if (method !== "GET") {
+    getTtlCache.clear();
+  }
   if (method === "GET" && retry) {
     const key = `${path}|${getAccessToken() || "anon"}`;
+    if (CACHEABLE_GET.test(path)) {
+      const hit = getTtlCache.get(key);
+      if (hit && hit.exp > Date.now()) return Promise.resolve(hit.data as T);
+    }
     const existing = getInflight.get(key);
     if (existing) return existing as Promise<T>;
-    const pending = send<T>(path, init, retry).finally(() => {
+    const pending = send<T>(path, init, retry).then((data) => {
+      if (CACHEABLE_GET.test(path)) {
+        getTtlCache.set(key, { exp: Date.now() + GET_TTL_MS, data });
+      }
+      return data;
+    }).finally(() => {
       if (getInflight.get(key) === pending) getInflight.delete(key);
     });
     getInflight.set(key, pending);

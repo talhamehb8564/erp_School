@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, openAuthedFile } from "../api/client";
 import { pretty, statusTone } from "../lib/format";
 import { useToast } from "../lib/toast";
@@ -144,7 +144,12 @@ export function QueryState({
   if (status.error && status.data == null) {
     return <ErrorBox error={status.error} onRetry={() => void status.reload()} title={`Unable to load ${label}`} />;
   }
-  return <>{children}</>;
+  return (
+    <div className={status.loading ? "is-refreshing" : undefined}>
+      {status.error ? <ErrorBox error={status.error} onRetry={() => void status.reload()} title={`Unable to refresh ${label}`} /> : null}
+      {children}
+    </div>
+  );
 }
 
 export function Modal({
@@ -213,33 +218,32 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
-  const reload = async () => {
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+  const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setData(null);
     try {
-      setData(await fn());
+      setData(await fnRef.current());
     } catch (e) {
       setError(e);
-      setData(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setData(null);
     void (async () => {
       try {
-        const next = await fn();
-        if (!cancelled) setData(next);
-      } catch (e) {
+        const next = await fnRef.current();
         if (!cancelled) {
-          setError(e);
-          setData(null);
+          setData(next);
+          setError(null);
         }
+      } catch (e) {
+        if (!cancelled) setError(e);
       } finally {
         if (!cancelled) setLoading(false);
       }

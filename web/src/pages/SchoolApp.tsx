@@ -9,6 +9,7 @@ import { SCHOOL_NAV } from "../lib/nav";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
 import { Button, ErrorBox } from "../ui/kit";
+import ErrorBoundary from "../ui/ErrorBoundary";
 
 export default function SchoolApp() {
   const { user, tenant, locked, logout } = useSession();
@@ -79,7 +80,9 @@ export default function SchoolApp() {
           <div className="content">
             <LookupsAlert />
             <ActivityBar />
-            <Outlet />
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </div>
       </div>

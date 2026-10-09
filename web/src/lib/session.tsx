@@ -161,11 +161,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setChildIdState(null);
   }, []);
 
-  const setChildId = (id: string | null) => {
+  const setChildId = useCallback((id: string | null) => {
     setChildIdState(id);
     if (id) localStorage.setItem(CHILD_KEY, id);
     else localStorage.removeItem(CHILD_KEY);
-  };
+  }, []);
 
   const locked = Boolean(
     user &&
@@ -175,7 +175,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Session>(
     () => ({ user, tenant, loading, locked, childId, login, logout, reload, setChildId }),
-    [user, tenant, loading, locked, childId, login, logout, reload],
+    [user, tenant, loading, locked, childId, login, logout, reload, setChildId],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

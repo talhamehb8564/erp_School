@@ -14,6 +14,7 @@ import com.erpschool.academic.repository.SubjectRepository;
 import com.erpschool.academic.repository.TeacherAssignmentRepository;
 import com.erpschool.academic.repository.TimetableSettingsRepository;
 import com.erpschool.academic.repository.TimetableSlotRepository;
+import com.erpschool.common.cache.CatalogCache;
 import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.DuplicateResourceException;
 import com.erpschool.common.exception.ForbiddenException;
@@ -47,6 +48,7 @@ public class AcademicService {
     private final TimetableSlotRepository timetableRepository;
     private final TimetableSettingsRepository timetableSettingsRepository;
     private final UserRepository userRepository;
+    private final CatalogCache catalogCache;
 
     public AcademicService(SchoolClassRepository classRepository,
                            SectionRepository sectionRepository,
@@ -55,7 +57,8 @@ public class AcademicService {
                            TeacherAssignmentRepository assignmentRepository,
                            TimetableSlotRepository timetableRepository,
                            TimetableSettingsRepository timetableSettingsRepository,
-                           UserRepository userRepository) {
+                           UserRepository userRepository,
+                           CatalogCache catalogCache) {
         this.classRepository = classRepository;
         this.sectionRepository = sectionRepository;
         this.subjectRepository = subjectRepository;
@@ -64,6 +67,7 @@ public class AcademicService {
         this.timetableRepository = timetableRepository;
         this.timetableSettingsRepository = timetableSettingsRepository;
         this.userRepository = userRepository;
+        this.catalogCache = catalogCache;
     }
 
     private UUID tid() {
@@ -81,16 +85,25 @@ public class AcademicService {
         if (c.getCampusId() == null && com.erpschool.tenant.context.CampusScope.restricts()) {
             c.setCampusId(com.erpschool.tenant.context.CampusScope.current());
         }
-        return classRepository.save(c);
+        SchoolClass saved = classRepository.save(c);
+        catalogCache.evictTenant(tid());
+        return saved;
     }
 
     @Transactional(readOnly = true)
     public List<SchoolClass> classes() {
-        if (com.erpschool.tenant.context.CampusScope.restricts()) {
-            return classRepository.findByTenantIdAndCampusIdOrderByNameAsc(
-                    tid(), com.erpschool.tenant.context.CampusScope.current());
-        }
-        return classRepository.findByTenantIdOrderByNameAsc(tid());
+        UUID tenantId = tid();
+        String campusKey = com.erpschool.tenant.context.CampusScope.restricts()
+                && com.erpschool.tenant.context.CampusScope.current() != null
+                ? com.erpschool.tenant.context.CampusScope.current().toString()
+                : "all";
+        return catalogCache.get(tenantId + ":classes:" + campusKey, () -> {
+            if (com.erpschool.tenant.context.CampusScope.restricts()) {
+                return List.copyOf(classRepository.findByTenantIdAndCampusIdOrderByNameAsc(
+                        tenantId, com.erpschool.tenant.context.CampusScope.current()));
+            }
+            return List.copyOf(classRepository.findByTenantIdOrderByNameAsc(tenantId));
+        });
     }
 
     @Transactional
@@ -100,7 +113,9 @@ public class AcademicService {
         stampNew(s);
         s.setClassId(classId);
         s.setName(name.trim());
-        return sectionRepository.save(s);
+        Section saved = sectionRepository.save(s);
+        catalogCache.evictTenant(tid());
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -110,12 +125,19 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<Section> allSections() {
-        List<Section> all = sectionRepository.findByTenantId(tid());
-        if (!com.erpschool.tenant.context.CampusScope.restricts()) {
-            return all;
-        }
-        java.util.Set<UUID> classIds = classes().stream().map(SchoolClass::getId).collect(Collectors.toSet());
-        return all.stream().filter(s -> classIds.contains(s.getClassId())).toList();
+        UUID tenantId = tid();
+        String campusKey = com.erpschool.tenant.context.CampusScope.restricts()
+                && com.erpschool.tenant.context.CampusScope.current() != null
+                ? com.erpschool.tenant.context.CampusScope.current().toString()
+                : "all";
+        return catalogCache.get(tenantId + ":sections:" + campusKey, () -> {
+            List<Section> all = sectionRepository.findByTenantId(tenantId);
+            if (!com.erpschool.tenant.context.CampusScope.restricts()) {
+                return List.copyOf(all);
+            }
+            java.util.Set<UUID> classIds = classes().stream().map(SchoolClass::getId).collect(Collectors.toSet());
+            return all.stream().filter(s -> classIds.contains(s.getClassId())).toList();
+        });
     }
 
     @Transactional
@@ -128,12 +150,16 @@ public class AcademicService {
         stampNew(s);
         s.setName(name);
         s.setCode(code.trim().toUpperCase());
-        return subjectRepository.save(s);
+        Subject saved = subjectRepository.save(s);
+        catalogCache.evictTenant(tid());
+        return saved;
     }
 
     @Transactional(readOnly = true)
     public List<Subject> subjects() {
-        return subjectRepository.findByTenantIdOrderByNameAsc(tid());
+        UUID tenantId = tid();
+        return catalogCache.get(tenantId + ":subjects", () ->
+                List.copyOf(subjectRepository.findByTenantIdOrderByNameAsc(tenantId)));
     }
 
     @Transactional
@@ -147,7 +173,9 @@ public class AcademicService {
         stampNew(cs);
         cs.setClassId(classId);
         cs.setSubjectId(subjectId);
-        return classSubjectRepository.save(cs);
+        ClassSubject saved = classSubjectRepository.save(cs);
+        catalogCache.evictTenant(tid());
+        return saved;
     }
 
     @Transactional
