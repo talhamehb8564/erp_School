@@ -226,6 +226,7 @@ public class BranchIsolationSeeder implements ApplicationRunner {
             if (account == null) {
                 continue;
             }
+            final UUID accountId = account.getId();
             boolean userDirty = false;
             if (account.getCampusId() == null) {
                 account.setCampusId(campus.getId());
@@ -235,7 +236,7 @@ public class BranchIsolationSeeder implements ApplicationRunner {
             if (account.getRole() == UserRole.STUDENT
                     && (account.getUsername() == null || account.getUsername().length() < 13)) {
                 boolean taken = userRepository.findByUsernameIgnoreCase(cnic)
-                        .filter(other -> !other.getId().equals(account.getId()))
+                        .filter(other -> !other.getId().equals(accountId))
                         .isPresent();
                 if (!taken) {
                     account.setUsername(cnic);
