@@ -9,6 +9,7 @@ import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.util.PasswordGenerator;
 import com.erpschool.common.util.TenantGuard;
+import com.erpschool.tenant.context.CampusScope;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.repository.TenantRepository;
@@ -105,6 +106,7 @@ public class UserService {
         user.setRole(request.getRole());
         user.setStatus(UserStatus.ACTIVE);
         user.setMustChangePassword(true);
+        user.setCampusId(CampusScope.current());
         user.setCreatedBy(TenantContext.getUserId());
 
         user = userRepository.save(user);
@@ -176,6 +178,7 @@ public class UserService {
             created.setRole(role);
             created.setStatus(UserStatus.ACTIVE);
             created.setMustChangePassword(mustChangePassword);
+            created.setCampusId(CampusScope.current());
             created.setCreatedBy(TenantContext.getUserId());
             return userRepository.save(created);
         });
@@ -204,13 +207,15 @@ public class UserService {
 
         boolean rolePresent = role != null;
         boolean statusPresent = status != null;
+        boolean campusPresent = CampusScope.restricts();
+        UUID campusId = campusPresent ? CampusScope.current() : UUID.fromString("00000000-0000-0000-0000-000000000000");
         UserRole roleBind = rolePresent ? role : UserRole.TEACHER;
         UserStatus statusBind = statusPresent ? status : UserStatus.ACTIVE;
         String term = blankToNull(q);
         Page<User> page;
         if (term == null) {
             page = userRepository.searchByTenant(
-                    tenantId, rolePresent, roleBind, statusPresent, statusBind, pageable);
+                    tenantId, rolePresent, roleBind, statusPresent, statusBind, campusPresent, campusId, pageable);
         } else {
             page = userRepository.searchByTenantQuery(
                     tenantId,
@@ -218,6 +223,8 @@ public class UserService {
                     roleBind,
                     statusPresent,
                     statusBind,
+                    campusPresent,
+                    campusId,
                     "%" + term.toLowerCase() + "%",
                     pageable);
         }

@@ -91,7 +91,6 @@ public class FileStorageService {
     }
 
     public Path resolvePublic(UUID tenantId, String name) {
-        TenantGuard.assertSameTenant(tenantId);
         Path dest = root.resolve(tenantId.toString()).resolve(name).normalize();
         if (!dest.startsWith(root)) {
             throw new BusinessException("FILE_PATH", "Invalid file path");

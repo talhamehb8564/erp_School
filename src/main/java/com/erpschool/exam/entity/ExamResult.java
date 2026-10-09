@@ -49,4 +49,7 @@ public class ExamResult extends TenantAwareEntity {
 
     @Column(length = 300)
     private String remarks;
+
+    @Column(nullable = false)
+    private boolean absent = false;
 }

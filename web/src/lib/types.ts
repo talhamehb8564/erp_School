@@ -270,6 +270,7 @@ export interface ExamResult {
   grade?: string;
   passStatus?: string;
   remarks?: string;
+  absent?: boolean;
 }
 
 export interface FeeStructure {

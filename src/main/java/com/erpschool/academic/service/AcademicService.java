@@ -78,6 +78,9 @@ public class AcademicService {
     @Transactional
     public SchoolClass createClass(SchoolClass c) {
         stampNew(c);
+        if (c.getCampusId() == null && com.erpschool.tenant.context.CampusScope.restricts()) {
+            c.setCampusId(com.erpschool.tenant.context.CampusScope.current());
+        }
         return classRepository.save(c);
     }
 
@@ -107,7 +110,12 @@ public class AcademicService {
 
     @Transactional(readOnly = true)
     public List<Section> allSections() {
-        return sectionRepository.findByTenantId(tid());
+        List<Section> all = sectionRepository.findByTenantId(tid());
+        if (!com.erpschool.tenant.context.CampusScope.restricts()) {
+            return all;
+        }
+        java.util.Set<UUID> classIds = classes().stream().map(SchoolClass::getId).collect(Collectors.toSet());
+        return all.stream().filter(s -> classIds.contains(s.getClassId())).toList();
     }
 
     @Transactional

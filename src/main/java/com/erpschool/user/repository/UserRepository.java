@@ -33,12 +33,15 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             WHERE u.tenantId = :tenantId
               AND (:rolePresent = false OR u.role = :role)
               AND (:statusPresent = false OR u.status = :status)
+              AND (:campusPresent = false OR u.campusId = :campusId)
             """)
     Page<User> searchByTenant(@Param("tenantId") UUID tenantId,
                               @Param("rolePresent") boolean rolePresent,
                               @Param("role") UserRole role,
                               @Param("statusPresent") boolean statusPresent,
                               @Param("status") UserStatus status,
+                              @Param("campusPresent") boolean campusPresent,
+                              @Param("campusId") UUID campusId,
                               Pageable pageable);
 
     @Query("""
@@ -46,6 +49,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             WHERE u.tenantId = :tenantId
               AND (:rolePresent = false OR u.role = :role)
               AND (:statusPresent = false OR u.status = :status)
+              AND (:campusPresent = false OR u.campusId = :campusId)
               AND (LOWER(u.username) LIKE :q
                    OR LOWER(u.firstName) LIKE :q
                    OR LOWER(u.lastName) LIKE :q
@@ -56,6 +60,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                                    @Param("role") UserRole role,
                                    @Param("statusPresent") boolean statusPresent,
                                    @Param("status") UserStatus status,
+                                   @Param("campusPresent") boolean campusPresent,
+                                   @Param("campusId") UUID campusId,
                                    @Param("q") String q,
                                    Pageable pageable);
 
@@ -65,7 +71,15 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     long countByTenantIdAndRole(UUID tenantId, UserRole role);
 
+    long countByTenantIdAndCampusId(UUID tenantId, UUID campusId);
+
+    long countByTenantIdAndCampusIdAndRole(UUID tenantId, UUID campusId, UserRole role);
+
+    long countByTenantIdAndCampusIdAndStatus(UUID tenantId, UUID campusId, UserStatus status);
+
     java.util.List<User> findByTenantIdAndRole(UUID tenantId, UserRole role);
+
+    java.util.List<User> findByTenantIdAndCampusIdAndRole(UUID tenantId, UUID campusId, UserRole role);
 
     long countByRole(UserRole role);
 }

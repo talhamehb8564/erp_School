@@ -40,6 +40,7 @@ public class ExamSession extends TenantAwareEntity {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.erpschool.common.util.FlexibleInstantDeserializer.class)
     @Column(name = "announce_at")
     private Instant announceAt;
 

@@ -12,4 +12,9 @@ public interface TeacherAttendanceRepository extends JpaRepository<TeacherAttend
     Optional<TeacherAttendance> findByTenantIdAndTeacherUserIdAndAttendanceDate(UUID tenantId, UUID teacherUserId, LocalDate date);
     List<TeacherAttendance> findByTenantIdAndAttendanceDateBetween(UUID tenantId, LocalDate from, LocalDate to);
     List<TeacherAttendance> findByTenantIdAndTeacherUserIdAndAttendanceDateBetween(UUID tenantId, UUID teacherUserId, LocalDate from, LocalDate to);
+
+    long countByTenantIdAndTeacherUserIdAndAttendanceDateBetween(UUID tenantId, UUID teacherUserId, LocalDate from, LocalDate to);
+
+    long countByTenantIdAndTeacherUserIdAndStatusAndAttendanceDateBetween(
+            UUID tenantId, UUID teacherUserId, com.erpschool.attendance.entity.AttendanceStatus status, LocalDate from, LocalDate to);
 }

@@ -1,9 +1,14 @@
 package com.erpschool.settings.service;
 
+import com.erpschool.campus.entity.Campus;
+import com.erpschool.campus.repository.CampusRepository;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.settings.entity.SchoolSettings;
 import com.erpschool.settings.repository.SchoolSettingsRepository;
+import com.erpschool.tenant.context.CampusScope;
 import com.erpschool.tenant.context.TenantContext;
+import com.erpschool.tenant.entity.Tenant;
+import com.erpschool.tenant.repository.TenantRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,9 +19,15 @@ import java.util.UUID;
 public class SchoolSettingsService {
 
     private final SchoolSettingsRepository repository;
+    private final TenantRepository tenantRepository;
+    private final CampusRepository campusRepository;
 
-    public SchoolSettingsService(SchoolSettingsRepository repository) {
+    public SchoolSettingsService(SchoolSettingsRepository repository,
+                                 TenantRepository tenantRepository,
+                                 CampusRepository campusRepository) {
         this.repository = repository;
+        this.tenantRepository = tenantRepository;
+        this.campusRepository = campusRepository;
     }
 
     @Transactional(readOnly = true)
@@ -55,6 +66,37 @@ public class SchoolSettingsService {
         s.setWaiveAttendanceDeduction(incoming.isWaiveAttendanceDeduction());
         s.setUpdatedAt(Instant.now());
         s.setUpdatedBy(TenantContext.getUserId());
-        return repository.save(s);
+        SchoolSettings saved = repository.save(s);
+        tenantRepository.findById(tenantId).ifPresent(tenant -> applyBranding(tenant, saved));
+        if (CampusScope.restricts()) {
+            campusRepository.findById(CampusScope.current()).ifPresent(campus -> applyCampus(campus, saved));
+        }
+        return saved;
+    }
+
+    private void applyBranding(Tenant tenant, SchoolSettings saved) {
+        if (saved.getLogoUrl() != null) {
+            tenant.setLogoUrl(saved.getLogoUrl());
+        }
+        if (saved.getPrimaryColor() != null) {
+            tenant.setPrimaryColor(saved.getPrimaryColor());
+        }
+        if (saved.getAccentColor() != null) {
+            tenant.setAccentColor(saved.getAccentColor());
+        }
+        tenantRepository.save(tenant);
+    }
+
+    private void applyCampus(Campus campus, SchoolSettings saved) {
+        if (saved.getLogoUrl() != null) {
+            campus.setLogoUrl(saved.getLogoUrl());
+        }
+        if (saved.getPrimaryColor() != null) {
+            campus.setPrimaryColor(saved.getPrimaryColor());
+        }
+        if (saved.getAccentColor() != null) {
+            campus.setAccentColor(saved.getAccentColor());
+        }
+        campusRepository.save(campus);
     }
 }

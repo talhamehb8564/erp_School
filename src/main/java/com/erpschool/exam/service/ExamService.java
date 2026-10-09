@@ -1,5 +1,9 @@
 package com.erpschool.exam.service;
 
+import com.erpschool.academic.entity.ClassSubject;
+import com.erpschool.academic.entity.TeacherAssignment;
+import com.erpschool.academic.repository.ClassSubjectRepository;
+import com.erpschool.academic.repository.TeacherAssignmentRepository;
 import com.erpschool.academic.service.AcademicService;
 import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.ForbiddenException;
@@ -14,9 +18,11 @@ import com.erpschool.exam.repository.ExamResultRepository;
 import com.erpschool.exam.repository.ExamSessionRepository;
 import com.erpschool.notification.service.NotificationService;
 import com.erpschool.student.entity.Student;
+import com.erpschool.student.entity.StudentStatus;
 import com.erpschool.student.repository.ParentStudentRepository;
 import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.student.service.StudentAccessService;
+import com.erpschool.tenant.context.CampusScope;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.user.entity.User;
 import com.erpschool.user.entity.UserRole;
@@ -44,6 +50,8 @@ public class ExamService {
     private final ParentStudentRepository parentStudentRepository;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+    private final ClassSubjectRepository classSubjectRepository;
+    private final TeacherAssignmentRepository assignmentRepository;
 
     public ExamService(
             ExamSessionRepository sessionRepository,
@@ -54,7 +62,9 @@ public class ExamService {
             StudentRepository studentRepository,
             ParentStudentRepository parentStudentRepository,
             NotificationService notificationService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            ClassSubjectRepository classSubjectRepository,
+            TeacherAssignmentRepository assignmentRepository) {
 
         this.sessionRepository = sessionRepository;
         this.resultRepository = resultRepository;
@@ -65,22 +75,23 @@ public class ExamService {
         this.parentStudentRepository = parentStudentRepository;
         this.notificationService = notificationService;
         this.userRepository = userRepository;
+        this.classSubjectRepository = classSubjectRepository;
+        this.assignmentRepository = assignmentRepository;
     }
 
     @Transactional
     public ExamSession createSession(ExamSession session) {
 
-        session.setTenantId(
-                TenantGuard.requireTenantId(null)
-        );
-
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        session.setTenantId(tenantId);
+        if (session.getCampusId() == null && CampusScope.restricts()) {
+            session.setCampusId(CampusScope.current());
+        }
         session.setPublished(false);
-
-        session.setCreatedBy(
-                TenantContext.getUserId()
-        );
-
-        return sessionRepository.save(session);
+        session.setCreatedBy(TenantContext.getUserId());
+        ExamSession saved = sessionRepository.save(session);
+        notifyStaffOfExam(saved);
+        return saved;
     }
 
     @Transactional
@@ -135,24 +146,15 @@ public class ExamService {
 
     @Transactional(readOnly = true)
     public List<ExamSession> sessions() {
-
         UUID tenantId = TenantGuard.requireTenantId(null);
-
-        UserRole role = TenantContext.getRole();
-
-        if (role == UserRole.PARENT
-                || role == UserRole.STUDENT) {
-
-            return sessionRepository
-                    .findByTenantIdAndPublishedTrueOrderByCreatedAtDesc(
-                            tenantId
-                    );
+        List<ExamSession> rows = sessionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        if (CampusScope.restricts()) {
+            UUID campusId = CampusScope.current();
+            rows = rows.stream()
+                    .filter(s -> s.getCampusId() == null || campusId.equals(s.getCampusId()))
+                    .toList();
         }
-
-        return sessionRepository
-                .findByTenantIdOrderByCreatedAtDesc(
-                        tenantId
-                );
+        return rows;
     }
 
     @Transactional
@@ -162,7 +164,8 @@ public class ExamService {
             UUID subjectId,
             BigDecimal total,
             BigDecimal obtained,
-            String remarks) {
+            String remarks,
+            boolean absent) {
 
         UUID tenantId = TenantGuard.requireTenantId(null);
 
@@ -174,9 +177,17 @@ public class ExamService {
             );
         }
 
-        studentAccessService.requireStudent(studentId);
+        Student student = studentAccessService.requireStudent(studentId);
 
         academicService.requireSubject(subjectId);
+        assertTeacherMayEnter(tenantId, student, subjectId);
+
+        if (absent) {
+            obtained = BigDecimal.ZERO;
+            if (remarks == null || remarks.isBlank()) {
+                remarks = "ABSENT";
+            }
+        }
 
         if (obtained.compareTo(total) > 0) {
             throw new BusinessException(
@@ -213,6 +224,7 @@ public class ExamService {
                 GradeCalculator.passStatus(pct)
         );
         row.setRemarks(remarks);
+        row.setAbsent(absent);
 
         if (row.getId() == null) {
             row.setCreatedBy(
@@ -327,6 +339,7 @@ public class ExamService {
             if (announceAt != null && Instant.now().isBefore(announceAt)) {
                 Map<String, Object> waiting = new HashMap<>();
                 waiting.put("announced", false);
+                waiting.put("pending", false);
                 waiting.put("announceAt", announceAt);
                 waiting.put("countdownSeconds", Math.max(0, ChronoUnit.SECONDS.between(Instant.now(), announceAt)));
                 waiting.put("session", session);
@@ -335,8 +348,21 @@ public class ExamService {
                 waiting.put("subjects", List.of());
                 return waiting;
             }
-            if (!session.isPublished()) {
+            boolean timeReached = announceAt == null || !Instant.now().isBefore(announceAt);
+            if (!session.isPublished() && (announceAt == null || !timeReached)) {
                 throw new ForbiddenException("Results are not published yet");
+            }
+            if (!marksComplete(session, student)) {
+                Map<String, Object> pending = new HashMap<>();
+                pending.put("announced", true);
+                pending.put("pending", true);
+                pending.put("announceAt", announceAt);
+                pending.put("session", session);
+                pending.put("studentId", student.getId());
+                pending.put("rollNumber", student.getRollNumber());
+                pending.put("subjects", List.of());
+                pending.put("message", "Result Pending / Processing");
+                return pending;
             }
         }
 
@@ -374,6 +400,7 @@ public class ExamService {
                 new HashMap<>();
 
         m.put("announced", true);
+        m.put("pending", false);
         m.put("announceAt", session.getAnnounceAt());
         m.put("session", session);
         m.put("studentId", student.getId());
@@ -411,6 +438,9 @@ public class ExamService {
                 .orElseThrow(() -> new ResourceNotFoundException("No result found for roll number " + roll));
         try {
             Map<String, Object> summary = studentResult(sessionId, student.getId());
+            if (Boolean.TRUE.equals(summary.get("pending"))) {
+                return summary;
+            }
             List<?> subjects = (List<?>) summary.get("subjects");
             if (subjects == null || subjects.isEmpty()) {
                 throw new ResourceNotFoundException("No result found for roll number " + roll);
@@ -433,6 +463,107 @@ public class ExamService {
                         session.getTenantId(),
                         sessionId
                 );
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> entryStatus(UUID sessionId) {
+        ExamSession session = requireSession(sessionId);
+        UUID tenantId = session.getTenantId();
+        List<TeacherAssignment> assignments = assignmentRepository.findByTenantId(tenantId);
+        if (CampusScope.restricts()) {
+            java.util.Set<UUID> classIds = academicService.classes().stream()
+                    .map(c -> c.getId()).collect(java.util.stream.Collectors.toSet());
+            assignments = assignments.stream().filter(a -> classIds.contains(a.getClassId())).toList();
+        }
+        List<ExamResult> results = resultRepository.findByTenantIdAndExamSessionId(tenantId, sessionId);
+        java.util.Set<String> entered = new java.util.HashSet<>();
+        for (ExamResult r : results) {
+            entered.add(r.getStudentId() + ":" + r.getSubjectId());
+        }
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (TeacherAssignment a : assignments) {
+            List<Student> roster = studentRepository.findByTenantIdAndClassIdAndSectionIdAndStatus(
+                    tenantId, a.getClassId(), a.getSectionId(), StudentStatus.ACTIVE);
+            int expected = roster.size();
+            int done = 0;
+            for (Student st : roster) {
+                if (entered.contains(st.getId() + ":" + a.getSubjectId())) {
+                    done++;
+                }
+            }
+            Map<String, Object> row = new HashMap<>();
+            row.put("teacherUserId", a.getTeacherUserId());
+            row.put("classId", a.getClassId());
+            row.put("sectionId", a.getSectionId());
+            row.put("subjectId", a.getSubjectId());
+            row.put("expected", expected);
+            row.put("entered", done);
+            row.put("complete", expected > 0 && done >= expected);
+            out.add(row);
+        }
+        return out;
+    }
+
+    private void notifyStaffOfExam(ExamSession session) {
+        UUID tenantId = session.getTenantId();
+        List<User> teachers = CampusScope.restricts()
+                ? userRepository.findByTenantIdAndCampusIdAndRole(tenantId, CampusScope.current(), UserRole.TEACHER)
+                : userRepository.findByTenantIdAndRole(tenantId, UserRole.TEACHER);
+        for (User teacher : teachers) {
+            notificationService.notifyUser(tenantId, teacher.getId(), "EXAM",
+                    "Marks entry: " + session.getName(),
+                    "Enter marks for your assigned subjects before the announcement.",
+                    "ExamSession", session.getId().toString());
+        }
+        List<User> admins = CampusScope.restricts()
+                ? userRepository.findByTenantIdAndCampusIdAndRole(tenantId, CampusScope.current(), UserRole.SCHOOL_ADMIN)
+                : userRepository.findByTenantIdAndRole(tenantId, UserRole.SCHOOL_ADMIN);
+        for (User admin : admins) {
+            notificationService.notifyUser(tenantId, admin.getId(), "EXAM",
+                    "Exam created: " + session.getName(),
+                    "Teachers can now enter marks. Watch entry status on Marks & results.",
+                    "ExamSession", session.getId().toString());
+        }
+    }
+
+    private void assertTeacherMayEnter(UUID tenantId, Student student, UUID subjectId) {
+        if (TenantContext.getRole() != UserRole.TEACHER) {
+            return;
+        }
+        UUID teacherId = TenantContext.getUserId();
+        boolean allowed = assignmentRepository.findByTenantIdAndTeacherUserId(tenantId, teacherId).stream()
+                .anyMatch(a -> subjectId.equals(a.getSubjectId())
+                        && student.getClassId().equals(a.getClassId())
+                        && (a.getSectionId() == null || a.getSectionId().equals(student.getSectionId())));
+        if (!allowed) {
+            throw new ForbiddenException("You can only enter marks for your assigned class, section, and subject");
+        }
+    }
+
+    private boolean marksComplete(ExamSession session, Student student) {
+        java.util.Set<UUID> expected = expectedSubjects(session, student);
+        if (expected.isEmpty()) {
+            return !resultRepository.findByTenantIdAndExamSessionIdAndStudentId(
+                    session.getTenantId(), session.getId(), student.getId()).isEmpty();
+        }
+        java.util.Set<UUID> got = resultRepository.findByTenantIdAndExamSessionIdAndStudentId(
+                        session.getTenantId(), session.getId(), student.getId())
+                .stream().map(ExamResult::getSubjectId).collect(java.util.stream.Collectors.toSet());
+        return got.containsAll(expected);
+    }
+
+    private java.util.Set<UUID> expectedSubjects(ExamSession session, Student student) {
+        List<ExamDateSheetEntry> sheet = dateSheetRepository
+                .findByTenantIdAndExamSessionIdAndClassIdOrderByExamDateAscStartTimeAsc(
+                        session.getTenantId(), session.getId(), student.getClassId());
+        if (!sheet.isEmpty()) {
+            return sheet.stream()
+                    .filter(e -> e.getSectionId() == null || e.getSectionId().equals(student.getSectionId()))
+                    .map(ExamDateSheetEntry::getSubjectId)
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+        return classSubjectRepository.findByTenantIdAndClassId(session.getTenantId(), student.getClassId())
+                .stream().map(ClassSubject::getSubjectId).collect(java.util.stream.Collectors.toSet());
     }
 
     private ExamSession requireSession(UUID id) {

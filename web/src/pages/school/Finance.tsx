@@ -355,14 +355,16 @@ export function SalariesPage() {
   const [deduct, setDeduct] = useState("");
   const [bonus, setBonus] = useState("");
   const [adjNotes, setAdjNotes] = useState("");
+  const [proofs, setProofs] = useState<Record<string, File | undefined>>({});
   if (user?.role === "TEACHER") {
     return (
       <>
         <div className="page-title"><div><h1>My salary</h1></div></div>
         <QueryState status={mine} label="salary">
-          <Table headers={["Month", "Net", "Status", ""]} rows={(mine.data || []).map((s) => [
+          <Table headers={["Month", "Net", "Proof", "Status", ""]} rows={(mine.data || []).map((s) => [
             fmtDate(s.month),
             money(s.netPay),
+            s.paymentProofUrl ? <img key={`img${s.id}`} src={s.paymentProofUrl} alt="Salary proof" style={{ maxHeight: 72 }} /> : "—",
             <Badge key={s.id} value={s.status} />,
             s.status === "PAID" && !s.verifiedAt ? (
               <Button key={`v${s.id}`} loadingText="Verifying…" onClick={async () => { await salaryApi.verify(s.id); toast("ok", "Receipt verified"); void mine.reload(); }}>Verify</Button>
@@ -405,8 +407,14 @@ export function SalariesPage() {
             !payrollOps || s.status === "PAID" ? pretty(s.status) : (
               <div key={`pay${s.id}`} className="row">
                 <Button kind="ghost" onClick={() => { setAdjustId(s.id); setDeduct(String(s.otherDeductions ?? "")); setBonus(String(s.bonuses ?? "")); setAdjNotes(""); }}>Adjust</Button>
+                <input type="file" accept="image/*" onChange={(e) => setProofs((p) => ({ ...p, [s.id]: e.target.files?.[0] }))} />
                 <Button loadingText="Updating…" onClick={async () => {
-                  const proof = window.prompt("Payment proof URL (optional)") || undefined;
+                  let proof: string | undefined;
+                  const file = proofs[s.id];
+                  if (file) {
+                    const stored = await fileApi.upload(file);
+                    proof = stored.url;
+                  }
                   await salaryApi.pay(s.id, today(), proof);
                   toast("ok", "Marked paid");
                   void monthRows.reload();
@@ -440,8 +448,10 @@ export function SalariesPage() {
 
 export function SettingsPage() {
   const toast = useToast();
+  const { reload } = useSession();
   const s = useAsync(() => settingsApi.get());
   const [form, setForm] = useState<SchoolSettings>({});
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const loaded = s.data;
   const current = { ...loaded, ...form };
   return (
@@ -449,7 +459,16 @@ export function SettingsPage() {
       <div className="page-title"><div><h1>Payment settings</h1><p>Shown to parents and locked schools when paying</p></div></div>
       <QueryState status={s} label="payment settings">
         <div className="card" style={{ maxWidth: 640 }}>
-          <Form busyLabel="Saving…" onSubmit={async () => { await settingsApi.save(current); toast("ok", "Settings saved"); }}>
+          <Form busyLabel="Saving…" onSubmit={async () => {
+            let logoUrl = current.logoUrl;
+            if (logoFile) {
+              const stored = await fileApi.upload(logoFile);
+              logoUrl = stored.url;
+            }
+            await settingsApi.save({ ...current, logoUrl });
+            toast("ok", "Settings saved");
+            await reload();
+          }}>
             <Field label="Bank name"><input value={current.bankName || ""} onChange={(e) => setForm({ ...form, bankName: e.target.value })} /></Field>
             <Field label="Account title"><input value={current.accountTitle || ""} onChange={(e) => setForm({ ...form, accountTitle: e.target.value })} /></Field>
             <Field label="Account number"><input value={current.accountNumber || ""} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} /></Field>
@@ -457,7 +476,10 @@ export function SettingsPage() {
             <Field label="JazzCash"><input value={current.jazzcash || ""} onChange={(e) => setForm({ ...form, jazzcash: e.target.value })} /></Field>
             <Field label="Easypaisa"><input value={current.easypaisa || ""} onChange={(e) => setForm({ ...form, easypaisa: e.target.value })} /></Field>
             <Field label="Instructions"><textarea value={current.paymentInstructions || ""} onChange={(e) => setForm({ ...form, paymentInstructions: e.target.value })} /></Field>
-            <Field label="Logo URL"><input value={current.logoUrl || ""} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} /></Field>
+            <Field label="School logo">
+              <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
+            </Field>
+            {current.logoUrl ? <img src={current.logoUrl} alt="Logo" style={{ height: 48 }} /> : null}
             <Field label="Primary color"><input type="color" value={current.primaryColor || "#1f3a5f"} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
             <Field label="Accent color"><input type="color" value={current.accentColor || "#c4a574"} onChange={(e) => setForm({ ...form, accentColor: e.target.value })} /></Field>
             <Field label="Absent deduction"><input type="number" value={current.absentDeduction ?? 0} onChange={(e) => setForm({ ...form, absentDeduction: Number(e.target.value) })} /></Field>

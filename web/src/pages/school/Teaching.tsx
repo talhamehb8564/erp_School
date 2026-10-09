@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { academicApi, attendanceApi, examApi, fileApi, homeworkApi, studentApi } from "../../api/services";
+import { academicApi, attendanceApi, examApi, fileApi, homeworkApi, studentApi, userApi } from "../../api/services";
 import { ApiError } from "../../api/client";
 import { useLookups } from "../../lib/lookups";
 import { dayName, fmtDate, pretty, today } from "../../lib/format";
@@ -114,7 +114,43 @@ export function AttendancePage() {
         />
       </QueryState>
       )}
+      {(user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? <StaffAttendanceCard /> : null}
     </>
+  );
+}
+
+function StaffAttendanceCard() {
+  const toast = useToast();
+  const staff = useAsync(() => userApi.list({ page: 0 }), []);
+  const [date, setDate] = useState(today());
+  const [uid, setUid] = useState("");
+  const [status, setStatus] = useState<AttendanceStatus>("PRESENT");
+  const people = (staff.data?.content || []).filter((u) => ["TEACHER", "ACCOUNT_OFFICER", "PRINCIPAL"].includes(u.role || ""));
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3>Staff attendance</h3>
+      <p className="hint">Mark teachers and office staff. Deduction rules from Settings apply when status is not Present.</p>
+      <Form busyLabel="Saving…" onSubmit={async () => {
+        await attendanceApi.markTeacher({ teacherUserId: uid, date, status, deductSalary: status !== "PRESENT" });
+        toast("ok", "Staff attendance saved");
+      }}>
+        <div className="row">
+          <Field label="Staff">
+            <select value={uid} onChange={(e) => setUid(e.target.value)} required>
+              <option value="">Select</option>
+              {people.map((u) => <option key={u.id} value={u.id}>{u.fullName || u.username} · {u.role}</option>)}
+            </select>
+          </Field>
+          <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          <Field label="Status">
+            <select value={status} onChange={(e) => setStatus(e.target.value as AttendanceStatus)}>
+              {["PRESENT", "ABSENT", "LATE", "LEAVE"].map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </Field>
+        </div>
+        <Button type="submit" kind="brass" loadingText="Saving…">Mark staff</Button>
+      </Form>
+    </div>
   );
 }
 
@@ -230,7 +266,7 @@ export function HomeworkPage() {
 
 export function ExamsPage() {
   const { user } = useSession();
-  const { subjects, subjectName, className, sections } = useLookups();
+  const { classes, subjects, subjectName, className, sections } = useLookups();
   const sessions = useAsync(() => examApi.sessions(), []);
   const toast = useToast();
   const [name, setName] = useState("");
@@ -241,7 +277,10 @@ export function ExamsPage() {
   const sid = useActiveStudentId(me.data?.id);
   const mine = useAsync(() => (sessionId && sid ? examApi.studentResult(sessionId, sid) : Promise.resolve(null)), [sessionId, sid]);
   const dir = useStudentDirectory(user?.role !== "STUDENT" && user?.role !== "PARENT");
-  const [mark, setMark] = useState({ studentId: "", subjectId: "", totalMarks: "100", obtainedMarks: "0" });
+  const [mark, setMark] = useState({ classId: "", sectionId: "", studentId: "", subjectId: "", totalMarks: "100", obtainedMarks: "0", absent: false });
+  const roster = useAsync(() => (mark.classId ? studentApi.list(mark.classId, mark.sectionId || undefined, 0) : Promise.resolve(null)), [mark.classId, mark.sectionId]);
+  const assigns = useAsync(() => (user?.role === "TEACHER" ? academicApi.assignments() : Promise.resolve([])), [user?.role]);
+  const entry = useAsync(() => (sessionId && (user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? examApi.entryStatus(sessionId) : Promise.resolve([])), [sessionId, user?.role]);
   const [roll, setRoll] = useState("");
   const [resultQ, setResultQ] = useState("");
   const [rollHit, setRollHit] = useState<Awaited<ReturnType<typeof examApi.byRoll>> | null>(null);
@@ -310,8 +349,14 @@ export function ExamsPage() {
         <QueryState status={mine} label="results">
           {mine.data && mine.data.announced === false ? (
             <ResultCountdown announceAt={mine.data.announceAt} seconds={mine.data.countdownSeconds} />
+          ) : mine.data?.pending ? (
+            <div className="card">
+              <p className="kicker">Results</p>
+              <h3>Result Pending / Processing</h3>
+              <p className="hint">Announcement time has passed, but not every subject has marks yet. The marksheet will appear when all teachers have submitted.</p>
+            </div>
           ) : mine.data ? (
-            <Marksheet
+            <Marksheet>
               school={undefined}
               studentName={mine.data.studentName || "—"}
               roll={mine.data.rollNumber}
@@ -330,27 +375,58 @@ export function ExamsPage() {
             <div className="card" style={{ marginBottom: 12 }}>
               <h3>Enter marks</h3>
               <Form busyLabel="Saving marks…" onSubmit={async () => {
-                await examApi.upsertResult(sessionId, { ...mark, totalMarks: Number(mark.totalMarks), obtainedMarks: Number(mark.obtainedMarks) });
-                toast("ok", "Result saved"); void results.reload();
+                await examApi.upsertResult(sessionId, {
+                  studentId: mark.studentId,
+                  subjectId: mark.subjectId,
+                  totalMarks: Number(mark.totalMarks),
+                  obtainedMarks: mark.absent ? 0 : Number(mark.obtainedMarks),
+                  absent: mark.absent,
+                });
+                toast("ok", "Result saved"); void results.reload(); void entry.reload();
               }}>
+                <Field label="Class">
+                  <select value={mark.classId} onChange={(e) => setMark({ ...mark, classId: e.target.value, sectionId: "", studentId: "" })} required>
+                    <option value="">Select class</option>
+                    {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Section">
+                  <select value={mark.sectionId} onChange={(e) => setMark({ ...mark, sectionId: e.target.value, studentId: "" })} required>
+                    <option value="">Select section</option>
+                    {(sections[mark.classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </Field>
                 <Field label="Student">
                   <select value={mark.studentId} onChange={(e) => setMark({ ...mark, studentId: e.target.value })} required>
-                    <option value="">Select</option>
-                    {dir.students.map((s) => <option key={s.id} value={s.id}>{studentLabel(s)}</option>)}
+                    <option value="">Select student</option>
+                    {(roster.data?.content || []).map((s) => <option key={s.id} value={s.id}>{studentLabel(s)}</option>)}
                   </select>
                 </Field>
                 <Field label="Subject">
                   <select value={mark.subjectId} onChange={(e) => setMark({ ...mark, subjectId: e.target.value })} required>
                     <option value="">Select</option>
-                    {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {(user?.role === "TEACHER"
+                      ? subjects.filter((s) => (assigns.data || []).some((a) => a.subjectId === s.id && (!mark.classId || a.classId === mark.classId)))
+                      : subjects
+                    ).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </Field>
                 <div className="row">
-                  <Field label="Obtained"><input value={mark.obtainedMarks} onChange={(e) => setMark({ ...mark, obtainedMarks: e.target.value })} /></Field>
+                  <Field label="Obtained"><input value={mark.obtainedMarks} disabled={mark.absent} onChange={(e) => setMark({ ...mark, obtainedMarks: e.target.value })} /></Field>
                   <Field label="Total"><input value={mark.totalMarks} onChange={(e) => setMark({ ...mark, totalMarks: e.target.value })} /></Field>
                 </div>
+                <label className="row" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={mark.absent} onChange={(e) => setMark({ ...mark, absent: e.target.checked, obtainedMarks: e.target.checked ? "0" : mark.obtainedMarks })} />
+                  Absent (records 0)
+                </label>
                 <Button type="submit" kind="brass" loadingText="Saving…">Save marks</Button>
               </Form>
+              {(user.role === "SCHOOL_ADMIN" || user.role === "PRINCIPAL") && entry.data?.length ? (
+                <Table
+                  headers={["Subject", "Entered", "Complete"]}
+                  rows={entry.data.map((r) => [subjectName(r.subjectId), `${r.entered}/${r.expected}`, r.complete ? "Yes" : "Pending"])}
+                />
+              ) : null}
               {(user.role === "SCHOOL_ADMIN" || user.role === "PRINCIPAL") ? (
                 <div className="row" style={{ marginTop: 8 }}>
                   <input type="datetime-local" onChange={(e) => {

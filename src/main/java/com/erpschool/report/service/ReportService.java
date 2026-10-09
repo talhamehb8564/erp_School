@@ -2,10 +2,12 @@ package com.erpschool.report.service;
 
 import com.erpschool.attendance.entity.AttendanceStatus;
 import com.erpschool.attendance.repository.StudentAttendanceRepository;
+import com.erpschool.attendance.repository.TeacherAttendanceRepository;
 import com.erpschool.common.util.GradeCalculator;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.exam.entity.ExamResult;
 import com.erpschool.exam.repository.ExamResultRepository;
+import com.erpschool.exam.repository.ExamSessionRepository;
 import com.erpschool.fee.entity.ChallanStatus;
 import com.erpschool.fee.entity.FeeChallan;
 import com.erpschool.fee.repository.FeeChallanRepository;
@@ -13,6 +15,8 @@ import com.erpschool.student.entity.Student;
 import com.erpschool.student.entity.StudentStatus;
 import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.student.service.StudentAccessService;
+import com.erpschool.tenant.context.CampusScope;
+import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.tenant.repository.TenantRepository;
 import com.erpschool.user.entity.UserRole;
 import com.erpschool.user.entity.UserStatus;
@@ -38,6 +42,8 @@ public class ReportService {
     private final ExamResultRepository examResultRepository;
     private final StudentAccessService studentAccessService;
     private final TenantRepository tenantRepository;
+    private final TeacherAttendanceRepository teacherAttendanceRepository;
+    private final ExamSessionRepository examSessionRepository;
 
     public ReportService(StudentRepository studentRepository,
                          UserRepository userRepository,
@@ -45,7 +51,9 @@ public class ReportService {
                          FeeChallanRepository challanRepository,
                          ExamResultRepository examResultRepository,
                          StudentAccessService studentAccessService,
-                         TenantRepository tenantRepository) {
+                         TenantRepository tenantRepository,
+                         TeacherAttendanceRepository teacherAttendanceRepository,
+                         ExamSessionRepository examSessionRepository) {
         this.studentRepository = studentRepository;
         this.userRepository = userRepository;
         this.studentAttendanceRepository = studentAttendanceRepository;
@@ -53,19 +61,81 @@ public class ReportService {
         this.examResultRepository = examResultRepository;
         this.studentAccessService = studentAccessService;
         this.tenantRepository = tenantRepository;
+        this.teacherAttendanceRepository = teacherAttendanceRepository;
+        this.examSessionRepository = examSessionRepository;
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> schoolDashboard() {
         UUID tenantId = TenantGuard.requireTenantId(null);
         Map<String, Object> m = new HashMap<>();
-        m.put("students", studentRepository.countByTenantId(tenantId));
-        m.put("activeStudents", studentRepository.countByTenantIdAndStatus(tenantId, StudentStatus.ACTIVE));
-        m.put("teachers", userRepository.countByTenantIdAndRole(tenantId, UserRole.TEACHER));
-        m.put("parents", userRepository.countByTenantIdAndRole(tenantId, UserRole.PARENT));
-        m.put("activeUsers", userRepository.countByTenantIdAndStatus(tenantId, UserStatus.ACTIVE));
+        if (CampusScope.restricts()) {
+            UUID campusId = CampusScope.current();
+            m.put("students", studentRepository.countByTenantIdAndCampusId(tenantId, campusId));
+            m.put("activeStudents", studentRepository.countByTenantIdAndCampusIdAndStatus(tenantId, campusId, StudentStatus.ACTIVE));
+            m.put("teachers", userRepository.countByTenantIdAndCampusIdAndRole(tenantId, campusId, UserRole.TEACHER));
+            m.put("parents", userRepository.countByTenantIdAndCampusIdAndRole(tenantId, campusId, UserRole.PARENT));
+            m.put("activeUsers", userRepository.countByTenantIdAndCampusIdAndStatus(tenantId, campusId, UserStatus.ACTIVE));
+        } else {
+            m.put("students", studentRepository.countByTenantId(tenantId));
+            m.put("activeStudents", studentRepository.countByTenantIdAndStatus(tenantId, StudentStatus.ACTIVE));
+            m.put("teachers", userRepository.countByTenantIdAndRole(tenantId, UserRole.TEACHER));
+            m.put("parents", userRepository.countByTenantIdAndRole(tenantId, UserRole.PARENT));
+            m.put("activeUsers", userRepository.countByTenantIdAndStatus(tenantId, UserStatus.ACTIVE));
+        }
         m.put("unpaidChallans", challanRepository.countByTenantIdAndStatus(tenantId, ChallanStatus.UNPAID));
         m.put("pendingFeeProofs", challanRepository.countByTenantIdAndStatus(tenantId, ChallanStatus.PAYMENT_UNDER_VERIFICATION));
+        return m;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> studentProgress(UUID studentId) {
+        Student student = studentAccessService.requireStudent(studentId);
+        LocalDate to = LocalDate.now();
+        LocalDate from = to.minusDays(30);
+        Map<String, Object> attendance = studentAttendance(studentId, from, to);
+        java.util.Set<UUID> published = examSessionRepository
+                .findByTenantIdAndPublishedTrueOrderByCreatedAtDesc(student.getTenantId())
+                .stream().map(s -> s.getId()).collect(java.util.stream.Collectors.toSet());
+        List<ExamResult> results = examResultRepository.findByTenantIdAndStudentId(student.getTenantId(), studentId)
+                .stream().filter(r -> published.contains(r.getExamSessionId())).toList();
+        BigDecimal total = results.stream().map(ExamResult::getTotalMarks).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal obtained = results.stream().map(ExamResult::getObtainedMarks).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal pct = GradeCalculator.percentage(obtained, total);
+        Map<String, Object> m = new HashMap<>();
+        m.put("attendancePercent", attendance.get("percentage"));
+        m.put("present", attendance.get("present"));
+        m.put("absent", attendance.get("absent"));
+        m.put("late", attendance.get("late"));
+        m.put("totalLectures", attendance.get("totalLectures"));
+        m.put("academicPercent", pct);
+        m.put("grade", GradeCalculator.grade(pct));
+        m.put("passStatus", GradeCalculator.passStatus(pct));
+        m.put("obtainedMarks", obtained);
+        m.put("totalMarks", total);
+        return m;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> teacherProgress() {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        UUID userId = TenantContext.getUserId();
+        LocalDate to = LocalDate.now();
+        LocalDate from = to.minusDays(30);
+        long total = teacherAttendanceRepository.countByTenantIdAndTeacherUserIdAndAttendanceDateBetween(tenantId, userId, from, to);
+        long present = teacherAttendanceRepository.countByTenantIdAndTeacherUserIdAndStatusAndAttendanceDateBetween(
+                tenantId, userId, AttendanceStatus.PRESENT, from, to);
+        long absent = teacherAttendanceRepository.countByTenantIdAndTeacherUserIdAndStatusAndAttendanceDateBetween(
+                tenantId, userId, AttendanceStatus.ABSENT, from, to);
+        long late = teacherAttendanceRepository.countByTenantIdAndTeacherUserIdAndStatusAndAttendanceDateBetween(
+                tenantId, userId, AttendanceStatus.LATE, from, to);
+        Map<String, Object> m = new HashMap<>();
+        m.put("attendancePercent", total == 0 ? 0 : Math.round(present * 10000.0 / total) / 100.0);
+        m.put("present", present);
+        m.put("absent", absent);
+        m.put("late", late);
+        m.put("totalDays", total);
+        m.put("academicPercent", 0);
         return m;
     }
 

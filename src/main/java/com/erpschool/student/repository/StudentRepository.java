@@ -21,6 +21,8 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
 
     long countByTenantIdAndCampusId(UUID tenantId, UUID campusId);
 
+    long countByTenantIdAndCampusIdAndStatus(UUID tenantId, UUID campusId, StudentStatus status);
+
     java.util.Optional<Student> findByTenantIdAndCnic(UUID tenantId, String cnic);
 
     Page<Student> findByTenantIdAndClassId(UUID tenantId, UUID classId, Pageable pageable);

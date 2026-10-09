@@ -221,6 +221,8 @@ export const examApi = {
       studentId?: string;
       studentName?: string;
       announced?: boolean;
+      pending?: boolean;
+      message?: string;
       announceAt?: string;
       countdownSeconds?: number;
     }>(`${v1}/exams/sessions/${sessionId}/students/${studentId}`),
@@ -247,6 +249,10 @@ export const examApi = {
     ),
   saveDateSheet: (sessionId: string, entries: Record<string, unknown>[]) =>
     api.post<unknown[]>(`${v1}/exams/sessions/${sessionId}/date-sheet`, entries),
+  entryStatus: (sessionId: string) =>
+    api.get<{ teacherUserId: string; classId: string; sectionId?: string; subjectId: string; expected: number; entered: number; complete: boolean }[]>(
+      `${v1}/exams/sessions/${sessionId}/entry-status`,
+    ),
 };
 
 export const feeApi = {

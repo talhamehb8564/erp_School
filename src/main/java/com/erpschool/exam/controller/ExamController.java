@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.erpschool.common.util.Instants;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +57,8 @@ public class ExamController {
             @PathVariable UUID id, @Valid @RequestBody ResultRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Result saved", examService.upsertResult(
                 id, request.getStudentId(), request.getSubjectId(),
-                request.getTotalMarks(), request.getObtainedMarks(), request.getRemarks())));
+                request.getTotalMarks(), request.getObtainedMarks(), request.getRemarks(),
+                Boolean.TRUE.equals(request.getAbsent()))));
     }
 
     @PostMapping("/sessions/{id}/publish")
@@ -69,8 +72,19 @@ public class ExamController {
     public ResponseEntity<ApiResponse<ExamSession>> announceAt(
             @PathVariable UUID id, @RequestBody Map<String, String> body) {
         String raw = body == null ? null : body.get("announceAt");
-        java.time.Instant when = raw == null || raw.isBlank() ? null : java.time.Instant.parse(raw);
+        java.time.Instant when;
+        try {
+            when = Instants.parse(raw);
+        } catch (IllegalArgumentException ex) {
+            throw new com.erpschool.common.exception.BusinessException("Invalid announcement date-time");
+        }
         return ResponseEntity.ok(ApiResponse.ok("Announcement time saved", examService.setAnnounceAt(id, when)));
+    }
+
+    @GetMapping("/sessions/{id}/entry-status")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> entryStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(examService.entryStatus(id)));
     }
 
     @GetMapping("/sessions/{id}/date-sheet")
@@ -119,5 +133,6 @@ public class ExamController {
         @NotNull
         private BigDecimal obtainedMarks;
         private String remarks;
+        private Boolean absent;
     }
 }

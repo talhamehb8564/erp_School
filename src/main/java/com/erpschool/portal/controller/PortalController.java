@@ -59,6 +59,7 @@ public class PortalController {
         m.put("homework", homeworkService.mine());
         m.put("unreadNotifications", notificationService.unreadCount());
         m.put("salaries", salaryService.mine());
+        m.put("progress", reportService.teacherProgress());
         return ResponseEntity.ok(ApiResponse.ok(m));
     }
 
@@ -100,6 +101,7 @@ public class PortalController {
         m.put("homework", homeworkService.mine());
         m.put("fees", feeService.studentChallans(profile.getId()));
         m.put("unreadNotifications", notificationService.unreadCount());
+        m.put("progress", reportService.studentProgress(profile.getId()));
         return ResponseEntity.ok(ApiResponse.ok(m));
     }
 }

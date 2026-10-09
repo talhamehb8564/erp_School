@@ -71,9 +71,18 @@ function TeacherDash() {
     subjectName?: string;
   }[]) || [];
   const homework = (d.data?.homework as { id: string; title: string; dueDate: string }[]) || [];
+  const progress = (d.data?.progress as { attendancePercent?: number; present?: number; absent?: number; late?: number; totalDays?: number }) || {};
+  const att = Number(progress.attendancePercent || 0);
   return (
     <>
-      <div className="page-title"><div><h1>Teacher desk</h1><p>Today’s lectures and assigned homework</p></div></div>
+      <div className="hero-strip card">
+        <div>
+          <p className="kicker">Your month</p>
+          <h1>Teacher desk</h1>
+          <p>Attendance {att}% · Present {progress.present ?? 0} · Absent {progress.absent ?? 0} · Late {progress.late ?? 0} of {progress.totalDays ?? 0} marked days.</p>
+        </div>
+        <Donut value={att} max={100} label="Attendance %" />
+      </div>
       <QueryState status={d} label="teacher desk">
         <div className="grid two">
           <div className="card">
@@ -153,9 +162,25 @@ function StudentDash() {
   const d = useAsync(() => portalApi.student());
   const hw = (d.data?.homework as { title: string; dueDate: string }[]) || [];
   const fees = (d.data?.fees as { challanNumber: string; totalPayable: number; status: string }[]) || [];
+  const progress = (d.data?.progress as {
+    attendancePercent?: number; academicPercent?: number; present?: number; absent?: number; late?: number;
+    totalLectures?: number; grade?: string; passStatus?: string; obtainedMarks?: number; totalMarks?: number;
+  }) || {};
+  const att = Number(progress.attendancePercent || 0);
+  const aca = Number(progress.academicPercent || 0);
   return (
     <>
-      <div className="page-title"><div><h1>My school</h1><p>Homework and fees from the live student portal</p></div></div>
+      <div className="hero-strip card">
+        <div>
+          <p className="kicker">This month</p>
+          <h1>My school</h1>
+          <p>Attendance {att}% ({progress.present ?? 0} present, {progress.absent ?? 0} absent, {progress.late ?? 0} late of {progress.totalLectures ?? 0} lectures). Academic {aca}% · Grade {progress.grade || "—"} · {pretty(progress.passStatus)} · {progress.obtainedMarks ?? 0}/{progress.totalMarks ?? 0}.</p>
+        </div>
+        <div className="row">
+          <Donut value={att} max={100} label="Attendance %" />
+          <Donut value={aca} max={100} label="Academics %" />
+        </div>
+      </div>
       <QueryState status={d} label="student dashboard">
         <div className="grid two">
           <div className="card">
