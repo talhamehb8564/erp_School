@@ -34,4 +34,10 @@ public class WebsiteController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> save(@RequestBody Map<String, Object> body) {
         return ResponseEntity.ok(ApiResponse.ok("Website saved", websiteService.save(body)));
     }
+
+    @PutMapping("/principal")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','PRINCIPAL')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> principal(@RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(ApiResponse.ok("Principal profile saved", websiteService.savePrincipal(body)));
+    }
 }

@@ -62,6 +62,11 @@ export const publicApi = {
     api.get<{ school: import("../lib/branding").PublicSchool; campuses: import("../lib/branding").PublicCampus[] }>(
       `${v1}/public/school${code ? `?code=${encodeURIComponent(code)}` : ""}`,
     ),
+  contact: (body: Record<string, unknown>, code?: string) =>
+    api.post<{ accepted?: boolean; message?: string }>(
+      `${v1}/public/contact${code ? `?code=${encodeURIComponent(code)}` : ""}`,
+      body,
+    ),
 };
 
 export const setupApi = {
@@ -362,6 +367,7 @@ export const portalApi = {
 export const websiteApi = {
   get: () => api.get<Record<string, unknown>>(`${v1}/website`),
   save: (body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/website`, body),
+  savePrincipal: (body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/website/principal`, body),
 };
 
 export const onlineExamApi = {

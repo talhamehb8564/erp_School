@@ -89,6 +89,45 @@ public class Tenant extends BaseEntity {
     @Column(name = "gallery_json", columnDefinition = "TEXT")
     private String galleryJson;
 
+    @Column(name = "principal_name", length = 200)
+    private String principalName;
+
+    @Column(name = "principal_title", length = 120)
+    private String principalTitle;
+
+    @Column(name = "principal_photo_url", length = 500)
+    private String principalPhotoUrl;
+
+    @Column(name = "principal_message", columnDefinition = "TEXT")
+    private String principalMessage;
+
+    @Column(name = "principal_published", nullable = false)
+    private boolean principalPublished = true;
+
+    @Column(name = "map_lat", precision = 10, scale = 7)
+    private java.math.BigDecimal mapLat;
+
+    @Column(name = "map_lng", precision = 10, scale = 7)
+    private java.math.BigDecimal mapLng;
+
+    @Column(name = "map_place", length = 300)
+    private String mapPlace;
+
+    @Column(name = "notice_title", length = 200)
+    private String noticeTitle;
+
+    @Column(name = "notice_body", columnDefinition = "TEXT")
+    private String noticeBody;
+
+    @Column(name = "notice_video_url", length = 500)
+    private String noticeVideoUrl;
+
+    @Column(name = "notice_poster_url", length = 500)
+    private String noticePosterUrl;
+
+    @Column(name = "notice_published", nullable = false)
+    private boolean noticePublished = false;
+
     @Column(length = 200)
     private String website;
 

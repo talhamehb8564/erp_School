@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { publicApi } from "../api/services";
 import { applyBrand } from "./theme";
 
@@ -25,6 +26,30 @@ export interface PublicCampus {
   hero?: PublicMedia[];
 }
 
+export interface PublicPrincipal {
+  name?: string;
+  title?: string;
+  photoUrl?: string;
+  message?: string;
+  published?: boolean;
+  isDefault?: boolean;
+}
+
+export interface PublicNotice {
+  title?: string;
+  body?: string;
+  videoUrl?: string;
+  posterUrl?: string;
+  published?: boolean;
+  isDefault?: boolean;
+}
+
+export interface PublicMap {
+  lat?: number | string | null;
+  lng?: number | string | null;
+  place?: string;
+}
+
 export interface PublicSchool {
   id: string;
   code: string;
@@ -48,6 +73,9 @@ export interface PublicSchool {
   twitterUrl?: string;
   linkedinUrl?: string;
   gallery?: PublicMedia[];
+  principal?: PublicPrincipal;
+  notice?: PublicNotice;
+  map?: PublicMap;
 }
 
 interface Branding {
@@ -64,11 +92,17 @@ interface Branding {
 
 const Ctx = createContext<Branding | null>(null);
 
+function isPublicPath(pathname: string) {
+  return pathname === "/" || pathname.startsWith("/portals") || pathname.startsWith("/login") || pathname === "/admin";
+}
+
 export function BrandingProvider({ children }: { children: ReactNode }) {
+  const loc = useLocation();
+  const publicSite = isPublicPath(loc.pathname);
   const [school, setSchool] = useState<PublicSchool | null>(null);
   const [campuses, setCampuses] = useState<PublicCampus[]>([]);
   const [campusId, setCampusIdState] = useState<string | null>(() => sessionStorage.getItem(CAMPUS_KEY));
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(publicSite);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState("");
 
@@ -100,8 +134,12 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!publicSite) {
+      setLoading(false);
+      return;
+    }
     void reload();
-  }, [reload]);
+  }, [publicSite, reload]);
 
   const setCampusId = useCallback((id: string) => {
     setCampusIdState(id);

@@ -182,21 +182,26 @@ export const ALLOWED_UPLOADS = new Set([
   "image/png",
   "image/webp",
   "image/gif",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
 export function validateUpload(file: File) {
-  if (file.size > 10 * 1024 * 1024) {
+  const type = (file.type || "").split(";", 2)[0].trim().toLowerCase();
+  const name = file.name.toLowerCase();
+  const video = type.startsWith("video/") || [".mp4", ".webm", ".mov"].some((ext) => name.endsWith(ext));
+  const max = video ? 25 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (file.size > max) {
     throw new ApiError(400, {
       success: false,
       errorCode: "FILE_TOO_LARGE",
-      message: "Maximum upload size is 10MB",
+      message: video ? "Maximum video size is 25MB" : "Maximum upload size is 10MB",
     });
   }
-  const type = (file.type || "").split(";", 2)[0].trim().toLowerCase();
-  const name = file.name.toLowerCase();
-  const byExt = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".doc", ".docx"].some((ext) => name.endsWith(ext));
+  const byExt = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".doc", ".docx", ".mp4", ".webm", ".mov"].some((ext) => name.endsWith(ext));
   if (type && !ALLOWED_UPLOADS.has(type) && !byExt) {
     throw new ApiError(400, {
       success: false,

@@ -29,7 +29,7 @@ export default function PortalPage() {
       <section className="portal-hero">
         <p className="kicker">Sign in</p>
         <h1>{name} Portal</h1>
-        <p>Choose your role. Branding is loaded from the school database for every session — not from a previous admin login.</p>
+        <p>Choose your role to sign in. School name and colours come from the public school profile.</p>
       </section>
       <div className="role-grid portal-grid">
         {roles.map((r) => (

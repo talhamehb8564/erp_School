@@ -61,6 +61,30 @@ public class PublicSchoolService {
         school.put("twitterUrl", tenant.getTwitterUrl());
         school.put("linkedinUrl", tenant.getLinkedinUrl());
         school.put("gallery", JsonLists.publicMedia(tenant.getGalleryJson(), false));
+        boolean principalCustom = tenant.getPrincipalMessage() != null && !tenant.getPrincipalMessage().isBlank();
+        Map<String, Object> principal = new LinkedHashMap<>();
+        principal.put("name", tenant.getPrincipalName());
+        principal.put("title", tenant.getPrincipalTitle());
+        principal.put("photoUrl", tenant.getPrincipalPhotoUrl());
+        principal.put("message", tenant.getPrincipalMessage());
+        principal.put("published", tenant.isPrincipalPublished());
+        principal.put("isDefault", !principalCustom);
+        school.put("principal", principal);
+        boolean noticeCustom = tenant.isNoticePublished()
+                && tenant.getNoticeTitle() != null && !tenant.getNoticeTitle().isBlank();
+        Map<String, Object> notice = new LinkedHashMap<>();
+        notice.put("title", tenant.getNoticeTitle());
+        notice.put("body", tenant.getNoticeBody());
+        notice.put("videoUrl", tenant.getNoticeVideoUrl());
+        notice.put("posterUrl", tenant.getNoticePosterUrl());
+        notice.put("published", tenant.isNoticePublished());
+        notice.put("isDefault", !noticeCustom);
+        school.put("notice", notice);
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("lat", tenant.getMapLat());
+        map.put("lng", tenant.getMapLng());
+        map.put("place", tenant.getMapPlace());
+        school.put("map", map);
 
         List<Map<String, Object>> campuses = new ArrayList<>();
         for (Campus campus : campusRepository.findByTenantIdOrderByNameAsc(tenant.getId())) {
@@ -83,6 +107,10 @@ public class PublicSchoolService {
         out.put("school", school);
         out.put("campuses", campuses);
         return out;
+    }
+
+    Tenant resolvePublic(String code) {
+        return resolve(code);
     }
 
     private Tenant resolve(String code) {

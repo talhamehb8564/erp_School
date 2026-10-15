@@ -1,14 +1,123 @@
 import { useEffect, useState } from "react";
 import { campusApi, fileApi, websiteApi } from "../../api/services";
+import { ApiError } from "../../api/client";
 import { useBranding } from "../../lib/branding";
 import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
+import { DEFAULT_HEROES } from "../../lib/site";
 import { Button, Field, Form, QueryState, useAsync } from "../../ui/kit";
 import type { Campus } from "../../lib/types";
 
 type Hero = { imageUrl: string; title?: string; caption?: string };
 
+async function uploadFile(file: File, toast: (k: "ok" | "err" | "info", m: string) => void) {
+  try {
+    const up = await fileApi.upload(file);
+    const url = String(up.url || "");
+    if (!url) throw new Error("Upload did not return a file URL");
+    return url;
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Upload failed";
+    toast("err", msg);
+    throw e;
+  }
+}
+
 export default function WebsitePage() {
+  const { user } = useSession();
+  if (user?.role === "PRINCIPAL") return <PrincipalWebsite />;
+  return <AdminWebsite />;
+}
+
+function PrincipalWebsite() {
+  const toast = useToast();
+  const { user } = useSession();
+  const { reload: reloadBrand } = useBranding();
+  const site = useAsync(() => websiteApi.get());
+  const loaded = site.data;
+  const [form, setForm] = useState({
+    principalName: "",
+    principalTitle: "Principal",
+    principalPhotoUrl: "",
+    principalMessage: "",
+    principalPublished: true,
+  });
+  const [busyFile, setBusyFile] = useState(false);
+
+  useEffect(() => {
+    if (!loaded) return;
+    setForm({
+      principalName: String(loaded.principalName || user?.fullName || ""),
+      principalTitle: String(loaded.principalTitle || "Principal"),
+      principalPhotoUrl: String(loaded.principalPhotoUrl || ""),
+      principalMessage: String(loaded.principalMessage || ""),
+      principalPublished: loaded.principalPublished !== false,
+    });
+  }, [loaded, user?.fullName]);
+
+  return (
+    <>
+      <div className="page-title">
+        <div>
+          <h1>Principal’s message</h1>
+          <p>Your portrait and words appear on the public website. School Admin cannot overwrite this section.</p>
+        </div>
+        <a className="btn ghost" href="/" target="_blank" rel="noreferrer">Preview website</a>
+      </div>
+      <QueryState status={site} label="principal profile">
+        <div className="grid two">
+          <div className="card">
+            <Form busyLabel="Publishing…" onSubmit={async () => {
+              await websiteApi.savePrincipal({ ...form });
+              toast("ok", "Principal profile saved");
+              await site.reload();
+              await reloadBrand();
+            }}>
+              <Field label="Display name"><input value={form.principalName} onChange={(e) => setForm({ ...form, principalName: e.target.value })} /></Field>
+              <Field label="Designation"><input value={form.principalTitle} onChange={(e) => setForm({ ...form, principalTitle: e.target.value })} /></Field>
+              <Field label="Portrait">
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={busyFile} onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  setBusyFile(true);
+                  try {
+                    const url = await uploadFile(f, toast);
+                    setForm((cur) => ({ ...cur, principalPhotoUrl: url }));
+                    toast("ok", "Photograph uploaded");
+                  } catch { /* toasted */ } finally {
+                    setBusyFile(false);
+                  }
+                }} />
+              </Field>
+              {form.principalPhotoUrl ? <img src={form.principalPhotoUrl} alt="" style={{ width: 160, height: 200, objectFit: "cover", borderRadius: 16 }} /> : null}
+              <Field label="Message"><textarea rows={10} value={form.principalMessage} onChange={(e) => setForm({ ...form, principalMessage: e.target.value })} /></Field>
+              <label className="chip">
+                <input type="checkbox" checked={form.principalPublished} onChange={(e) => setForm({ ...form, principalPublished: e.target.checked })} />
+                Publish on the public website
+              </label>
+              <Button type="submit" kind="brass" loadingText="Publishing…">Save and publish</Button>
+            </Form>
+          </div>
+          <div className="card">
+            <p className="kicker">Preview</p>
+            <h3>Principal’s Message</h3>
+            <div className="site-principal" style={{ display: "grid", gap: 16 }}>
+              {form.principalPhotoUrl ? <img src={form.principalPhotoUrl} alt="" style={{ width: 140, height: 170, objectFit: "cover", borderRadius: 16 }} /> : null}
+              <div>
+                <strong>{form.principalName || "Principal"}</strong>
+                <p className="hint">{form.principalTitle}</p>
+                <p style={{ whiteSpace: "pre-wrap" }}>{form.principalMessage || "Write a message to appear here."}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </QueryState>
+    </>
+  );
+}
+
+function AdminWebsite() {
   const toast = useToast();
   const { reload: reloadBrand } = useBranding();
   const { reload: reloadSession } = useSession();
@@ -16,6 +125,8 @@ export default function WebsitePage() {
   const campuses = useAsync(() => campusApi.list());
   const [form, setForm] = useState<Record<string, string>>({});
   const [gallery, setGallery] = useState<Hero[]>([]);
+  const [noticePublished, setNoticePublished] = useState(false);
+  const [busyFile, setBusyFile] = useState(false);
   const loaded = site.data;
 
   useEffect(() => {
@@ -39,20 +150,55 @@ export default function WebsitePage() {
       accentColor: String(loaded.accentColor || "#c08956"),
       secondaryColor: String(loaded.secondaryColor || "#1f4d43"),
       logoUrl: String(loaded.logoUrl || ""),
+      mapLat: loaded.mapLat == null ? "" : String(loaded.mapLat),
+      mapLng: loaded.mapLng == null ? "" : String(loaded.mapLng),
+      mapPlace: String(loaded.mapPlace || ""),
+      noticeTitle: String(loaded.noticeTitle || ""),
+      noticeBody: String(loaded.noticeBody || ""),
+      noticeVideoUrl: String(loaded.noticeVideoUrl || ""),
+      noticePosterUrl: String(loaded.noticePosterUrl || ""),
     });
+    setNoticePublished(Boolean(loaded.noticePublished));
     setGallery(Array.isArray(loaded.gallery) ? loaded.gallery as Hero[] : []);
   }, [loaded]);
+
+  const pick = async (accept: string, onUrl: (url: string) => void) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      setBusyFile(true);
+      try {
+        onUrl(await uploadFile(f, toast));
+      } catch { /* toasted */ } finally {
+        setBusyFile(false);
+      }
+    };
+    input.click();
+  };
 
   return (
     <>
       <div className="page-title">
-        <div><h1>School website</h1><p>Global name, logo and colours apply to every campus. Heroes and contact are per branch.</p></div>
+        <div>
+          <h1>School website</h1>
+          <p>Global name, logo and colours apply to every campus. Heroes and contact are per branch. The Principal owns their message separately.</p>
+        </div>
+        <a className="btn ghost" href="/" target="_blank" rel="noreferrer">Preview website</a>
       </div>
       <QueryState status={site} label="website">
         <div className="card" style={{ marginBottom: 16 }}>
           <h3>Global branding</h3>
           <Form busyLabel="Saving…" onSubmit={async () => {
-            await websiteApi.save({ ...form, gallery });
+            await websiteApi.save({
+              ...form,
+              gallery,
+              noticePublished,
+              mapLat: form.mapLat || null,
+              mapLng: form.mapLng || null,
+            });
             toast("ok", "Website saved");
             await site.reload();
             await reloadBrand();
@@ -66,51 +212,91 @@ export default function WebsitePage() {
               <Field label="Secondary"><input type="color" value={form.secondaryColor || "#1f4d43"} onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })} /></Field>
             </div>
             <Field label="Logo">
-              <input type="file" accept="image/*" onChange={async (e) => {
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={busyFile} onChange={async (e) => {
                 const f = e.target.files?.[0];
+                e.target.value = "";
                 if (!f) return;
-                const up = await fileApi.upload(f);
-                setForm((cur) => ({ ...cur, logoUrl: String(up.url || "") }));
+                setBusyFile(true);
+                try {
+                  const url = await uploadFile(f, toast);
+                  setForm((cur) => ({ ...cur, logoUrl: url }));
+                  toast("ok", "Logo uploaded");
+                } catch { /* toasted */ } finally {
+                  setBusyFile(false);
+                }
               }} />
             </Field>
             {form.logoUrl ? <img src={form.logoUrl} alt="" style={{ height: 48 }} /> : null}
             <Field label="About"><textarea value={form.aboutText || ""} onChange={(e) => setForm({ ...form, aboutText: e.target.value })} rows={4} /></Field>
             <Field label="Academics"><textarea value={form.academicsText || ""} onChange={(e) => setForm({ ...form, academicsText: e.target.value })} rows={3} /></Field>
             <Field label="Achievements"><textarea value={form.achievementsText || ""} onChange={(e) => setForm({ ...form, achievementsText: e.target.value })} rows={3} /></Field>
-            <Field label="Public email"><input value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-            <Field label="Public phone"><input value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+            <div className="row">
+              <Field label="Public email"><input value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+              <Field label="Public phone"><input value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+            </div>
             <Field label="Address"><input value={form.addressLine || ""} onChange={(e) => setForm({ ...form, addressLine: e.target.value })} /></Field>
             <Field label="City"><input value={form.city || ""} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+            <div className="row">
+              <Field label="Map latitude"><input value={form.mapLat || ""} onChange={(e) => setForm({ ...form, mapLat: e.target.value })} placeholder="e.g. 31.5204" /></Field>
+              <Field label="Map longitude"><input value={form.mapLng || ""} onChange={(e) => setForm({ ...form, mapLng: e.target.value })} placeholder="e.g. 74.3587" /></Field>
+            </div>
+            <Field label="Map place name (optional)"><input value={form.mapPlace || ""} onChange={(e) => setForm({ ...form, mapPlace: e.target.value })} /></Field>
+            <p className="hint">Leave coordinates empty until you have the school’s real location. Do not invent a pin.</p>
             <Field label="Facebook"><input value={form.facebookUrl || ""} onChange={(e) => setForm({ ...form, facebookUrl: e.target.value })} /></Field>
             <Field label="Instagram"><input value={form.instagramUrl || ""} onChange={(e) => setForm({ ...form, instagramUrl: e.target.value })} /></Field>
             <Field label="YouTube"><input value={form.youtubeUrl || ""} onChange={(e) => setForm({ ...form, youtubeUrl: e.target.value })} /></Field>
+            <Field label="X / Twitter"><input value={form.twitterUrl || ""} onChange={(e) => setForm({ ...form, twitterUrl: e.target.value })} /></Field>
+            <Field label="LinkedIn"><input value={form.linkedinUrl || ""} onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })} /></Field>
+
+            <h3>Public notice &amp; video</h3>
+            <p className="hint">Shown on the public website when published. Video is optional — YouTube URL or an uploaded MP4.</p>
+            <Field label="Notice title"><input value={form.noticeTitle || ""} onChange={(e) => setForm({ ...form, noticeTitle: e.target.value })} /></Field>
+            <Field label="Notice body"><textarea rows={3} value={form.noticeBody || ""} onChange={(e) => setForm({ ...form, noticeBody: e.target.value })} /></Field>
+            <Field label="Video URL (YouTube or file)"><input value={form.noticeVideoUrl || ""} onChange={(e) => setForm({ ...form, noticeVideoUrl: e.target.value })} /></Field>
             <div className="row">
-              <Button type="button" kind="ghost" onClick={async () => {
-                const input = document.createElement("input");
-                input.type = "file"; input.accept = "image/*";
-                input.onchange = async () => {
-                  const f = input.files?.[0];
-                  if (!f) return;
-                  const up = await fileApi.upload(f);
-                  setGallery((g) => [...g, { imageUrl: String(up.url || ""), caption: "" }]);
-                };
-                input.click();
-              }}>Add gallery photo</Button>
+              <Button type="button" kind="ghost" disabled={busyFile} onClick={() => void pick("video/mp4,video/webm,video/quicktime", (url) => {
+                setForm((cur) => ({ ...cur, noticeVideoUrl: url }));
+                toast("ok", "Video uploaded");
+              })}>Upload video</Button>
+              <Button type="button" kind="ghost" disabled={busyFile} onClick={() => void pick("image/*", (url) => {
+                setForm((cur) => ({ ...cur, noticePosterUrl: url }));
+                toast("ok", "Poster uploaded");
+              })}>Upload poster</Button>
+            </div>
+            <label className="chip">
+              <input type="checkbox" checked={noticePublished} onChange={(e) => setNoticePublished(e.target.checked)} />
+              Publish notice on the public website
+            </label>
+
+            <h3>Gallery</h3>
+            <div className="row" style={{ marginBottom: 8 }}>
+              <Button type="button" kind="ghost" disabled={busyFile} onClick={() => void pick("image/jpeg,image/png,image/webp,image/gif", (url) => {
+                setGallery((g) => [...g, { imageUrl: url, caption: "" }]);
+                toast("ok", "Photo added");
+              })}>Add gallery photo</Button>
             </div>
             <div className="site-gallery" style={{ marginTop: 8 }}>
               {gallery.map((g, i) => (
                 <figure key={g.imageUrl + i}>
                   <img src={g.imageUrl} alt="" />
                   <input placeholder="Caption" value={g.caption || ""} onChange={(e) => setGallery(gallery.map((x, n) => n === i ? { ...x, caption: e.target.value } : x))} />
+                  <Button kind="ghost" onClick={() => setGallery(gallery.filter((_, n) => n !== i))}>Remove</Button>
                 </figure>
               ))}
             </div>
+            {loaded?.principalName || loaded?.principalMessage ? (
+              <p className="hint">Principal’s message is managed in the Principal portal and is not changed by this form.</p>
+            ) : (
+              <p className="hint">The public site shows a marked sample Principal’s message until the Principal publishes their own.</p>
+            )}
             <Button type="submit" kind="brass" loadingText="Saving…">Save global website</Button>
           </Form>
         </div>
       </QueryState>
       <QueryState status={campuses} label="campuses">
-        {(campuses.data || []).map((c) => <CampusWebsite key={c.id} campus={c} onSaved={() => { void campuses.reload(); void reloadBrand(); }} />)}
+        {(campuses.data || []).map((c) => (
+          <CampusWebsite key={c.id} campus={c} onSaved={() => { void campuses.reload(); void reloadBrand(); }} />
+        ))}
       </QueryState>
     </>
   );
@@ -133,6 +319,15 @@ function CampusWebsite({ campus, onSaved }: { campus: Campus; onSaved: () => voi
       return [];
     }
   });
+  const [busyFile, setBusyFile] = useState(false);
+  const move = (i: number, dir: number) => {
+    const j = i + dir;
+    if (j < 0 || j >= hero.length) return;
+    const next = hero.slice();
+    const [row] = next.splice(i, 1);
+    next.splice(j, 0, row);
+    setHero(next);
+  };
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <h3>{campus.name}</h3>
@@ -150,23 +345,41 @@ function CampusWebsite({ campus, onSaved }: { campus: Campus; onSaved: () => voi
         <Field label="Instagram"><input value={instagramUrl} onChange={(e) => setInstagramUrl(e.target.value)} /></Field>
         <Field label="YouTube"><input value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} /></Field>
         <Field label="X / Twitter"><input value={twitterUrl} onChange={(e) => setTwitterUrl(e.target.value)} /></Field>
-        <Button type="button" kind="ghost" onClick={async () => {
-          const input = document.createElement("input");
-          input.type = "file"; input.accept = "image/*";
-          input.onchange = async () => {
-            const f = input.files?.[0];
-            if (!f) return;
-            const up = await fileApi.upload(f);
-            setHero((h) => [...h, { imageUrl: String(up.url || ""), title: campus.name, caption: "" }]);
-          };
-          input.click();
-        }}>Add hero image</Button>
+        <div className="row">
+          <Button type="button" kind="ghost" disabled={busyFile} onClick={async () => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/jpeg,image/png,image/webp,image/gif";
+            input.onchange = async () => {
+              const f = input.files?.[0];
+              if (!f) return;
+              setBusyFile(true);
+              try {
+                const url = await uploadFile(f, toast);
+                setHero((h) => [...h, { imageUrl: url, title: campus.name, caption: "" }]);
+                toast("ok", "Hero image uploaded");
+              } catch { /* toasted */ } finally {
+                setBusyFile(false);
+              }
+            };
+            input.click();
+          }}>Add hero image</Button>
+          <Button type="button" kind="ghost" onClick={() => {
+            setHero(DEFAULT_HEROES.map((h) => ({ ...h, title: campus.name })));
+            toast("info", "Starter slides added — save the campus to publish them");
+          }}>Use starter slides</Button>
+        </div>
         <div className="site-gallery" style={{ marginTop: 8 }}>
           {hero.map((h, i) => (
             <figure key={h.imageUrl + i}>
               <img src={h.imageUrl} alt="" />
               <input placeholder="Title" value={h.title || ""} onChange={(e) => setHero(hero.map((x, n) => n === i ? { ...x, title: e.target.value } : x))} />
               <input placeholder="Caption" value={h.caption || ""} onChange={(e) => setHero(hero.map((x, n) => n === i ? { ...x, caption: e.target.value } : x))} />
+              <div className="row">
+                <Button kind="ghost" onClick={() => move(i, -1)}>Up</Button>
+                <Button kind="ghost" onClick={() => move(i, 1)}>Down</Button>
+                <Button kind="ghost" onClick={() => setHero(hero.filter((_, n) => n !== i))}>Remove</Button>
+              </div>
             </figure>
           ))}
         </div>

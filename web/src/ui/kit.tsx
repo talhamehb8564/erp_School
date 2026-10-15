@@ -131,6 +131,16 @@ export function ErrorBox({ error, onRetry, title }: { error: unknown; onRetry?: 
   );
 }
 
+export function Skeleton({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="skeleton-block" aria-hidden>
+      {Array.from({ length: lines }).map((_, i) => (
+        <i key={i} className="skeleton-line" style={{ width: `${88 - i * 12}%` }} />
+      ))}
+    </div>
+  );
+}
+
 export function QueryState({
   status,
   label,
@@ -140,7 +150,18 @@ export function QueryState({
   label: string;
   children: ReactNode;
 }) {
-  if (status.loading && status.data == null) return <Loading label={`Loading ${label}…`} />;
+  if (status.loading && status.data == null) {
+    return (
+      <div className="query-skel" role="status" aria-label={`Loading ${label}`}>
+        <div className="grid stats" style={{ marginBottom: 14 }}>
+          <div className="card"><Skeleton lines={2} /></div>
+          <div className="card"><Skeleton lines={2} /></div>
+          <div className="card"><Skeleton lines={2} /></div>
+        </div>
+        <div className="card"><Skeleton lines={4} /></div>
+      </div>
+    );
+  }
   if (status.error && status.data == null) {
     return <ErrorBox error={status.error} onRetry={() => void status.reload()} title={`Unable to load ${label}`} />;
   }

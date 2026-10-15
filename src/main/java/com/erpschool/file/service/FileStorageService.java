@@ -30,9 +30,14 @@ public class FileStorageService {
             "image/png",
             "image/webp",
             "image/gif",
+            "video/mp4",
+            "video/webm",
+            "video/quicktime",
             "application/msword",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
+    private static final long IMAGE_MAX = 10L * 1024 * 1024;
+    private static final long VIDEO_MAX = 25L * 1024 * 1024;
 
     private final StoredFileRepository repository;
     private final Path root;
@@ -59,8 +64,11 @@ public class FileStorageService {
         if ("image/jpg".equals(contentType)) {
             contentType = "image/jpeg";
         }
-        if (file.getSize() > 10 * 1024 * 1024) {
-            throw new BusinessException("FILE_TOO_LARGE", "Maximum upload size is 10MB");
+        boolean video = contentType.startsWith("video/");
+        long max = video ? VIDEO_MAX : IMAGE_MAX;
+        if (file.getSize() > max) {
+            throw new BusinessException("FILE_TOO_LARGE",
+                    video ? "Maximum video size is 25MB" : "Maximum upload size is 10MB");
         }
         try {
             Path dir = root.resolve(tenantId.toString());
@@ -86,7 +94,7 @@ public class FileStorageService {
             result.put("sizeBytes", entity.getSizeBytes());
             return result;
         } catch (IOException e) {
-            throw new BusinessException("FILE_STORE_FAILED", "Could not store file");
+            throw new BusinessException("FILE_STORE_FAILED", "Could not store the file. Check that uploads are writable.");
         }
     }
 
@@ -122,6 +130,15 @@ public class FileStorageService {
         }
         if (lower.endsWith(".gif")) {
             return "image/gif";
+        }
+        if (lower.endsWith(".mp4")) {
+            return "video/mp4";
+        }
+        if (lower.endsWith(".webm")) {
+            return "video/webm";
+        }
+        if (lower.endsWith(".mov")) {
+            return "video/quicktime";
         }
         if (lower.endsWith(".doc")) {
             return "application/msword";

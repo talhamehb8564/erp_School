@@ -46,6 +46,7 @@ public class FileController {
         String contentType = Files.probeContentType(path);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + name + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
                 .contentType(MediaType.parseMediaType(contentType == null ? "application/octet-stream" : contentType))
                 .body(new FileSystemResource(path));
     }

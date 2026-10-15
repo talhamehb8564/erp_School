@@ -53,7 +53,14 @@ export function LookupsProvider({ children, enabled }: { children: React.ReactNo
 
   useEffect(() => {
     if (!enabled) return;
-    void reload();
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(() => { void reload(); });
+      const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      return () => cancel?.(id);
+    }
+    const t = window.setTimeout(() => { void reload(); }, 280);
+    return () => window.clearTimeout(t);
   }, [enabled, reload]);
 
   const classMap = useMemo(() => new Map(classes.map((c) => [c.id, c.name])), [classes]);
