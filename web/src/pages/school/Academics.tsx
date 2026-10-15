@@ -12,14 +12,27 @@ import ChildSwitch from "./ChildSwitch";
 export function CampusesPage() {
   const list = useAsync(() => campusApi.list());
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const toast = useToast();
-  const [form, setForm] = useState({ name: "", code: "", city: "", phone: "" });
+  const blank = { name: "", code: "", city: "", phone: "", email: "", address: "", facebookUrl: "", instagramUrl: "", youtubeUrl: "", twitterUrl: "" };
+  const [form, setForm] = useState(blank);
+  const editing = (list.data || []).find((c) => c.id === editId);
   return (
     <>
-      <div className="page-title"><div><h1>Campuses</h1><p>Physical school sites</p></div>
-        <Button kind="brass" onClick={() => setOpen(true)}>Add campus</Button></div>
+      <div className="page-title"><div><h1>Campuses</h1><p>Physical school sites. Logo and colours stay global on the website.</p></div>
+        <Button kind="brass" onClick={() => { setForm(blank); setOpen(true); }}>Add campus</Button></div>
       <QueryState status={list} label="campuses">
-        <Table headers={["Name", "Code", "City", "Phone"]} rows={(list.data || []).map((c) => [c.name, c.code, c.city || "—", c.phone || "—"])} />
+        <Table headers={["Name", "Code", "City", "Phone", "Email", ""]} rows={(list.data || []).map((c) => [
+          c.name, c.code, c.city || "—", c.phone || "—", c.email || "—",
+          <Button key={c.id} kind="ghost" onClick={() => {
+            setEditId(c.id);
+            setForm({
+              name: c.name, code: c.code, city: c.city || "", phone: c.phone || "", email: c.email || "",
+              address: c.address || "", facebookUrl: c.facebookUrl || "", instagramUrl: c.instagramUrl || "",
+              youtubeUrl: c.youtubeUrl || "", twitterUrl: c.twitterUrl || "",
+            });
+          }}>Edit</Button>,
+        ])} />
       </QueryState>
       <Modal title="New campus" open={open} onClose={() => setOpen(false)}>
         <Form busyLabel="Saving…" onSubmit={async () => {
@@ -27,8 +40,31 @@ export function CampusesPage() {
         }}>
           <Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
           <Field label="Code"><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required /></Field>
+          <Field label="Address"><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
           <Field label="City"><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
           <Field label="Phone"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Field label="Email"><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
+        </Form>
+      </Modal>
+      <Modal title={editing ? `Edit ${editing.name}` : "Edit campus"} open={!!editId} onClose={() => setEditId(null)}>
+        <Form busyLabel="Saving…" onSubmit={async () => {
+          if (!editId) return;
+          await campusApi.update(editId, form);
+          toast("ok", "Campus updated");
+          setEditId(null);
+          void list.reload();
+        }}>
+          <Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
+          <Field label="Address"><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
+          <Field label="City"><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+          <Field label="Phone"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Field label="Email"><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Facebook"><input value={form.facebookUrl} onChange={(e) => setForm({ ...form, facebookUrl: e.target.value })} /></Field>
+          <Field label="Instagram"><input value={form.instagramUrl} onChange={(e) => setForm({ ...form, instagramUrl: e.target.value })} /></Field>
+          <Field label="YouTube"><input value={form.youtubeUrl} onChange={(e) => setForm({ ...form, youtubeUrl: e.target.value })} /></Field>
+          <Field label="X / Twitter"><input value={form.twitterUrl} onChange={(e) => setForm({ ...form, twitterUrl: e.target.value })} /></Field>
+          <p className="hint">Hero images for this branch are managed on the Website page. School name, logo and colours never change here.</p>
           <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
         </Form>
       </Modal>

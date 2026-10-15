@@ -51,6 +51,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh",
                                 "/api/v1/setup",
                                 "/api/v1/setup/**",
+                                "/api/v1/public/**",
                                 "/api/v1/health",
                                 "/actuator/health",
                                 "/actuator/health/**",

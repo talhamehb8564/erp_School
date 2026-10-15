@@ -3,6 +3,7 @@ import { feeApi, fileApi, salaryApi, settingsApi, studentApi, subscriptionApi, u
 import { useLookups } from "../../lib/lookups";
 import { fmtDate, money, monthStart, pretty, today } from "../../lib/format";
 import { useSession } from "../../lib/session";
+import { useBranding } from "../../lib/branding";
 import { useToast } from "../../lib/toast";
 import { Badge, Button, Empty, Field, FileLink, Form, Modal, QueryState, Table, useAsync } from "../../ui/kit";
 import ChildSwitch, { useActiveStudentId } from "./ChildSwitch";
@@ -448,7 +449,9 @@ export function SalariesPage() {
 
 export function SettingsPage() {
   const toast = useToast();
-  const { reload } = useSession();
+  const { user, reload } = useSession();
+  const { reload: reloadBrand } = useBranding();
+  const admin = user?.role === "SCHOOL_ADMIN";
   const s = useAsync(() => settingsApi.get());
   const [form, setForm] = useState<SchoolSettings>({});
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -461,13 +464,14 @@ export function SettingsPage() {
         <div className="card" style={{ maxWidth: 640 }}>
           <Form busyLabel="Saving…" onSubmit={async () => {
             let logoUrl = current.logoUrl;
-            if (logoFile) {
+            if (admin && logoFile) {
               const stored = await fileApi.upload(logoFile);
               logoUrl = stored.url;
             }
             await settingsApi.save({ ...current, logoUrl });
             toast("ok", "Settings saved");
             await reload();
+            if (admin) await reloadBrand();
           }}>
             <Field label="Bank name"><input value={current.bankName || ""} onChange={(e) => setForm({ ...form, bankName: e.target.value })} /></Field>
             <Field label="Account title"><input value={current.accountTitle || ""} onChange={(e) => setForm({ ...form, accountTitle: e.target.value })} /></Field>
@@ -476,12 +480,17 @@ export function SettingsPage() {
             <Field label="JazzCash"><input value={current.jazzcash || ""} onChange={(e) => setForm({ ...form, jazzcash: e.target.value })} /></Field>
             <Field label="Easypaisa"><input value={current.easypaisa || ""} onChange={(e) => setForm({ ...form, easypaisa: e.target.value })} /></Field>
             <Field label="Instructions"><textarea value={current.paymentInstructions || ""} onChange={(e) => setForm({ ...form, paymentInstructions: e.target.value })} /></Field>
-            <Field label="School logo">
-              <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
-            </Field>
-            {current.logoUrl ? <img src={current.logoUrl} alt="Logo" style={{ height: 48 }} /> : null}
-            <Field label="Primary color"><input type="color" value={current.primaryColor || "#1f3a5f"} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
-            <Field label="Accent color"><input type="color" value={current.accentColor || "#c4a574"} onChange={(e) => setForm({ ...form, accentColor: e.target.value })} /></Field>
+            {admin ? (
+              <>
+                <Field label="School logo">
+                  <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
+                </Field>
+                {current.logoUrl ? <img src={current.logoUrl} alt="Logo" style={{ height: 48 }} /> : null}
+                <Field label="Primary color"><input type="color" value={current.primaryColor || "#1f3a5f"} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></Field>
+                <Field label="Accent color"><input type="color" value={current.accentColor || "#c4a574"} onChange={(e) => setForm({ ...form, accentColor: e.target.value })} /></Field>
+                <Field label="Secondary color"><input type="color" value={current.secondaryColor || "#1f4d43"} onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })} /></Field>
+              </>
+            ) : null}
             <Field label="Absent deduction"><input type="number" value={current.absentDeduction ?? 0} onChange={(e) => setForm({ ...form, absentDeduction: Number(e.target.value) })} /></Field>
             <Field label="Late deduction"><input type="number" value={current.lateDeduction ?? 0} onChange={(e) => setForm({ ...form, lateDeduction: Number(e.target.value) })} /></Field>
             <Field label="Leave deduction"><input type="number" value={current.leaveDeduction ?? 0} onChange={(e) => setForm({ ...form, leaveDeduction: Number(e.target.value) })} /></Field>

@@ -13,7 +13,7 @@ export function applyTheme(theme: Theme) {
 }
 
 /** Push school primary/accent into CSS variables used by sidebar, buttons, and cards. */
-export function applyBrand(primary?: string | null, accent?: string | null) {
+export function applyBrand(primary?: string | null, accent?: string | null, secondary?: string | null) {
   const root = document.documentElement.style;
   if (primary) {
     root.setProperty("--brand", primary);
@@ -38,5 +38,10 @@ export function applyBrand(primary?: string | null, accent?: string | null) {
     root.removeProperty("--brass");
     root.removeProperty("--brass-2");
     root.removeProperty("--accent-2");
+  }
+  if (secondary) {
+    root.setProperty("--brand-3", secondary);
+  } else {
+    root.removeProperty("--brand-3");
   }
 }

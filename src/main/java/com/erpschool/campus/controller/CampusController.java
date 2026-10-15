@@ -42,6 +42,7 @@ public class CampusController {
         campus.setAddress(request.getAddress());
         campus.setCity(request.getCity());
         campus.setPhone(request.getPhone());
+        campus.setEmail(request.getEmail());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Campus created", campusService.create(campus)));
     }
@@ -60,6 +61,18 @@ public class CampusController {
         campus.setAddress(request.getAddress());
         campus.setCity(request.getCity());
         campus.setPhone(request.getPhone());
+        campus.setEmail(request.getEmail());
+        campus.setFacebookUrl(request.getFacebookUrl());
+        campus.setInstagramUrl(request.getInstagramUrl());
+        campus.setYoutubeUrl(request.getYoutubeUrl());
+        campus.setTwitterUrl(request.getTwitterUrl());
+        if (request.getHero() != null) {
+            try {
+                campus.setHeroJson(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(request.getHero()));
+            } catch (Exception ignored) {
+                campus.setHeroJson("[]");
+            }
+        }
         return ResponseEntity.ok(ApiResponse.ok("Campus updated", campusService.update(id, campus)));
     }
 
@@ -73,5 +86,11 @@ public class CampusController {
         private String address;
         private String city;
         private String phone;
+        private String email;
+        private String facebookUrl;
+        private String instagramUrl;
+        private String youtubeUrl;
+        private String twitterUrl;
+        private java.util.List<java.util.Map<String, Object>> hero;
     }
 }

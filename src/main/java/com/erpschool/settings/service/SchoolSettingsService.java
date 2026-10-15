@@ -1,15 +1,13 @@
 package com.erpschool.settings.service;
 
-import com.erpschool.campus.entity.Campus;
-import com.erpschool.campus.repository.CampusRepository;
 import com.erpschool.common.cache.CatalogCache;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.settings.entity.SchoolSettings;
 import com.erpschool.settings.repository.SchoolSettingsRepository;
-import com.erpschool.tenant.context.CampusScope;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.repository.TenantRepository;
+import com.erpschool.user.entity.UserRole;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,16 +19,13 @@ public class SchoolSettingsService {
 
     private final SchoolSettingsRepository repository;
     private final TenantRepository tenantRepository;
-    private final CampusRepository campusRepository;
     private final CatalogCache catalogCache;
 
     public SchoolSettingsService(SchoolSettingsRepository repository,
                                  TenantRepository tenantRepository,
-                                 CampusRepository campusRepository,
                                  CatalogCache catalogCache) {
         this.repository = repository;
         this.tenantRepository = tenantRepository;
-        this.campusRepository = campusRepository;
         this.catalogCache = catalogCache;
     }
 
@@ -61,9 +56,12 @@ public class SchoolSettingsService {
         s.setJazzcash(incoming.getJazzcash());
         s.setEasypaisa(incoming.getEasypaisa());
         s.setOtherPaymentMethods(incoming.getOtherPaymentMethods());
-        s.setLogoUrl(incoming.getLogoUrl());
-        s.setPrimaryColor(incoming.getPrimaryColor());
-        s.setAccentColor(incoming.getAccentColor());
+        if (TenantContext.getRole() != UserRole.ACCOUNT_OFFICER) {
+            s.setLogoUrl(incoming.getLogoUrl());
+            s.setPrimaryColor(incoming.getPrimaryColor());
+            s.setAccentColor(incoming.getAccentColor());
+            s.setSecondaryColor(incoming.getSecondaryColor());
+        }
         s.setAbsentDeduction(incoming.getAbsentDeduction());
         s.setLateDeduction(incoming.getLateDeduction());
         s.setLeaveDeduction(incoming.getLeaveDeduction());
@@ -71,9 +69,8 @@ public class SchoolSettingsService {
         s.setUpdatedAt(Instant.now());
         s.setUpdatedBy(TenantContext.getUserId());
         SchoolSettings saved = repository.save(s);
-        tenantRepository.findById(tenantId).ifPresent(tenant -> applyBranding(tenant, saved));
-        if (CampusScope.restricts()) {
-            campusRepository.findById(CampusScope.current()).ifPresent(campus -> applyCampus(campus, saved));
+        if (TenantContext.getRole() != UserRole.ACCOUNT_OFFICER) {
+            tenantRepository.findById(tenantId).ifPresent(tenant -> applyBranding(tenant, saved));
         }
         catalogCache.evictTenant(tenantId);
         return saved;
@@ -89,19 +86,9 @@ public class SchoolSettingsService {
         if (saved.getAccentColor() != null) {
             tenant.setAccentColor(saved.getAccentColor());
         }
+        if (saved.getSecondaryColor() != null) {
+            tenant.setSecondaryColor(saved.getSecondaryColor());
+        }
         tenantRepository.save(tenant);
-    }
-
-    private void applyCampus(Campus campus, SchoolSettings saved) {
-        if (saved.getLogoUrl() != null) {
-            campus.setLogoUrl(saved.getLogoUrl());
-        }
-        if (saved.getPrimaryColor() != null) {
-            campus.setPrimaryColor(saved.getPrimaryColor());
-        }
-        if (saved.getAccentColor() != null) {
-            campus.setAccentColor(saved.getAccentColor());
-        }
-        campusRepository.save(campus);
     }
 }

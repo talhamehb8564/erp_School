@@ -53,6 +53,13 @@ export const authApi = {
     api.post<void>(`${v1}/auth/change-password`, { currentPassword, newPassword, newUsername }),
 };
 
+export const publicApi = {
+  school: (code?: string) =>
+    api.get<{ school: import("../lib/branding").PublicSchool; campuses: import("../lib/branding").PublicCampus[] }>(
+      `${v1}/public/school${code ? `?code=${encodeURIComponent(code)}` : ""}`,
+    ),
+};
+
 export const setupApi = {
   status: () => api.get<{ needsSetup: boolean; schoolCount: number; hasOwner: boolean }>(`${v1}/setup/status`),
   complete: (body: { schoolName: string; branches?: string[] }) =>
@@ -346,6 +353,34 @@ export const portalApi = {
   account: () => api.get<Record<string, unknown>>(`${v1}/portals/account`),
   parent: () => api.get<Record<string, unknown>>(`${v1}/portals/parent`),
   student: () => api.get<Record<string, unknown>>(`${v1}/portals/student`),
+};
+
+export const websiteApi = {
+  get: () => api.get<Record<string, unknown>>(`${v1}/website`),
+  save: (body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/website`, body),
+};
+
+export const onlineExamApi = {
+  list: () => api.get<Record<string, unknown>[]>(`${v1}/online-exams`),
+  mine: () => api.get<Record<string, unknown>[]>(`${v1}/online-exams/mine`),
+  get: (id: string) => api.get<Record<string, unknown>>(`${v1}/online-exams/${id}`),
+  create: (body: Record<string, unknown>) => api.post<Record<string, unknown>>(`${v1}/online-exams`, body),
+  update: (id: string, body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/online-exams/${id}`, body),
+  saveQuestions: (id: string, body: Record<string, unknown>[]) =>
+    api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/questions`, body),
+  schedule: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/schedule`),
+  publishResults: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/publish-results`),
+  start: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/start`),
+  saveAnswers: (id: string, body: Record<string, unknown>[]) =>
+    api.put<Record<string, unknown>>(`${v1}/online-exams/${id}/answers`, body),
+  submit: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/submit`),
+  autoSubmit: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/auto-submit`),
+  result: (id: string) => api.get<Record<string, unknown>>(`${v1}/online-exams/${id}/result`),
+  attempts: (id: string) => api.get<Record<string, unknown>[]>(`${v1}/online-exams/${id}/attempts`),
+  attempt: (id: string, attemptId: string) =>
+    api.get<Record<string, unknown>>(`${v1}/online-exams/${id}/attempts/${attemptId}`),
+  grade: (id: string, attemptId: string, body: Record<string, unknown>[]) =>
+    api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/attempts/${attemptId}/grade`, body),
 };
 
 export const healthApi = {

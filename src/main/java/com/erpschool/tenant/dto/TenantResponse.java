@@ -26,6 +26,8 @@ public class TenantResponse {
     private final String logoUrl;
     private final String primaryColor;
     private final String accentColor;
+    private final String secondaryColor;
+    private final String tagline;
     private final String website;
     private final TenantStatus status;
     private final String academicYear;
@@ -51,6 +53,8 @@ public class TenantResponse {
                 .logoUrl(tenant.getLogoUrl())
                 .primaryColor(tenant.getPrimaryColor())
                 .accentColor(tenant.getAccentColor())
+                .secondaryColor(tenant.getSecondaryColor())
+                .tagline(tenant.getTagline())
                 .website(tenant.getWebsite())
                 .status(tenant.getStatus())
                 .academicYear(tenant.getAcademicYear())

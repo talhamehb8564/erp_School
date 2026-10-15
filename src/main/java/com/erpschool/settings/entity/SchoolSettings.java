@@ -58,6 +58,9 @@ public class SchoolSettings {
     @Column(name = "accent_color", length = 16)
     private String accentColor;
 
+    @Column(name = "secondary_color", length = 16)
+    private String secondaryColor;
+
     @Column(name = "absent_deduction", precision = 12, scale = 2)
     private java.math.BigDecimal absentDeduction = java.math.BigDecimal.ZERO;
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useSession } from "../lib/session";
+import { useBranding } from "../lib/branding";
 import type { Role } from "../lib/types";
 import { ROLE_LABEL } from "../lib/types";
 import { homeFor } from "../lib/routes";
@@ -21,6 +22,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
   const { role: slug } = useParams();
   const expected = owner ? "ERP_OWNER" : MAP[slug || ""];
   const { user, login } = useSession();
+  const { school } = useBranding();
   const nav = useNavigate();
   const toast = useToast();
   const [username, setUsername] = useState("");
@@ -29,17 +31,25 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
   if (user) return <Navigate to={homeFor(user)} replace />;
   if (!expected) return <Navigate to="/" replace />;
 
+  const name = owner ? "ERP Owner" : school?.name || "School";
+  const letter = (school?.name || "S").trim().charAt(0).toUpperCase();
+
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <Link to="/" className="kicker">
-          ← All portals
-        </Link>
+        <Link to={owner ? "/" : "/portals"} className="kicker">← {owner ? "Home" : "All portals"}</Link>
+        <div className="site-brand" style={{ margin: "12px 0 8px" }}>
+          {school?.logoUrl && !owner ? <img src={school.logoUrl} alt="" style={{ width: 42, height: 42, objectFit: "cover", borderRadius: 12 }} /> : <div className="mark">{letter}</div>}
+          <div>
+            <strong>{owner ? "Platform console" : name}</strong>
+            <div className="hint">{owner ? "ERP Owner" : `${ROLE_LABEL[expected]} portal`}</div>
+          </div>
+        </div>
         <h1>{owner ? "ERP Owner" : ROLE_LABEL[expected]}</h1>
         <p className="hint">
           {owner
-            ? "Sign in with erp.owner or owner@erpschool.local against /api/v1/auth/login."
-            : "Use the generated username (GVS-ADM-0001) or the account email. Same live /api/v1/auth/login endpoint."}
+            ? "Sign in with your platform owner account."
+            : `Sign in to ${name}. Use your generated username or email.`}
         </p>
         <Form
           busyLabel="Signing in…"

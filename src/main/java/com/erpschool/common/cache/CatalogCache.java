@@ -32,10 +32,16 @@ public class CatalogCache {
 
     public void evictTenant(UUID tenantId) {
         if (tenantId == null) {
+            evictPublic();
             return;
         }
         String prefix = tenantId + ":";
         map.keySet().removeIf(k -> k.startsWith(prefix));
+        evictPublic();
+    }
+
+    public void evictPublic() {
+        map.keySet().removeIf(k -> k.startsWith("public:"));
     }
 
     private record Entry(Object value, long expiresAt) {

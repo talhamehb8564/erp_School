@@ -30,6 +30,24 @@ public class Campus extends TenantAwareEntity {
     @Column(length = 30)
     private String phone;
 
+    @Column(length = 150)
+    private String email;
+
+    @Column(name = "facebook_url", length = 300)
+    private String facebookUrl;
+
+    @Column(name = "instagram_url", length = 300)
+    private String instagramUrl;
+
+    @Column(name = "youtube_url", length = 300)
+    private String youtubeUrl;
+
+    @Column(name = "twitter_url", length = 300)
+    private String twitterUrl;
+
+    @Column(name = "hero_json", columnDefinition = "TEXT")
+    private String heroJson;
+
     @Column(name = "logo_url", length = 500)
     private String logoUrl;
 

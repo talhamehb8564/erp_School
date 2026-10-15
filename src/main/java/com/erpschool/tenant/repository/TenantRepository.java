@@ -17,6 +17,8 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
 
     Optional<Tenant> findByCodeIgnoreCase(String code);
 
+    java.util.List<Tenant> findByStatusInOrderByCreatedAtAsc(java.util.Collection<TenantStatus> statuses);
+
     Page<Tenant> findByStatus(TenantStatus status, Pageable pageable);
 
     /**

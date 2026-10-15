@@ -5,6 +5,7 @@ import { LookupsProvider, useLookups } from "../lib/lookups";
 import { initials } from "../lib/format";
 import { useSession } from "../lib/session";
 import { applyBrand, applyTheme, readTheme, type Theme } from "../lib/theme";
+import { useBranding } from "../lib/branding";
 import { SCHOOL_NAV } from "../lib/nav";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
@@ -13,6 +14,7 @@ import ErrorBoundary from "../ui/ErrorBoundary";
 
 export default function SchoolApp() {
   const { user, tenant, locked, logout } = useSession();
+  const { school } = useBranding();
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme());
   const [unread, setUnread] = useState(0);
@@ -24,14 +26,13 @@ export default function SchoolApp() {
   }, [user, locked]);
 
   useEffect(() => {
-    applyBrand(tenant?.primaryColor, tenant?.accentColor);
-    const school = tenant?.name?.trim();
-    document.title = school || "School ERP";
-    return () => {
-      applyBrand(undefined, undefined);
-      document.title = "School ERP";
-    };
-  }, [tenant?.primaryColor, tenant?.accentColor, tenant?.name]);
+    applyBrand(
+      tenant?.primaryColor || school?.primaryColor,
+      tenant?.accentColor || school?.accentColor,
+      tenant?.secondaryColor || school?.secondaryColor,
+    );
+    document.title = tenant?.name?.trim() || school?.name || "School";
+  }, [tenant?.primaryColor, tenant?.accentColor, tenant?.secondaryColor, tenant?.name, school?.primaryColor, school?.accentColor, school?.secondaryColor, school?.name]);
 
   if (!user) return <Navigate to="/" replace />;
   if (user.role === "ERP_OWNER") return <Navigate to="/admin/app" replace />;
@@ -51,7 +52,7 @@ export default function SchoolApp() {
       <div className="shell" data-role={role}>
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>
-          <BrandMark name={tenant?.name || "School"} code={tenant?.code} logoUrl={tenant?.logoUrl} />
+          <BrandMark name={tenant?.name || school?.name || "School"} code={tenant?.code || school?.code} logoUrl={tenant?.logoUrl || school?.logoUrl} />
           {items.map((i) => (
             <NavLink key={i.to} to={i.to} end={i.to === "/app"} className="nav-link" onClick={() => setOpen(false)}>
               {i.label}

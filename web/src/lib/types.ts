@@ -84,6 +84,8 @@ export interface Tenant {
   logoUrl?: string;
   primaryColor?: string;
   accentColor?: string;
+  secondaryColor?: string;
+  tagline?: string;
   website?: string;
   status: TenantStatus;
   academicYear?: string;
@@ -130,6 +132,12 @@ export interface Campus {
   address?: string;
   city?: string;
   phone?: string;
+  email?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  youtubeUrl?: string;
+  twitterUrl?: string;
+  heroJson?: string;
 }
 
 export interface SchoolClass {
@@ -380,6 +388,7 @@ export interface SchoolSettings {
   logoUrl?: string;
   primaryColor?: string;
   accentColor?: string;
+  secondaryColor?: string;
   absentDeduction?: number;
   lateDeduction?: number;
   leaveDeduction?: number;

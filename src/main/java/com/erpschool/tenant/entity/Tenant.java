@@ -56,6 +56,39 @@ public class Tenant extends BaseEntity {
     @Column(name = "accent_color", length = 16)
     private String accentColor;
 
+    @Column(name = "secondary_color", length = 16)
+    private String secondaryColor;
+
+    @Column(length = 300)
+    private String tagline;
+
+    @Column(name = "about_text", columnDefinition = "TEXT")
+    private String aboutText;
+
+    @Column(name = "academics_text", columnDefinition = "TEXT")
+    private String academicsText;
+
+    @Column(name = "achievements_text", columnDefinition = "TEXT")
+    private String achievementsText;
+
+    @Column(name = "facebook_url", length = 300)
+    private String facebookUrl;
+
+    @Column(name = "instagram_url", length = 300)
+    private String instagramUrl;
+
+    @Column(name = "youtube_url", length = 300)
+    private String youtubeUrl;
+
+    @Column(name = "twitter_url", length = 300)
+    private String twitterUrl;
+
+    @Column(name = "linkedin_url", length = 300)
+    private String linkedinUrl;
+
+    @Column(name = "gallery_json", columnDefinition = "TEXT")
+    private String galleryJson;
+
     @Column(length = 200)
     private String website;
 

@@ -4,6 +4,7 @@ import { useSession } from "./lib/session";
 import { homeFor } from "./lib/routes";
 import Welcome from "./pages/Welcome";
 import LoginPage from "./pages/LoginPage";
+import PortalPage from "./pages/PortalPage";
 import OwnerApp, { OwnerHome, SchoolDetail, Schools, Subscriptions } from "./pages/OwnerApp";
 import SchoolApp from "./pages/SchoolApp";
 import ChangePassword from "./pages/ChangePassword";
@@ -20,6 +21,8 @@ const TimetablePage = lazy(() => import("./pages/school/Academics").then((m) => 
 const AttendancePage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.AttendancePage })));
 const HomeworkPage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.HomeworkPage })));
 const ExamsPage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.ExamsPage })));
+const OnlineExamsPage = lazy(() => import("./pages/school/OnlineExams"));
+const WebsitePage = lazy(() => import("./pages/school/Website"));
 const FeesPage = lazy(() => import("./pages/school/Finance").then((m) => ({ default: m.FeesPage })));
 const SalariesPage = lazy(() => import("./pages/school/Finance").then((m) => ({ default: m.SalariesPage })));
 const SettingsPage = lazy(() => import("./pages/school/Finance").then((m) => ({ default: m.SettingsPage })));
@@ -65,6 +68,7 @@ export default function App() {
       <Suspense fallback={<Loading label="Loading…" />}>
         <Routes>
           <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
+          <Route path="/portals" element={<PublicOnly><PortalPage /></PublicOnly>} />
           <Route path="/login/:role" element={<PublicOnly><LoginPage /></PublicOnly>} />
           <Route path="/admin" element={<PublicOnly><LoginPage owner /></PublicOnly>} />
           <Route path="/dashboard" element={<HomeRedirect />} />
@@ -105,6 +109,9 @@ export default function App() {
             <Route path="attendance" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><AttendancePage /></RoleGate>} />
             <Route path="homework" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><HomeworkPage /></RoleGate>} />
             <Route path="exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><ExamsPage /></RoleGate>} />
+            <Route path="online-exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><OnlineExamsPage /></RoleGate>} />
+            <Route path="online-exams/:examId" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><OnlineExamsPage /></RoleGate>} />
+            <Route path="website" element={<RoleGate roles={["SCHOOL_ADMIN"]}><WebsitePage /></RoleGate>} />
             <Route path="fees" element={<RoleGate roles={["ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"]}><FeesPage /></RoleGate>} />
             <Route path="salaries" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "TEACHER"]}><SalariesPage /></RoleGate>} />
             <Route path="announcements" element={<AnnouncementsPage />} />
