@@ -13,10 +13,10 @@ spring:
       minimum-idle: 0
       connection-timeout: 15000
       validation-timeout: 5000
-      idle-timeout: 30000
+      idle-timeout: 60000
       max-lifetime: 180000
-      keepalive-time: 20000
-      leak-detection-threshold: 20000
+      keepalive-time: 30000
+      leak-detection-threshold: 60000
       initialization-fail-timeout: 60000
       connection-test-query: SELECT 1
       data-source-properties:
