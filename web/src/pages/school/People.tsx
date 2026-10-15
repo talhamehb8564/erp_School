@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { studentApi, userApi } from "../../api/services";
 import { useLookups } from "../../lib/lookups";
 import { pretty } from "../../lib/format";
@@ -148,6 +148,11 @@ export function UsersPage() {
   const [page, setPage] = useState(0);
   const dq = useDebounced(q);
   const list = useAsync(() => userApi.list({ q: dq || undefined, role: role || undefined, page }), [dq, role, page]);
+  useEffect(() => {
+    const refresh = () => void list.reload();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [list.reload]);
   const [open, setOpen] = useState(false);
   const toast = useToast();
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", role: "TEACHER" as Role });

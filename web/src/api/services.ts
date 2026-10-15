@@ -49,8 +49,12 @@ export const authApi = {
   logout: (refreshToken: string) =>
     api.post<void>(`${v1}/auth/logout`, { refreshToken }),
   me: () => api.get<User>(`${v1}/auth/me`),
-  changePassword: (currentPassword: string, newPassword: string, newUsername?: string) =>
-    api.post<void>(`${v1}/auth/change-password`, { currentPassword, newPassword, newUsername }),
+  changePassword: (currentPassword: string, newPassword?: string, newUsername?: string) =>
+    api.post<User>(`${v1}/auth/change-password`, {
+      currentPassword,
+      ...(newPassword ? { newPassword } : {}),
+      ...(newUsername ? { newUsername } : {}),
+    }),
 };
 
 export const publicApi = {

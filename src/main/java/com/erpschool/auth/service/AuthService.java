@@ -153,39 +153,69 @@ public class AuthService {
         auditService.record(AuditService.LOGOUT, "User", null, null);
     }
 
-    @Transactional
-    public void changePassword(User actor, String currentPassword, String newPassword) {
-        changeCredentials(actor, currentPassword, newPassword, null);
+    public UserResponse changePassword(User actor, String currentPassword, String newPassword) {
+        return changeCredentials(actor, currentPassword, newPassword, null);
     }
 
-    @Transactional
-    public void changeCredentials(User actor, String currentPassword, String newPassword, String newUsername) {
-        User user = userRepository.findById(actor.getId())
+    /**
+     * Verify the current password and encode any new hash outside the write
+     * transaction so Neon is not left idle-in-transaction during BCrypt.
+     * Username-only, password-only, or both are persisted with saveAndFlush.
+     */
+    public UserResponse changeCredentials(User actor, String currentPassword, String newPassword, String newUsername) {
+        User loaded = userRepository.findById(actor.getId())
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
-        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+        if (!passwordEncoder.matches(currentPassword, loaded.getPasswordHash())) {
             throw new UnauthorizedException("Current password is incorrect");
         }
-        if (newUsername != null && !newUsername.isBlank()) {
-            String username = newUsername.trim();
-            UUID currentUserId = user.getId();
-            userRepository.findByUsernameIgnoreCase(username)
-                    .filter(existing -> !existing.getId().equals(currentUserId))
-                    .ifPresent(existing -> {
-                        throw new BusinessException("Username is already in use");
-                    });
-            user.setUsername(username);
+        String trimmedUsername = newUsername == null ? null : newUsername.trim();
+        boolean usernameChange = trimmedUsername != null && !trimmedUsername.isEmpty()
+                && !trimmedUsername.equalsIgnoreCase(loaded.getUsername());
+        boolean passwordChange = newPassword != null && !newPassword.isBlank();
+        if (!usernameChange && !passwordChange) {
+            throw new BusinessException("Provide a new username and/or a new password");
         }
-        if (newPassword != null && !newPassword.isBlank()) {
+        if (usernameChange) {
+            if (trimmedUsername.length() < 3 || trimmedUsername.length() > 80) {
+                throw new BusinessException("Username must be between 3 and 80 characters");
+            }
+        }
+        if (passwordChange) {
             if (currentPassword.equals(newPassword)) {
                 throw new BusinessException("NEW_PASSWORD_SAME", "New password must be different from the current password");
             }
-            user.setPasswordHash(passwordEncoder.encode(newPassword));
-            user.setMustChangePassword(false);
-            user.setPasswordChangedAt(Instant.now());
-            refreshTokenRepository.revokeAllForUser(user.getId(), Instant.now());
+            if (newPassword.length() < 8 || newPassword.length() > 72
+                    || !newPassword.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$")) {
+                throw new BusinessException("Password must be 8–72 characters with upper, lower, digit and a special character");
+            }
         }
-        userRepository.save(user);
-        auditService.record(AuditService.PASSWORD_CHANGED, "User", user.getId().toString(), null);
+        String encoded = passwordChange ? passwordEncoder.encode(newPassword) : null;
+        UserResponse updated = writeTx.execute(status -> {
+            User user = userRepository.findById(actor.getId())
+                    .orElseThrow(() -> new UnauthorizedException("User not found"));
+            if (usernameChange) {
+                UUID currentUserId = user.getId();
+                userRepository.findByUsernameIgnoreCase(trimmedUsername)
+                        .filter(existing -> !existing.getId().equals(currentUserId))
+                        .ifPresent(existing -> {
+                            throw new BusinessException("Username is already in use");
+                        });
+                user.setUsername(trimmedUsername);
+            }
+            if (passwordChange) {
+                user.setPasswordHash(encoded);
+                user.setMustChangePassword(false);
+                user.setPasswordChangedAt(Instant.now());
+            }
+            refreshTokenRepository.revokeAllForUser(user.getId(), Instant.now());
+            return UserResponse.from(userRepository.saveAndFlush(user));
+        });
+        if (updated == null) {
+            throw new BusinessException("Unable to save credentials");
+        }
+        auditService.record(AuditService.PASSWORD_CHANGED, "User", actor.getId().toString(),
+                Map.of("usernameChanged", usernameChange, "passwordChanged", passwordChange));
+        return updated;
     }
 
     @Transactional(readOnly = true)

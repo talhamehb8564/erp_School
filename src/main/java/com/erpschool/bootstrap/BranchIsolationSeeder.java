@@ -120,7 +120,7 @@ public class BranchIsolationSeeder implements ApplicationRunner {
         fillCampus(tenant, canal, grade6, g6a, password, 50);
         fillCampus(tenant, cantt, grade7, g7a, password, 50);
 
-        backfillCnics(tenantId);
+        backfillCnics(tenantId, tenant.getCode());
         examSessionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().findFirst().ifPresent(session -> {
             if (session.getAnnounceAt() == null) {
                 session.setAnnounceAt(Instant.now().minus(1, ChronoUnit.HOURS));
@@ -233,8 +233,7 @@ public class BranchIsolationSeeder implements ApplicationRunner {
                 userDirty = true;
             }
             String cnic = String.format("3%02d%010d", Math.abs(campus.getCode().hashCode()) % 90, seq);
-            if (account.getRole() == UserRole.STUDENT
-                    && (account.getUsername() == null || account.getUsername().length() < 13)) {
+            if (account.getRole() == UserRole.STUDENT && looksGeneratedUsername(account.getUsername(), tenant.getCode())) {
                 boolean taken = userRepository.findByUsernameIgnoreCase(cnic)
                         .filter(other -> !other.getId().equals(accountId))
                         .isPresent();
@@ -265,7 +264,7 @@ public class BranchIsolationSeeder implements ApplicationRunner {
         }
     }
 
-    private void backfillCnics(UUID tenantId) {
+    private void backfillCnics(UUID tenantId, String tenantCode) {
         int n = 1;
         for (Student student : studentRepository.findByTenantId(tenantId)) {
             if (student.getCnic() != null) {
@@ -277,7 +276,8 @@ public class BranchIsolationSeeder implements ApplicationRunner {
             if (student.getUserId() != null) {
                 String username = cnic;
                 userRepository.findById(student.getUserId()).ifPresent(account -> {
-                    if (account.getRole() == UserRole.STUDENT) {
+                    if (account.getRole() == UserRole.STUDENT
+                            && looksGeneratedUsername(account.getUsername(), tenantCode)) {
                         userRepository.findByUsernameIgnoreCase(username)
                                 .filter(existing -> !existing.getId().equals(account.getId()))
                                 .ifPresentOrElse(existing -> { /* keep generated username */ }, () -> {
@@ -288,5 +288,17 @@ public class BranchIsolationSeeder implements ApplicationRunner {
                 });
             }
         }
+    }
+
+    /** Generated logins look like GVS-ST-0001. Never overwrite a user-chosen username. */
+    static boolean looksGeneratedUsername(String username, String tenantCode) {
+        if (username == null || username.isBlank()) {
+            return true;
+        }
+        String code = tenantCode == null ? "" : tenantCode.trim().toUpperCase();
+        if (code.isEmpty()) {
+            return false;
+        }
+        return username.toUpperCase().matches(java.util.regex.Pattern.quote(code) + "-[A-Z]{2,4}-\\d{4}");
     }
 }

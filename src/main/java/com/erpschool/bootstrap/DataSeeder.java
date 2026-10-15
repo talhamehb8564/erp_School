@@ -159,28 +159,11 @@ public class DataSeeder implements ApplicationRunner {
                 existing.setRole(role);
                 dirty = true;
             }
-            dirty = restoreCanonicalUsername(existing, tenant.getCode(), role) || dirty;
             dirty = unlock(existing) || dirty;
             if (dirty) {
                 userRepository.save(existing);
             }
         });
-    }
-
-    private boolean restoreCanonicalUsername(User user, String tenantCode, UserRole role) {
-        String canonical = tenantCode.toUpperCase() + "-" + role.getUsernameCode() + "-0001";
-        if (canonical.equalsIgnoreCase(user.getUsername())) {
-            return false;
-        }
-        boolean taken = userRepository.findByUsernameIgnoreCase(canonical)
-                .filter(other -> !other.getId().equals(user.getId()))
-                .isPresent();
-        if (taken) {
-            return false;
-        }
-        log.info("Restoring demo username {} -> {}", user.getUsername(), canonical);
-        user.setUsername(canonical);
-        return true;
     }
 
     private static boolean unlock(User user) {

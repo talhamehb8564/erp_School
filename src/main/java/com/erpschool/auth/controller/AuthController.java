@@ -55,11 +55,12 @@ public class AuthController {
     }
 
     @PostMapping("/change-password")
-    @Operation(summary = "Change password for the authenticated user")
-    public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+    @Operation(summary = "Change username and/or password for the authenticated user")
+    public ResponseEntity<ApiResponse<UserResponse>> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         User user = authService.requireUser(CurrentUser.require().getId());
-        authService.changeCredentials(user, request.getCurrentPassword(), request.getNewPassword(), request.getNewUsername());
-        return ResponseEntity.ok(ApiResponse.ok("Credentials updated. Please login again.", null));
+        UserResponse updated = authService.changeCredentials(
+                user, request.getCurrentPassword(), request.getNewPassword(), request.getNewUsername());
+        return ResponseEntity.ok(ApiResponse.ok("Credentials updated. Please login again.", updated));
     }
 
     @GetMapping("/me")

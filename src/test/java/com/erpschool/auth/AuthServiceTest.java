@@ -182,14 +182,69 @@ class AuthServiceTest {
     @Test
     void changePasswordUpdatesHashAndRevokesRefreshTokens() {
         when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         authService.changePassword(teacher, "ChangeMe@123", "NewPass@123");
 
         assertThat(passwordEncoder.matches("NewPass@123", teacher.getPasswordHash())).isTrue();
         assertThat(passwordEncoder.matches("ChangeMe@123", teacher.getPasswordHash())).isFalse();
         assertThat(teacher.isMustChangePassword()).isFalse();
+        assertThat(teacher.getUsername()).isEqualTo("GVS-TCH-0001");
         verify(refreshTokenRepository).revokeAllForUser(eq(teacher.getId()), any());
+        verify(userRepository).saveAndFlush(teacher);
+    }
+
+    @Test
+    void changeUsernamePersistsAndRevokesRefreshTokensWithoutPasswordChange() {
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.findByUsernameIgnoreCase("ali.raza")).thenReturn(Optional.empty());
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        String previousHash = teacher.getPasswordHash();
+
+        var updated = authService.changeCredentials(teacher, "ChangeMe@123", null, "ali.raza");
+
+        assertThat(updated.getUsername()).isEqualTo("ali.raza");
+        assertThat(teacher.getUsername()).isEqualTo("ali.raza");
+        assertThat(teacher.getPasswordHash()).isEqualTo(previousHash);
+        verify(refreshTokenRepository).revokeAllForUser(eq(teacher.getId()), any());
+        verify(userRepository).saveAndFlush(teacher);
+    }
+
+    @Test
+    void changeUsernameAndPasswordTogether() {
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.findByUsernameIgnoreCase("teacher.one")).thenReturn(Optional.empty());
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var updated = authService.changeCredentials(teacher, "ChangeMe@123", "NewPass@123", "teacher.one");
+
+        assertThat(updated.getUsername()).isEqualTo("teacher.one");
+        assertThat(passwordEncoder.matches("NewPass@123", teacher.getPasswordHash())).isTrue();
+        assertThat(passwordEncoder.matches("ChangeMe@123", teacher.getPasswordHash())).isFalse();
+        verify(refreshTokenRepository).revokeAllForUser(eq(teacher.getId()), any());
+    }
+
+    @Test
+    void changeUsernameRejectsDuplicates() {
+        User other = new User();
+        other.setId(UUID.randomUUID());
+        other.setUsername("taken");
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.findByUsernameIgnoreCase("taken")).thenReturn(Optional.of(other));
+
+        assertThatThrownBy(() -> authService.changeCredentials(teacher, "ChangeMe@123", null, "taken"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("already in use");
+        assertThat(teacher.getUsername()).isEqualTo("GVS-TCH-0001");
+    }
+
+    @Test
+    void changeCredentialsRequiresUsernameOrPasswordChange() {
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+
+        assertThatThrownBy(() -> authService.changeCredentials(teacher, "ChangeMe@123", null, "GVS-TCH-0001"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("new username");
     }
 
     @Test
