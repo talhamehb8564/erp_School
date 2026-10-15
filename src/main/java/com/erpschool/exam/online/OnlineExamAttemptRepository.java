@@ -10,4 +10,6 @@ public interface OnlineExamAttemptRepository extends JpaRepository<OnlineExamAtt
     Optional<OnlineExamAttempt> findByTenantIdAndExamIdAndStudentId(UUID tenantId, UUID examId, UUID studentId);
     List<OnlineExamAttempt> findByTenantIdAndExamIdOrderBySubmittedAtDesc(UUID tenantId, UUID examId);
     List<OnlineExamAttempt> findByTenantIdAndStudentIdOrderByStartedAtDesc(UUID tenantId, UUID studentId);
+    boolean existsByTenantIdAndExamId(UUID tenantId, UUID examId);
+    long countByTenantIdAndExamId(UUID tenantId, UUID examId);
 }

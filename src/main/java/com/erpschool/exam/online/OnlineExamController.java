@@ -30,14 +30,14 @@ public class OnlineExamController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> create(@RequestBody OnlineExam body) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> create(@RequestBody Map<String, Object> body) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Exam created", onlineExamService.create(body)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> update(@PathVariable UUID id, @RequestBody OnlineExam body) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> update(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
         return ResponseEntity.ok(ApiResponse.ok("Exam updated", onlineExamService.update(id, body)));
     }
 

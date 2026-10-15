@@ -12,6 +12,14 @@ import ChangePassword from "./ChangePassword";
 import { Button, ErrorBox } from "../ui/kit";
 import ErrorBoundary from "../ui/ErrorBoundary";
 
+const NAV_GROUPS: { label: string; tos: string[] }[] = [
+  { label: "Home", tos: ["/app", "/app/notifications", "/app/password"] },
+  { label: "People", tos: ["/app/students", "/app/users", "/app/campuses"] },
+  { label: "Academics", tos: ["/app/academics", "/app/timetable", "/app/attendance", "/app/homework", "/app/exams", "/app/online-exams"] },
+  { label: "Finance", tos: ["/app/fees", "/app/salaries", "/app/reports", "/app/billing"] },
+  { label: "School", tos: ["/app/website", "/app/announcements", "/app/calendar", "/app/settings"] },
+];
+
 export default function SchoolApp() {
   const { user, tenant, locked, logout } = useSession();
   const { school } = useBranding();
@@ -41,6 +49,8 @@ export default function SchoolApp() {
 
   const role = user.role;
   const items = SCHOOL_NAV.filter((i) => i.roles.includes(role));
+  const current = items.find((i) => i.to === loc.pathname)
+    || items.filter((i) => i.to !== "/app" && loc.pathname.startsWith(i.to)).sort((a, b) => b.to.length - a.to.length)[0];
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
     applyTheme(next);
@@ -53,12 +63,21 @@ export default function SchoolApp() {
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>
           <BrandMark name={tenant?.name || school?.name || "School"} code={tenant?.code || school?.code} logoUrl={tenant?.logoUrl || school?.logoUrl} />
-          {items.map((i) => (
-            <NavLink key={i.to} to={i.to} end={i.to === "/app"} className="nav-link" onClick={() => setOpen(false)}>
-              {i.label}
-              {i.to === "/app/notifications" && unread ? ` (${unread})` : ""}
-            </NavLink>
-          ))}
+          {NAV_GROUPS.map((g) => {
+            const shown = items.filter((i) => g.tos.includes(i.to));
+            if (!shown.length) return null;
+            return (
+              <div key={g.label} className="nav-group">
+                <div className="nav-sec">{g.label}</div>
+                {shown.map((i) => (
+                  <NavLink key={i.to} to={i.to} end={i.to === "/app"} className="nav-link" onClick={() => setOpen(false)}>
+                    {i.label}
+                    {i.to === "/app/notifications" && unread ? ` (${unread})` : ""}
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
           <div style={{ flex: 1 }} />
           <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
             Sign out
@@ -69,8 +88,8 @@ export default function SchoolApp() {
             <button className="icon-btn burger" onClick={() => setOpen((v) => !v)}>
               ☰
             </button>
-            <div>
-              <div className="crumbs">{role.replaceAll("_", " ")}</div>
+            <div className="topbar-copy">
+              <div className="crumbs">{role.replaceAll("_", " ")}{current ? ` · ${current.label}` : ""}</div>
               <strong>{user.fullName}</strong>
             </div>
             <div className="row">
@@ -80,7 +99,7 @@ export default function SchoolApp() {
           </header>
           <div className="content">
             <LookupsAlert />
-            <ActivityBar />
+            <ActivityBar enabled={loc.pathname === "/app"} />
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>
@@ -109,13 +128,13 @@ function BrandMark({ name, code, logoUrl }: { name: string; code?: string; logoU
   );
 }
 
-function ActivityBar() {
+function ActivityBar({ enabled }: { enabled: boolean }) {
   const { locked } = useSession();
   const [items, setItems] = useState<{ id: string; action: string; createdAt?: string }[]>([]);
   useEffect(() => {
-    if (locked) return;
+    if (!enabled || locked) return;
     void auditApi.mine().then((page) => setItems(page.content || [])).catch(() => undefined);
-  }, [locked]);
+  }, [enabled, locked]);
   if (!items.length) return null;
   return (
     <div className="activity-bar" aria-label="Recent activity">

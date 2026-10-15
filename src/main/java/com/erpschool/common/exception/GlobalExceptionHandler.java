@@ -62,6 +62,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnreadable(HttpMessageNotReadableException ex) {
+        String detail = ex.getMostSpecificCause() == null ? "" : String.valueOf(ex.getMostSpecificCause().getMessage());
+        String lower = detail.toLowerCase();
+        if (lower.contains("uuid")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.fail("VALIDATION_ERROR",
+                            "A class or section identifier was empty or invalid. Select a class and at least one section."));
+        }
         return ResponseEntity.badRequest()
                 .body(ApiResponse.fail("MALFORMED_JSON", "Request body is missing or invalid JSON"));
     }

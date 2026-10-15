@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ApiError } from "../../api/client";
 import { academicApi, onlineExamApi } from "../../api/services";
 import { useLookups } from "../../lib/lookups";
 import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
+import type { Section } from "../../lib/types";
 import { Badge, Button, Empty, Field, Form, QueryState, Table, useAsync } from "../../ui/kit";
 
 type QuestionDraft = {
@@ -21,6 +23,8 @@ type QuestionDraft = {
   textAnswer?: string;
   obtainedMarks?: number | string;
   autoGraded?: boolean;
+  gradingStatus?: string;
+  hasAnswerKey?: boolean;
 };
 
 function str(v: unknown, fallback = "") {
@@ -50,25 +54,127 @@ function clock(seconds: number) {
   if (h) return `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
   return `${m}:${String(r).padStart(2, "0")}`;
 }
+function idsOf(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => str(x)).filter(Boolean);
+}
 
-function useDeadline(remainingSeconds?: unknown, deadlineAt?: unknown) {
-  const end = useMemo(() => {
-    if (typeof remainingSeconds === "number") return Date.now() + remainingSeconds * 1000;
-    if (typeof deadlineAt === "string") {
-      const t = new Date(deadlineAt).getTime();
-      return Number.isNaN(t) ? null : t;
-    }
-    return null;
-  }, [remainingSeconds, deadlineAt]);
-  const [left, setLeft] = useState(() => (end ? Math.max(0, Math.floor((end - Date.now()) / 1000)) : 0));
+function resolveDeadline(remainingSeconds?: unknown, deadlineAt?: unknown, serverNow?: unknown): number | null {
+  const deadline = typeof deadlineAt === "string" ? Date.parse(deadlineAt) : NaN;
+  const server = typeof serverNow === "string" ? Date.parse(serverNow) : NaN;
+  if (!Number.isNaN(deadline)) {
+    if (!Number.isNaN(server)) return Date.now() + (deadline - server);
+    return deadline;
+  }
+  if (typeof remainingSeconds === "number" && Number.isFinite(remainingSeconds) && remainingSeconds >= 0) {
+    return Date.now() + remainingSeconds * 1000;
+  }
+  return null;
+}
+
+function useDeadline(remainingSeconds?: unknown, deadlineAt?: unknown, serverNow?: unknown) {
+  const end = useMemo(
+    () => resolveDeadline(remainingSeconds, deadlineAt, serverNow),
+    [remainingSeconds, deadlineAt, serverNow],
+  );
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!end) return;
-    const tick = () => setLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)));
+    if (end == null) return;
+    const tick = () => setNow(Date.now());
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, [end]);
+  const left = end == null ? null : Math.max(0, Math.floor((end - now) / 1000));
   return { left, end };
+}
+
+function examPayload(form: {
+  title: string;
+  description: string;
+  classId: string;
+  subjectId: string;
+  sectionIds: string[];
+  allSections: boolean;
+  startAt: string;
+  durationMinutes: string;
+  passingMarks: string;
+  mcqMarks: string;
+  shortMarks: string;
+  longMarks: string;
+  shortRequired: string;
+  longRequired: string;
+}, teacher: boolean) {
+  if (!form.classId) throw new Error("Class is required");
+  if (!form.subjectId) throw new Error("Subject is required");
+  if (!form.sectionIds.length && !form.allSections) throw new Error("Select at least one section, or All sections");
+  const startAt = fromLocalInput(form.startAt);
+  return {
+    title: form.title,
+    description: form.description,
+    classId: form.classId,
+    subjectId: form.subjectId,
+    sectionIds: form.sectionIds,
+    allSections: form.allSections && !teacher,
+    startAt,
+    examDate: startAt.slice(0, 10),
+    durationMinutes: Number(form.durationMinutes),
+    passingMarks: form.passingMarks ? Number(form.passingMarks) : null,
+    mcqMarks: Number(form.mcqMarks),
+    shortMarks: Number(form.shortMarks),
+    longMarks: Number(form.longMarks),
+    shortRequired: form.shortRequired ? Number(form.shortRequired) : null,
+    longRequired: form.longRequired ? Number(form.longRequired) : null,
+  };
+}
+
+function SectionPicker({
+  options,
+  value,
+  allOn,
+  disabled,
+  onChange,
+}: {
+  options: Section[];
+  value: string[];
+  allOn: boolean;
+  disabled?: boolean;
+  onChange: (ids: string[], all: boolean) => void;
+}) {
+  const allIds = options.map((s) => s.id);
+  if (!options.length) return <p className="hint">No sections for this class.</p>;
+  return (
+    <div className="section-picker">
+      <label className={`chip ${allOn ? "on" : ""}`}>
+        <input
+          type="checkbox"
+          checked={allOn}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked ? allIds : [], e.target.checked)}
+        />
+        All sections
+      </label>
+      {options.map((s) => {
+        const on = allOn || value.includes(s.id);
+        return (
+          <label key={s.id} className={`chip ${on ? "on" : ""}`}>
+            <input
+              type="checkbox"
+              disabled={disabled}
+              checked={on}
+              onChange={(e) => {
+                const next = e.target.checked
+                  ? Array.from(new Set([...value, s.id]))
+                  : value.filter((id) => id !== s.id);
+                onChange(next, next.length === allIds.length && allIds.length > 0);
+              }}
+            />
+            {s.name}
+          </label>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function OnlineExamsPage() {
@@ -84,7 +190,12 @@ function StudentList() {
   const { className, subjectName } = useLookups();
   return (
     <>
-      <div className="page-title"><div><h1>Online exams</h1><p>Timed papers. Remaining time comes from the server when you start.</p></div></div>
+      <div className="page-title">
+        <div>
+          <h1>Online exams</h1>
+          <p>Timed papers. The clock starts from the server deadline when you open a live exam.</p>
+        </div>
+      </div>
       <QueryState status={list} label="online exams">
         {!(list.data || []).length ? <Empty title="No online exams" hint="Scheduled papers for your class appear here." /> : (
           <Table
@@ -97,12 +208,13 @@ function StudentList() {
               if (attempt === "IN_PROGRESS" || status === "LIVE") action = <Link to={`/app/online-exams/${id}`} className="btn sm brass">Open</Link>;
               else if (status === "SCHEDULED") action = <Link to={`/app/online-exams/${id}`} className="btn sm ghost">Waiting</Link>;
               else if (attempt) action = <Link to={`/app/online-exams/${id}`} className="btn sm ghost">Result</Link>;
+              const grade = e.grade != null ? ` · ${str(e.obtainedMarks)}/${str(e.totalMarks)} ${str(e.grade)}` : "";
               return [
                 str(e.title),
                 subjectName(str(e.subjectId)) + " · " + className(str(e.classId)),
                 e.startAt ? new Date(str(e.startAt)).toLocaleString() : "—",
                 `${num(e.durationMinutes)} min`,
-                <Badge key={id} value={attempt || status} />,
+                <Badge key={id} value={(attempt || status) + grade} />,
                 action,
               ];
             })}
@@ -117,25 +229,31 @@ function StudentTake({ examId }: { examId: string }) {
   const toast = useToast();
   const nav = useNavigate();
   const paper = useAsync(async () => {
-    const mine = await onlineExamApi.mine();
-    const row = mine.find((x) => str(x.id) === examId);
-    const attempt = str(row?.attemptStatus);
-    const status = str(row?.status);
-    if (status === "LIVE" || attempt === "IN_PROGRESS") {
-      return onlineExamApi.start(examId);
+    try {
+      return await onlineExamApi.start(examId);
+    } catch (e) {
+      const code = e instanceof ApiError ? e.errorCode : "";
+      if (code === "EXAM_NOT_STARTED") {
+        const mine = await onlineExamApi.mine();
+        const row = mine.find((x) => str(x.id) === examId);
+        if (row) return row;
+      }
+      try {
+        return await onlineExamApi.result(examId);
+      } catch {
+        const mine = await onlineExamApi.mine();
+        const row = mine.find((x) => str(x.id) === examId);
+        if (row) return row;
+        throw e;
+      }
     }
-    if (attempt && attempt !== "IN_PROGRESS") {
-      return onlineExamApi.result(examId);
-    }
-    if (row) return row;
-    throw new Error("Exam not found for this student");
   }, [examId]);
   const data = paper.data;
   const inProgress = str(data?.attemptStatus) === "IN_PROGRESS";
   const questions = ((data?.questions as QuestionDraft[]) || []);
   const [answers, setAnswers] = useState<Record<string, { optionChoice?: string; textAnswer?: string }>>({});
   const dirty = useRef(false);
-  const { left, end } = useDeadline(data?.remainingSeconds, data?.deadlineAt);
+  const { left, end } = useDeadline(data?.remainingSeconds, data?.deadlineAt, data?.serverNow);
 
   useEffect(() => {
     const next: Record<string, { optionChoice?: string; textAnswer?: string }> = {};
@@ -160,7 +278,7 @@ function StudentTake({ examId }: { examId: string }) {
 
   const autoFired = useRef(false);
   useEffect(() => {
-    if (!inProgress || !end || left > 0 || autoFired.current) return;
+    if (!inProgress || end == null || left == null || left > 0 || autoFired.current) return;
     autoFired.current = true;
     void (async () => {
       try {
@@ -188,7 +306,7 @@ function StudentTake({ examId }: { examId: string }) {
           <h1>{str(data?.title, "Online exam")}</h1>
           <p>{str(data?.description)}</p>
         </div>
-        {inProgress ? <div className="exam-timer" data-low={left < 60 ? "1" : undefined}>{clock(left)}</div> : null}
+        {inProgress && left != null ? <div className="exam-timer" data-low={left < 60 ? "1" : undefined}>{clock(left)}</div> : null}
       </div>
       <QueryState status={paper} label="exam">
         {!data ? <Empty title="Exam unavailable" /> : null}
@@ -270,17 +388,21 @@ function StaffList() {
   const classOpts = allowedClassIds ? classes.filter((c) => allowedClassIds.has(c.id)) : classes;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
-    title: "", description: "", classId: "", sectionId: "", subjectId: "",
+    title: "", description: "", classId: "", subjectId: "",
+    sectionIds: [] as string[], allSections: false,
     startAt: "", durationMinutes: "60", passingMarks: "", mcqMarks: "1", shortMarks: "2", longMarks: "5",
     shortRequired: "", longRequired: "",
   });
+  const sectionOpts = (sections[form.classId] || []).filter((s) =>
+    !teacher || (assigns.data || []).some((a) => a.sectionId === s.id && a.classId === form.classId),
+  );
   const subjectOpts = teacher
-    ? subjects.filter((s) => (assigns.data || []).some((a) => a.subjectId === s.id && a.classId === form.classId && (!form.sectionId || a.sectionId === form.sectionId)))
+    ? subjects.filter((s) => (assigns.data || []).some((a) => a.subjectId === s.id && a.classId === form.classId && (!form.sectionIds.length || form.sectionIds.includes(a.sectionId))))
     : subjects;
   return (
     <>
       <div className="page-title">
-        <div><h1>Online exams</h1><p>Timed MCQ, short and long papers. Answer keys never go to students.</p></div>
+        <div><h1>Online exams</h1><p>Timed MCQ, short and long papers. Assign one exam to several sections. Answer keys never go to students.</p></div>
         <Button kind="brass" onClick={() => setOpen(true)}>New exam</Button>
       </div>
       <QueryState status={list} label="online exams">
@@ -288,9 +410,11 @@ function StaffList() {
           headers={["Exam", "Class", "Starts", "Duration", "Status", ""]}
           rows={(list.data || []).map((e) => {
             const id = str(e.id);
+            const secIds = idsOf(e.sectionIds);
+            const secNames = (sections[str(e.classId)] || []).filter((s) => secIds.includes(s.id)).map((s) => s.name).join(", ");
             return [
               str(e.title),
-              `${className(str(e.classId))} · ${subjectName(str(e.subjectId))}`,
+              `${className(str(e.classId))}${secNames ? ` · ${secNames}` : ""} · ${subjectName(str(e.subjectId))}`,
               e.startAt ? new Date(str(e.startAt)).toLocaleString() : "—",
               `${num(e.durationMinutes)} min`,
               <Badge key={id} value={str(e.status)} />,
@@ -303,40 +427,25 @@ function StaffList() {
         <div className="card" style={{ marginTop: 16 }}>
           <h3>Create exam</h3>
           <Form busyLabel="Creating…" onSubmit={async () => {
-            const created = await onlineExamApi.create({
-              title: form.title,
-              description: form.description,
-              classId: form.classId,
-              sectionId: form.sectionId,
-              subjectId: form.subjectId,
-              startAt: fromLocalInput(form.startAt),
-              examDate: fromLocalInput(form.startAt).slice(0, 10),
-              durationMinutes: Number(form.durationMinutes),
-              passingMarks: form.passingMarks ? Number(form.passingMarks) : null,
-              mcqMarks: Number(form.mcqMarks),
-              shortMarks: Number(form.shortMarks),
-              longMarks: Number(form.longMarks),
-              shortRequired: form.shortRequired ? Number(form.shortRequired) : null,
-              longRequired: form.longRequired ? Number(form.longRequired) : null,
-            });
+            const created = await onlineExamApi.create(examPayload(form, teacher));
             toast("ok", "Draft created");
             nav(`/app/online-exams/${str(created.id)}`);
           }}>
             <Field label="Title"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></Field>
             <Field label="Description"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <Field label="Class">
-              <select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value, sectionId: "", subjectId: "" })} required>
+              <select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value, sectionIds: [], allSections: false, subjectId: "" })} required>
                 <option value="">Select</option>
                 {classOpts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
-            <Field label="Section">
-              <select value={form.sectionId} onChange={(e) => setForm({ ...form, sectionId: e.target.value })} required>
-                <option value="">Select</option>
-                {(sections[form.classId] || []).filter((s) => !teacher || (assigns.data || []).some((a) => a.sectionId === s.id && a.classId === form.classId)).map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+            <Field label="Sections">
+              <SectionPicker
+                options={sectionOpts}
+                value={form.sectionIds}
+                allOn={form.allSections}
+                onChange={(sectionIds, allSections) => setForm({ ...form, sectionIds, allSections })}
+              />
             </Field>
             <Field label="Subject">
               <select value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })} required>
@@ -373,7 +482,8 @@ function StaffExam({ examId }: { examId: string }) {
   const attempts = useAsync(() => onlineExamApi.attempts(examId), [examId]);
   const data = exam.data;
   const [meta, setMeta] = useState({
-    title: "", description: "", classId: "", sectionId: "", subjectId: "",
+    title: "", description: "", classId: "", subjectId: "",
+    sectionIds: [] as string[], allSections: false,
     startAt: "", durationMinutes: "60", passingMarks: "", mcqMarks: "1", shortMarks: "2", longMarks: "5",
     shortRequired: "", longRequired: "",
   });
@@ -381,15 +491,19 @@ function StaffExam({ examId }: { examId: string }) {
   const [grading, setGrading] = useState<string | null>(null);
   const detail = useAsync(() => (grading ? onlineExamApi.attempt(examId, grading) : Promise.resolve(null)), [examId, grading]);
   const { classes, sections, subjects } = useLookups();
+  const { user } = useSession();
+  const teacher = user?.role === "TEACHER";
 
   useEffect(() => {
     if (!data) return;
+    const sectionIds = idsOf(data.sectionIds);
     setMeta({
       title: str(data.title),
       description: str(data.description),
       classId: str(data.classId),
-      sectionId: str(data.sectionId),
       subjectId: str(data.subjectId),
+      sectionIds: sectionIds.length ? sectionIds : (data.sectionId ? [str(data.sectionId)] : []),
+      allSections: Boolean(data.allSections),
       startAt: toLocalInput(str(data.startAt)),
       durationMinutes: str(data.durationMinutes, "60"),
       passingMarks: data.passingMarks == null ? "" : str(data.passingMarks),
@@ -405,9 +519,11 @@ function StaffExam({ examId }: { examId: string }) {
   const status = str(data?.status);
   const editable = status === "DRAFT" || status === "SCHEDULED";
   const questionsLocked = status !== "DRAFT";
+  const assignmentLocked = Boolean(data?.assignmentLocked);
+  const sectionOpts = sections[meta.classId] || [];
 
   const addQuestion = (questionType: string) => {
-    setQuestions((q) => [...q, { questionType, prompt: "", optionA: "", optionB: "", optionC: "", optionD: "", correctOption: "A" }]);
+    setQuestions((q) => [...q, { questionType, prompt: "", optionA: "", optionB: "", optionC: "", optionD: "", correctOption: "" }]);
   };
   const patchQ = (i: number, patch: Partial<QuestionDraft>) => {
     setQuestions((qs) => qs.map((q, n) => (n === i ? { ...q, ...patch } : q)));
@@ -444,22 +560,7 @@ function StaffExam({ examId }: { examId: string }) {
             <div className="card">
               <h3>Paper settings</h3>
               <Form busyLabel="Saving…" onSubmit={async () => {
-                await onlineExamApi.update(examId, {
-                  title: meta.title,
-                  description: meta.description,
-                  classId: meta.classId,
-                  sectionId: meta.sectionId,
-                  subjectId: meta.subjectId,
-                  startAt: fromLocalInput(meta.startAt),
-                  examDate: fromLocalInput(meta.startAt).slice(0, 10),
-                  durationMinutes: Number(meta.durationMinutes),
-                  passingMarks: meta.passingMarks ? Number(meta.passingMarks) : null,
-                  mcqMarks: Number(meta.mcqMarks),
-                  shortMarks: Number(meta.shortMarks),
-                  longMarks: Number(meta.longMarks),
-                  shortRequired: meta.shortRequired ? Number(meta.shortRequired) : null,
-                  longRequired: meta.longRequired ? Number(meta.longRequired) : null,
-                });
+                await onlineExamApi.update(examId, examPayload(meta, teacher));
                 toast("ok", "Exam updated");
                 await exam.reload();
               }}>
@@ -467,14 +568,24 @@ function StaffExam({ examId }: { examId: string }) {
                   <Field label="Title"><input value={meta.title} onChange={(e) => setMeta({ ...meta, title: e.target.value })} required /></Field>
                   <Field label="Description"><textarea value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} /></Field>
                   <Field label="Class">
-                    <select value={meta.classId} onChange={(e) => setMeta({ ...meta, classId: e.target.value, sectionId: "" })} required>
+                    <select
+                      value={meta.classId}
+                      disabled={assignmentLocked}
+                      onChange={(e) => setMeta({ ...meta, classId: e.target.value, sectionIds: [], allSections: false })}
+                      required
+                    >
                       {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </Field>
-                  <Field label="Section">
-                    <select value={meta.sectionId} onChange={(e) => setMeta({ ...meta, sectionId: e.target.value })} required>
-                      {(sections[meta.classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                  <Field label="Sections">
+                    <SectionPicker
+                      options={sectionOpts}
+                      value={meta.sectionIds}
+                      allOn={meta.allSections}
+                      disabled={assignmentLocked}
+                      onChange={(sectionIds, allSections) => setMeta({ ...meta, sectionIds, allSections })}
+                    />
+                    {assignmentLocked ? <p className="hint">Class and sections lock after a student starts the exam.</p> : null}
                   </Field>
                   <Field label="Subject">
                     <select value={meta.subjectId} onChange={(e) => setMeta({ ...meta, subjectId: e.target.value })} required>
@@ -519,14 +630,15 @@ function StaffExam({ examId }: { examId: string }) {
                       <Field label="B"><input value={q.optionB || ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { optionB: e.target.value })} /></Field>
                       <Field label="C"><input value={q.optionC || ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { optionC: e.target.value })} /></Field>
                       <Field label="D"><input value={q.optionD || ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { optionD: e.target.value })} /></Field>
-                      <Field label="Correct">
-                        <select value={q.correctOption || "A"} disabled={questionsLocked} onChange={(e) => patchQ(i, { correctOption: e.target.value })}>
-                          <option>A</option><option>B</option><option>C</option><option>D</option>
+                      <Field label="Correct (blank = teacher grades)">
+                        <select value={q.correctOption || ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { correctOption: e.target.value })}>
+                          <option value="">No auto-key</option>
+                          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
                         </select>
                       </Field>
                     </>
                   ) : (
-                    <Field label="Reference answer (staff only)"><textarea value={q.referenceAnswer || ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { referenceAnswer: e.target.value })} /></Field>
+                    <Field label="Reference answer (staff only, used for auto-match)"><textarea value={q.referenceAnswer || ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { referenceAnswer: e.target.value })} /></Field>
                   )}
                   <Field label="Marks (blank = default)"><input type="number" value={q.marks ?? ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { marks: e.target.value })} /></Field>
                 </div>
@@ -538,7 +650,7 @@ function StaffExam({ examId }: { examId: string }) {
                     prompt: q.prompt,
                     marks: q.marks === "" || q.marks == null ? null : Number(q.marks),
                     optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
-                    correctOption: q.questionType === "MCQ" ? q.correctOption : null,
+                    correctOption: q.questionType === "MCQ" ? (q.correctOption || null) : null,
                     referenceAnswer: q.referenceAnswer,
                   })));
                   toast("ok", "Questions saved");
@@ -570,7 +682,7 @@ function StaffExam({ examId }: { examId: string }) {
         {grading && detail.data ? (
           <Form busyLabel="Saving marks…" onSubmit={async () => {
             const qs = (detail.data?.questions as QuestionDraft[]) || [];
-            await onlineExamApi.grade(examId, grading, qs.filter((q) => q.questionType !== "MCQ").map((q) => ({
+            await onlineExamApi.grade(examId, grading, qs.filter((q) => q.questionType !== "MCQ" || !q.correctOption).map((q) => ({
               questionId: q.id,
               obtainedMarks: q.obtainedMarks === "" || q.obtainedMarks == null ? null : Number(q.obtainedMarks),
             })));
@@ -581,10 +693,10 @@ function StaffExam({ examId }: { examId: string }) {
             <h3>Grade attempt</h3>
             {((detail.data.questions as QuestionDraft[]) || []).map((q, i) => (
               <div key={q.id || i} className="exam-q">
-                <p className="kicker">{q.questionType} · {q.marks} marks {q.autoGraded ? "· auto" : ""}</p>
+                <p className="kicker">{q.questionType} · {q.marks} marks · {q.gradingStatus || (q.autoGraded ? "AUTO" : "PENDING")}</p>
                 <strong>{q.prompt}</strong>
                 <p>{q.questionType === "MCQ" ? `Choice ${q.optionChoice || "—"} (key ${q.correctOption || "—"})` : (q.textAnswer || "—")}</p>
-                {q.questionType !== "MCQ" ? (
+                {q.questionType !== "MCQ" || !q.correctOption ? (
                   <Field label="Obtained">
                     <input
                       type="number"
@@ -592,7 +704,7 @@ function StaffExam({ examId }: { examId: string }) {
                       onChange={(e) => { q.obtainedMarks = e.target.value; }}
                     />
                   </Field>
-                ) : <p className="hint">MCQ is auto-graded.</p>}
+                ) : <p className="hint">MCQ is auto-graded from the answer key.</p>}
               </div>
             ))}
             <div className="row">

@@ -30,7 +30,7 @@ export default function OwnerApp() {
         <div className="brand-mark" style={{ marginBottom: 18 }}>
           <div className="mark">A</div>
           <div>
-            Atrium Owner
+            ERP Owner
             <div style={{ fontSize: 12, opacity: 0.65 }}>Platform console</div>
           </div>
         </div>
@@ -191,7 +191,7 @@ export function Schools() {
           <Field label="Admin first name"><input value={form.adminFirstName} onChange={(e) => setForm({ ...form, adminFirstName: e.target.value })} /></Field>
           <Field label="Admin last name"><input value={form.adminLastName} onChange={(e) => setForm({ ...form, adminLastName: e.target.value })} /></Field>
           <Field label="Admin email"><input value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} /></Field>
-          <Button type="submit" kind="brass" loadingText="Creating…">Create on Neon</Button>
+          <Button type="submit" kind="brass" loadingText="Creating…">Create school</Button>
         </Form>
       </Modal>
     </>
@@ -365,7 +365,7 @@ export function Subscriptions() {
       <div className="page-title">
         <div>
           <h1>Subscriptions</h1>
-          <p>Every school billing record on Neon</p>
+          <p>Billing status for every school on the platform</p>
         </div>
       </div>
       <Field label="Filter status">

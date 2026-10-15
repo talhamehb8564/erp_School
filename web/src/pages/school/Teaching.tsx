@@ -23,9 +23,7 @@ function useStudentDirectory(enabled: boolean) {
 export function AttendancePage() {
   const { user } = useSession();
   const teacher = user?.role === "TEACHER";
-  const staff = user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL" || teacher;
   const { classes, sections } = useLookups();
-  const dir = useStudentDirectory(staff);
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
   const slots = useAsync(() => {
@@ -106,7 +104,7 @@ export function AttendancePage() {
         <Table
           headers={["Student", "Status"]}
           rows={(roster.data || []).map((st) => [
-            dir.nameOf(st.id) !== st.id.slice(0, 8) ? dir.nameOf(st.id) : studentLabel(st),
+            studentLabel(st),
             <select key={st.id} className="search" value={marks[st.id] || "PRESENT"} onChange={(e) => setMarks((m) => ({ ...m, [st.id]: e.target.value as AttendanceStatus }))}>
               {["PRESENT", "ABSENT", "LATE", "LEAVE"].map((s) => <option key={s}>{s}</option>)}
             </select>,

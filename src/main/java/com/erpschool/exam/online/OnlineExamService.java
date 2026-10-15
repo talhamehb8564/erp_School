@@ -1,10 +1,13 @@
 package com.erpschool.exam.online;
 
+import com.erpschool.academic.entity.Section;
+import com.erpschool.academic.repository.SectionRepository;
 import com.erpschool.academic.service.AcademicService;
 import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.util.GradeCalculator;
+import com.erpschool.common.util.Instants;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.student.entity.Student;
 import com.erpschool.student.repository.StudentRepository;
@@ -19,22 +22,30 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class OnlineExamService {
 
+    private static final ZoneId KARACHI = ZoneId.of("Asia/Karachi");
+
     private final OnlineExamRepository examRepository;
     private final OnlineExamQuestionRepository questionRepository;
     private final OnlineExamAttemptRepository attemptRepository;
     private final OnlineExamAnswerRepository answerRepository;
+    private final OnlineExamSectionRepository examSectionRepository;
+    private final SectionRepository sectionRepository;
     private final AcademicService academicService;
     private final StudentRepository studentRepository;
     private final StudentAccessService studentAccessService;
@@ -44,6 +55,8 @@ public class OnlineExamService {
                              OnlineExamQuestionRepository questionRepository,
                              OnlineExamAttemptRepository attemptRepository,
                              OnlineExamAnswerRepository answerRepository,
+                             OnlineExamSectionRepository examSectionRepository,
+                             SectionRepository sectionRepository,
                              AcademicService academicService,
                              StudentRepository studentRepository,
                              StudentAccessService studentAccessService,
@@ -52,6 +65,8 @@ public class OnlineExamService {
         this.questionRepository = questionRepository;
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
+        this.examSectionRepository = examSectionRepository;
+        this.sectionRepository = sectionRepository;
         this.academicService = academicService;
         this.studentRepository = studentRepository;
         this.studentAccessService = studentAccessService;
@@ -59,14 +74,14 @@ public class OnlineExamService {
     }
 
     @Transactional
-    public Map<String, Object> create(OnlineExam incoming) {
+    public Map<String, Object> create(Map<String, Object> body) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         assertStaffWrite();
-        validateMeta(incoming);
-        if (TenantContext.getRole() == UserRole.TEACHER) {
-            academicService.assertTeacherAssigned(TenantContext.getUserId(),
-                    incoming.getClassId(), incoming.getSectionId(), incoming.getSubjectId());
-        }
+        OnlineExam incoming = new OnlineExam();
+        applyBody(incoming, body);
+        List<UUID> sections = resolveSections(incoming.getClassId(), body);
+        validateMeta(incoming, sections);
+        assertTeacherCanWrite(incoming.getClassId(), incoming.getSubjectId(), sections);
         incoming.setTenantId(tenantId);
         incoming.setCreatedBy(TenantContext.getUserId());
         if (incoming.getCampusId() == null && CampusScope.restricts()) {
@@ -74,25 +89,49 @@ public class OnlineExamService {
         }
         incoming.setStatus("DRAFT");
         incoming.setTotalMarks(BigDecimal.ZERO);
-        return toStaffExam(examRepository.save(incoming), List.of());
+        incoming.setSectionId(sections.get(0));
+        OnlineExam saved = examRepository.save(incoming);
+        replaceSections(saved, sections);
+        return toStaffExam(saved, List.of());
     }
 
     @Transactional
-    public Map<String, Object> update(UUID id, OnlineExam incoming) {
+    public Map<String, Object> update(UUID id, Map<String, Object> body) {
         OnlineExam exam = requireExam(id);
         assertCanManage(exam);
         if (!"DRAFT".equals(exam.getStatus()) && !"SCHEDULED".equals(exam.getStatus())) {
             throw new BusinessException("Only draft or scheduled exams can be edited");
         }
-        validateMeta(incoming);
-        if (TenantContext.getRole() == UserRole.TEACHER) {
-            academicService.assertTeacherAssigned(TenantContext.getUserId(),
-                    incoming.getClassId(), incoming.getSectionId(), incoming.getSubjectId());
+        OnlineExam incoming = new OnlineExam();
+        incoming.setTitle(exam.getTitle());
+        incoming.setDescription(exam.getDescription());
+        incoming.setClassId(exam.getClassId());
+        incoming.setSectionId(exam.getSectionId());
+        incoming.setSubjectId(exam.getSubjectId());
+        incoming.setExamDate(exam.getExamDate());
+        incoming.setStartAt(exam.getStartAt());
+        incoming.setDurationMinutes(exam.getDurationMinutes());
+        incoming.setPassingMarks(exam.getPassingMarks());
+        incoming.setMcqMarks(exam.getMcqMarks());
+        incoming.setShortMarks(exam.getShortMarks());
+        incoming.setLongMarks(exam.getLongMarks());
+        incoming.setShortRequired(exam.getShortRequired());
+        incoming.setLongRequired(exam.getLongRequired());
+        applyBody(incoming, body);
+        List<UUID> sections = resolveSections(incoming.getClassId(), body);
+        validateMeta(incoming, sections);
+        assertTeacherCanWrite(incoming.getClassId(), incoming.getSubjectId(), sections);
+        List<UUID> currentSections = sectionsOf(exam);
+        boolean assignmentChanged = !exam.getClassId().equals(incoming.getClassId())
+                || !sameIds(currentSections, sections);
+        if (assignmentChanged && attemptRepository.existsByTenantIdAndExamId(exam.getTenantId(), exam.getId())) {
+            throw new BusinessException(
+                    "Class and sections cannot be changed after students have started this exam");
         }
         exam.setTitle(incoming.getTitle());
         exam.setDescription(incoming.getDescription());
         exam.setClassId(incoming.getClassId());
-        exam.setSectionId(incoming.getSectionId());
+        exam.setSectionId(sections.get(0));
         exam.setSubjectId(incoming.getSubjectId());
         exam.setExamDate(incoming.getExamDate());
         exam.setStartAt(incoming.getStartAt());
@@ -104,7 +143,9 @@ public class OnlineExamService {
         exam.setShortRequired(incoming.getShortRequired());
         exam.setLongRequired(incoming.getLongRequired());
         exam.setUpdatedBy(TenantContext.getUserId());
-        return toStaffExam(examRepository.save(exam), questions(exam));
+        OnlineExam saved = examRepository.save(exam);
+        replaceSections(saved, sections);
+        return toStaffExam(saved, questions(saved));
     }
 
     @Transactional
@@ -190,7 +231,10 @@ public class OnlineExamService {
         } else {
             rows = examRepository.findByTenantIdOrderByStartAtDesc(tenantId);
         }
-        return rows.stream().map(this::toStaffSummary).toList();
+        Map<UUID, List<UUID>> sectionMap = sectionMap(rows);
+        return rows.stream()
+                .map(e -> toStaffSummary(e, sectionMap.getOrDefault(e.getId(), fallbackSections(e))))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -204,20 +248,43 @@ public class OnlineExamService {
     public List<Map<String, Object>> studentList() {
         Student me = requireMeStudent();
         UUID tenantId = me.getTenantId();
-        return examRepository.findByTenantIdAndClassIdAndSectionIdOrderByStartAtDesc(
-                        tenantId, me.getClassId(), me.getSectionId())
+        List<OnlineExam> rows = examSectionRepository.findAssigned(tenantId, me.getClassId(), me.getSectionId())
+                .stream().filter(e -> !"DRAFT".equals(e.getStatus())).toList();
+        Map<UUID, List<UUID>> sectionMap = sectionMap(rows);
+        Map<UUID, OnlineExamAttempt> attempts = attemptRepository
+                .findByTenantIdAndStudentIdOrderByStartedAtDesc(tenantId, me.getId())
                 .stream()
-                .filter(e -> !"DRAFT".equals(e.getStatus()))
+                .collect(Collectors.toMap(OnlineExamAttempt::getExamId, a -> a, (a, b) -> a));
+        Map<UUID, List<OnlineExamQuestion>> questionsByExam = Map.of();
+        Map<UUID, Map<UUID, OnlineExamAnswer>> answersByAttempt = Map.of();
+        if (!rows.isEmpty()) {
+            questionsByExam = questionRepository.findByTenantIdAndExamIdIn(
+                            tenantId, rows.stream().map(OnlineExam::getId).toList())
+                    .stream().collect(Collectors.groupingBy(OnlineExamQuestion::getExamId));
+            List<UUID> attemptIds = rows.stream()
+                    .map(e -> attempts.get(e.getId()))
+                    .filter(a -> a != null)
+                    .map(OnlineExamAttempt::getId)
+                    .toList();
+            if (!attemptIds.isEmpty()) {
+                answersByAttempt = answerRepository.findByTenantIdAndAttemptIdIn(tenantId, attemptIds)
+                        .stream()
+                        .collect(Collectors.groupingBy(OnlineExamAnswer::getAttemptId,
+                                Collectors.toMap(OnlineExamAnswer::getQuestionId, a -> a, (a, b) -> a)));
+            }
+        }
+        Map<UUID, List<OnlineExamQuestion>> qMap = questionsByExam;
+        Map<UUID, Map<UUID, OnlineExamAnswer>> aMap = answersByAttempt;
+        return rows.stream()
                 .map(e -> {
-                    Map<String, Object> m = toStudentSummary(e);
-                    attemptRepository.findByTenantIdAndExamIdAndStudentId(tenantId, e.getId(), me.getId())
-                            .ifPresent(a -> {
-                                m.put("attemptStatus", a.getStatus());
-                                if ("RESULTS_PUBLISHED".equals(e.getStatus())) {
-                                    m.put("obtainedMarks", a.getObtainedMarks());
-                                    m.put("grade", a.getGrade());
-                                }
-                            });
+                    Map<String, Object> m = toStudentSummary(e, sectionMap.getOrDefault(e.getId(), fallbackSections(e)));
+                    OnlineExamAttempt a = attempts.get(e.getId());
+                    if (a != null) {
+                        m.put("attemptStatus", a.getStatus());
+                        attachReleasedGrade(m, e, a,
+                                qMap.getOrDefault(e.getId(), List.of()),
+                                aMap.getOrDefault(a.getId(), Map.of()));
+                    }
                     return m;
                 })
                 .toList();
@@ -326,10 +393,14 @@ public class OnlineExamService {
                         rows.stream().map(OnlineExamAttempt::getStudentId).toList())
                 .stream().collect(Collectors.toMap(Student::getId, s -> s, (a, b) -> a));
         Map<UUID, String> names = new HashMap<>();
-        for (Student s : students.values()) {
-            if (s.getUserId() != null) {
-                userRepository.findById(s.getUserId()).map(User::getFullName)
-                        .ifPresent(n -> names.put(s.getId(), n));
+        List<UUID> userIds = students.values().stream().map(Student::getUserId).filter(u -> u != null).toList();
+        if (!userIds.isEmpty()) {
+            for (User u : userRepository.findAllById(userIds)) {
+                for (Student s : students.values()) {
+                    if (u.getId().equals(s.getUserId())) {
+                        names.put(s.getId(), u.getFullName());
+                    }
+                }
             }
         }
         List<Map<String, Object>> out = new ArrayList<>();
@@ -382,7 +453,8 @@ public class OnlineExamService {
             for (Map<String, Object> row : marks) {
                 UUID qid = uuid(row.get("questionId"));
                 OnlineExamQuestion q = byId.get(qid);
-                if (q == null || "MCQ".equals(q.getQuestionType())) continue;
+                if (q == null) continue;
+                if ("MCQ".equals(q.getQuestionType()) && !blank(q.getCorrectOption())) continue;
                 OnlineExamAnswer ans = answerRepository
                         .findByTenantIdAndAttemptIdAndQuestionId(exam.getTenantId(), attempt.getId(), qid)
                         .orElse(null);
@@ -437,15 +509,24 @@ public class OnlineExamService {
         for (OnlineExamQuestion q : qs) {
             OnlineExamAnswer ans = answers.get(q.getId());
             if ("MCQ".equals(q.getQuestionType())) {
-                if (ans == null) continue;
-                if (!blank(q.getCorrectOption()) && !blank(ans.getOptionChoice())) {
-                    boolean ok = q.getCorrectOption().equalsIgnoreCase(ans.getOptionChoice());
-                    ans.setObtainedMarks(ok ? q.getMarks() : BigDecimal.ZERO);
+                if (!blank(q.getCorrectOption())) {
+                    if (ans != null && !blank(ans.getOptionChoice())) {
+                        boolean ok = q.getCorrectOption().equalsIgnoreCase(ans.getOptionChoice());
+                        ans.setObtainedMarks(ok ? q.getMarks() : BigDecimal.ZERO);
+                        ans.setAutoGraded(true);
+                        answerRepository.save(ans);
+                    }
+                } else {
+                    pendingManual = true;
+                }
+            } else if (ans != null && !blank(ans.getTextAnswer())) {
+                if (!blank(q.getReferenceAnswer()) && textMatches(ans.getTextAnswer(), q.getReferenceAnswer())) {
+                    ans.setObtainedMarks(q.getMarks());
                     ans.setAutoGraded(true);
                     answerRepository.save(ans);
+                } else {
+                    pendingManual = true;
                 }
-            } else if (ans != null && !blank(ans.getTextAnswer()) && ans.getObtainedMarks() == null) {
-                pendingManual = true;
             }
         }
         tally(exam, attempt, false);
@@ -507,8 +588,9 @@ public class OnlineExamService {
 
     private void enforceDeadline(OnlineExam exam, OnlineExamAttempt attempt) {
         Instant now = Instant.now();
+        Instant deadline = attempt.getDeadlineAt() != null ? attempt.getDeadlineAt() : examEnd(exam);
         if ("IN_PROGRESS".equals(attempt.getStatus())
-                && (now.isAfter(attempt.getDeadlineAt()) || !now.isBefore(examEnd(exam)))) {
+                && (now.isAfter(deadline) || !now.isBefore(examEnd(exam)))) {
             finalizeSubmit(exam, attempt, true);
         }
     }
@@ -556,8 +638,12 @@ public class OnlineExamService {
     }
 
     private void assertStudentAssigned(OnlineExam exam, Student me) {
-        if (!exam.getClassId().equals(me.getClassId()) || !exam.getSectionId().equals(me.getSectionId())) {
+        if (!exam.getClassId().equals(me.getClassId())) {
             throw new ForbiddenException("This exam is not assigned to your class");
+        }
+        List<UUID> sections = sectionsOf(exam);
+        if (me.getSectionId() == null || !sections.contains(me.getSectionId())) {
+            throw new ForbiddenException("This exam is not assigned to your section");
         }
         if (exam.getCampusId() != null && me.getCampusId() != null && !exam.getCampusId().equals(me.getCampusId())) {
             throw new ForbiddenException("This exam is not assigned to your campus");
@@ -596,13 +682,128 @@ public class OnlineExamService {
         }
     }
 
-    private void validateMeta(OnlineExam incoming) {
+    private void assertTeacherCanWrite(UUID classId, UUID subjectId, List<UUID> sections) {
+        if (TenantContext.getRole() != UserRole.TEACHER) return;
+        UUID teacherId = TenantContext.getUserId();
+        for (UUID sectionId : sections) {
+            academicService.assertTeacherAssigned(teacherId, classId, sectionId, subjectId);
+        }
+    }
+
+    private void applyBody(OnlineExam exam, Map<String, Object> body) {
+        if (body == null) return;
+        if (body.containsKey("title")) exam.setTitle(str(body.get("title"), ""));
+        if (body.containsKey("description")) exam.setDescription(str(body.get("description"), null));
+        if (body.containsKey("classId")) exam.setClassId(uuid(body.get("classId")));
+        if (body.containsKey("sectionId")) exam.setSectionId(uuid(body.get("sectionId")));
+        if (body.containsKey("subjectId")) exam.setSubjectId(uuid(body.get("subjectId")));
+        if (body.containsKey("campusId")) exam.setCampusId(uuid(body.get("campusId")));
+        if (body.containsKey("startAt")) {
+            try {
+                exam.setStartAt(Instants.parse(str(body.get("startAt"), null)));
+            } catch (IllegalArgumentException ex) {
+                throw new BusinessException(ex.getMessage());
+            }
+        }
+        if (body.containsKey("durationMinutes")) {
+            exam.setDurationMinutes(intVal(body.get("durationMinutes"), 0));
+        }
+        if (body.containsKey("passingMarks")) exam.setPassingMarks(decimal(body.get("passingMarks")));
+        if (body.containsKey("mcqMarks")) exam.setMcqMarks(decimal(body.get("mcqMarks")));
+        if (body.containsKey("shortMarks")) exam.setShortMarks(decimal(body.get("shortMarks")));
+        if (body.containsKey("longMarks")) exam.setLongMarks(decimal(body.get("longMarks")));
+        if (body.containsKey("shortRequired")) exam.setShortRequired(nullableInt(body.get("shortRequired")));
+        if (body.containsKey("longRequired")) exam.setLongRequired(nullableInt(body.get("longRequired")));
+        if (body.containsKey("examDate")) {
+            String raw = str(body.get("examDate"), null);
+            exam.setExamDate(raw == null ? null : LocalDate.parse(raw.substring(0, Math.min(10, raw.length()))));
+        } else if (exam.getExamDate() == null && exam.getStartAt() != null) {
+            exam.setExamDate(exam.getStartAt().atZone(KARACHI).toLocalDate());
+        }
+    }
+
+    private List<UUID> resolveSections(UUID classId, Map<String, Object> body) {
+        if (classId == null) {
+            throw new BusinessException("Class is required");
+        }
+        academicService.requireClass(classId);
+        List<Section> classSections = sectionRepository.findByTenantIdAndClassIdOrderByNameAsc(
+                TenantGuard.requireTenantId(null), classId);
+        boolean all = truthy(body == null ? null : body.get("allSections"));
+        LinkedHashSet<UUID> ids = new LinkedHashSet<>();
+        if (all) {
+            for (Section s : classSections) ids.add(s.getId());
+        } else {
+            if (body != null) {
+                ids.addAll(uuidList(body.get("sectionIds")));
+                UUID one = uuid(body.get("sectionId"));
+                if (one != null) ids.add(one);
+            }
+        }
+        if (ids.isEmpty()) {
+            throw new BusinessException("Select at least one section, or All sections");
+        }
+        Set<UUID> allowed = classSections.stream().map(Section::getId).collect(Collectors.toSet());
+        for (UUID sid : ids) {
+            if (!allowed.contains(sid)) {
+                Section s = academicService.requireSection(sid);
+                if (!classId.equals(s.getClassId())) {
+                    throw new BusinessException("Section does not belong to the selected class");
+                }
+            }
+        }
+        return new ArrayList<>(ids);
+    }
+
+    private void replaceSections(OnlineExam exam, List<UUID> sections) {
+        examSectionRepository.deleteAll(examSectionRepository.findByTenantIdAndExamId(exam.getTenantId(), exam.getId()));
+        examSectionRepository.flush();
+        for (UUID sid : sections) {
+            OnlineExamSection row = new OnlineExamSection();
+            row.setTenantId(exam.getTenantId());
+            row.setExamId(exam.getId());
+            row.setSectionId(sid);
+            examSectionRepository.save(row);
+        }
+    }
+
+    private List<UUID> sectionsOf(OnlineExam exam) {
+        List<UUID> ids = examSectionRepository.findByTenantIdAndExamId(exam.getTenantId(), exam.getId())
+                .stream().map(OnlineExamSection::getSectionId).toList();
+        if (ids.isEmpty()) return fallbackSections(exam);
+        return ids;
+    }
+
+    private List<UUID> fallbackSections(OnlineExam exam) {
+        return exam.getSectionId() == null ? List.of() : List.of(exam.getSectionId());
+    }
+
+    private Map<UUID, List<UUID>> sectionMap(List<OnlineExam> exams) {
+        if (exams == null || exams.isEmpty()) return Map.of();
+        UUID tenantId = exams.get(0).getTenantId();
+        List<UUID> ids = exams.stream().map(OnlineExam::getId).toList();
+        Map<UUID, List<UUID>> out = new HashMap<>();
+        for (OnlineExamSection row : examSectionRepository.findByTenantIdAndExamIdIn(tenantId, ids)) {
+            out.computeIfAbsent(row.getExamId(), k -> new ArrayList<>()).add(row.getSectionId());
+        }
+        return out;
+    }
+
+    private void validateMeta(OnlineExam incoming, List<UUID> sections) {
         if (incoming.getTitle() == null || incoming.getTitle().isBlank()) {
             throw new BusinessException("Exam title is required");
         }
+        if (incoming.getClassId() == null) {
+            throw new BusinessException("Class is required");
+        }
         academicService.requireClass(incoming.getClassId());
-        academicService.requireSection(incoming.getSectionId());
+        if (incoming.getSubjectId() == null) {
+            throw new BusinessException("Subject is required");
+        }
         academicService.requireSubject(incoming.getSubjectId());
+        if (sections == null || sections.isEmpty()) {
+            throw new BusinessException("Select at least one section, or All sections");
+        }
         if (incoming.getStartAt() == null) {
             throw new BusinessException("Start date/time is required");
         }
@@ -614,12 +815,13 @@ public class OnlineExamService {
         incoming.setLongMarks(nz(incoming.getLongMarks(), BigDecimal.valueOf(5)));
     }
 
-    private Map<String, Object> toStaffSummary(OnlineExam exam) {
+    private Map<String, Object> toStaffSummary(OnlineExam exam, List<UUID> sectionIds) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", exam.getId());
         m.put("title", exam.getTitle());
         m.put("classId", exam.getClassId());
-        m.put("sectionId", exam.getSectionId());
+        m.put("sectionId", sectionIds.isEmpty() ? exam.getSectionId() : sectionIds.get(0));
+        m.put("sectionIds", sectionIds);
         m.put("subjectId", exam.getSubjectId());
         m.put("startAt", exam.getStartAt());
         m.put("durationMinutes", exam.getDurationMinutes());
@@ -629,7 +831,8 @@ public class OnlineExamService {
     }
 
     private Map<String, Object> toStaffExam(OnlineExam exam, List<OnlineExamQuestion> qs) {
-        Map<String, Object> m = toStaffSummary(exam);
+        List<UUID> sectionIds = sectionsOf(exam);
+        Map<String, Object> m = toStaffSummary(exam, sectionIds);
         m.put("description", exam.getDescription());
         m.put("examDate", exam.getExamDate());
         m.put("passingMarks", exam.getPassingMarks());
@@ -639,6 +842,13 @@ public class OnlineExamService {
         m.put("shortRequired", exam.getShortRequired());
         m.put("longRequired", exam.getLongRequired());
         m.put("campusId", exam.getCampusId());
+        long attempts = attemptRepository.countByTenantIdAndExamId(exam.getTenantId(), exam.getId());
+        m.put("attemptCount", attempts);
+        boolean editable = "DRAFT".equals(exam.getStatus()) || "SCHEDULED".equals(exam.getStatus());
+        m.put("assignmentLocked", attempts > 0 || !editable);
+        int classSectionCount = sectionRepository.findByTenantIdAndClassIdOrderByNameAsc(
+                exam.getTenantId(), exam.getClassId()).size();
+        m.put("allSections", classSectionCount > 0 && sectionIds.size() == classSectionCount);
         m.put("questions", qs.stream().map(this::staffQuestion).toList());
         return m;
     }
@@ -647,6 +857,9 @@ public class OnlineExamService {
         Map<String, Object> m = studentQuestion(q);
         m.put("correctOption", q.getCorrectOption());
         m.put("referenceAnswer", q.getReferenceAnswer());
+        m.put("hasAnswerKey", "MCQ".equals(q.getQuestionType())
+                ? !blank(q.getCorrectOption())
+                : !blank(q.getReferenceAnswer()));
         return m;
     }
 
@@ -667,6 +880,10 @@ public class OnlineExamService {
     }
 
     private Map<String, Object> toStudentSummary(OnlineExam exam) {
+        return toStudentSummary(exam, sectionsOf(exam));
+    }
+
+    private Map<String, Object> toStudentSummary(OnlineExam exam, List<UUID> sectionIds) {
         Instant now = Instant.now();
         Instant end = examEnd(exam);
         Map<String, Object> m = new LinkedHashMap<>();
@@ -674,7 +891,8 @@ public class OnlineExamService {
         m.put("title", exam.getTitle());
         m.put("description", exam.getDescription());
         m.put("classId", exam.getClassId());
-        m.put("sectionId", exam.getSectionId());
+        m.put("sectionId", sectionIds.isEmpty() ? exam.getSectionId() : sectionIds.get(0));
+        m.put("sectionIds", sectionIds);
         m.put("subjectId", exam.getSubjectId());
         m.put("startAt", exam.getStartAt());
         m.put("durationMinutes", exam.getDurationMinutes());
@@ -682,7 +900,8 @@ public class OnlineExamService {
         m.put("status", computeStatus(exam, exam.getStatus()));
         m.put("serverNow", now);
         m.put("deadlineAt", end);
-        m.put("remainingSeconds", Math.max(0, ChronoUnit.SECONDS.between(now, end)));
+        long remaining = ChronoUnit.SECONDS.between(now, end);
+        m.put("remainingSeconds", remaining > 0 ? remaining : 0);
         m.put("shortRequired", exam.getShortRequired());
         m.put("longRequired", exam.getLongRequired());
         return m;
@@ -695,8 +914,10 @@ public class OnlineExamService {
         Map<String, Object> m = toStudentSummary(exam);
         m.put("attemptId", attempt.getId());
         m.put("attemptStatus", attempt.getStatus());
-        m.put("deadlineAt", attempt.getDeadlineAt());
-        m.put("remainingSeconds", Math.max(0, ChronoUnit.SECONDS.between(now, attempt.getDeadlineAt())));
+        Instant deadline = attempt.getDeadlineAt() != null ? attempt.getDeadlineAt() : examEnd(exam);
+        m.put("deadlineAt", deadline);
+        long remaining = ChronoUnit.SECONDS.between(now, deadline);
+        m.put("remainingSeconds", remaining > 0 ? remaining : 0);
         m.put("serverNow", now);
         int shorts = (int) qs.stream().filter(q -> "SHORT".equals(q.getQuestionType())).count();
         int longs = (int) qs.stream().filter(q -> "LONG".equals(q.getQuestionType())).count();
@@ -729,8 +950,8 @@ public class OnlineExamService {
         if ("IN_PROGRESS".equals(attempt.getStatus())) {
             return studentPaper(exam, attempt, false);
         }
-        boolean published = "RESULTS_PUBLISHED".equals(exam.getStatus());
-        if (!published) {
+        boolean released = attachReleasedGrade(m, exam, attempt, questions(exam), answersOf(attempt));
+        if (!released) {
             if ("SUBMITTED".equals(attempt.getStatus())) {
                 m.put("message", "Submitted — awaiting teacher evaluation");
             } else {
@@ -739,10 +960,25 @@ public class OnlineExamService {
             m.put("totalMarks", attempt.getTotalMarks());
             return m;
         }
-        if ("SUBMITTED".equals(attempt.getStatus())) {
-            m.put("message", "Submitted — awaiting teacher evaluation");
-            m.put("totalMarks", attempt.getTotalMarks());
-            return m;
+        if (withKeys) {
+            m.put("questions", questions(exam).stream().map(this::staffQuestion).toList());
+        }
+        return m;
+    }
+
+    private boolean attachReleasedGrade(Map<String, Object> m,
+                                       OnlineExam exam,
+                                       OnlineExamAttempt attempt,
+                                       List<OnlineExamQuestion> qs,
+                                       Map<UUID, OnlineExamAnswer> answers) {
+        boolean published = "RESULTS_PUBLISHED".equals(exam.getStatus());
+        boolean auto = fullyAutoGraded(attempt, qs, answers);
+        m.put("fullyAutoGraded", auto);
+        if (!"GRADED".equals(attempt.getStatus())) {
+            return false;
+        }
+        if (!auto && !published) {
+            return false;
         }
         m.put("mcqObtained", attempt.getMcqObtained());
         m.put("shortObtained", attempt.getShortObtained());
@@ -752,10 +988,26 @@ public class OnlineExamService {
         m.put("percentage", attempt.getPercentage());
         m.put("grade", attempt.getGrade());
         m.put("passStatus", attempt.getPassStatus());
-        if (withKeys) {
-            m.put("questions", questions(exam).stream().map(this::staffQuestion).toList());
+        return true;
+    }
+
+    private boolean fullyAutoGraded(OnlineExamAttempt attempt,
+                                   List<OnlineExamQuestion> qs,
+                                   Map<UUID, OnlineExamAnswer> answers) {
+        if (!"GRADED".equals(attempt.getStatus())) return false;
+        for (OnlineExamQuestion q : qs) {
+            if ("MCQ".equals(q.getQuestionType())) {
+                if (blank(q.getCorrectOption())) return false;
+            } else {
+                OnlineExamAnswer ans = answers.get(q.getId());
+                if (ans != null && !blank(ans.getTextAnswer())) {
+                    if (blank(q.getReferenceAnswer()) || !ans.isAutoGraded() || ans.getObtainedMarks() == null) {
+                        return false;
+                    }
+                }
+            }
         }
-        return m;
+        return true;
     }
 
     private Map<String, Object> staffAttempt(OnlineExam exam, OnlineExamAttempt attempt, Student student) {
@@ -770,18 +1022,46 @@ public class OnlineExamService {
         m.put("grade", attempt.getGrade());
         m.put("passStatus", attempt.getPassStatus());
         m.put("submittedAt", attempt.getSubmittedAt());
+        m.put("attemptStatus", attempt.getStatus());
         Map<UUID, OnlineExamAnswer> answers = answersOf(attempt);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> qs = (List<Map<String, Object>>) m.get("questions");
         for (Map<String, Object> q : qs) {
             UUID qid = (UUID) q.get("id");
             OnlineExamAnswer ans = answers.get(qid);
+            String type = String.valueOf(q.get("questionType"));
+            boolean hasKey = Boolean.TRUE.equals(q.get("hasAnswerKey"));
             if (ans != null) {
                 q.put("obtainedMarks", ans.getObtainedMarks());
                 q.put("autoGraded", ans.isAutoGraded());
             }
+            String gradingStatus;
+            if (ans != null && ans.getObtainedMarks() != null) {
+                gradingStatus = ans.isAutoGraded() ? "AUTO" : "GRADED";
+            } else if ("MCQ".equals(type) && hasKey) {
+                gradingStatus = "AUTO";
+            } else if (ans != null && (!blank(ans.getTextAnswer()) || !blank(ans.getOptionChoice()))) {
+                gradingStatus = "PENDING";
+            } else {
+                gradingStatus = "UNANSWERED";
+            }
+            q.put("gradingStatus", gradingStatus);
         }
         return m;
+    }
+
+    private static boolean sameIds(List<UUID> a, List<UUID> b) {
+        if (a.size() != b.size()) return false;
+        return Set.copyOf(a).equals(Set.copyOf(b));
+    }
+
+    private static boolean textMatches(String given, String key) {
+        return normalizeText(given).equals(normalizeText(key));
+    }
+
+    private static String normalizeText(String s) {
+        if (s == null) return "";
+        return s.trim().replaceAll("\\s+", " ").toLowerCase();
     }
 
     private static BigDecimal marksFor(OnlineExam exam, String type, Object override) {
@@ -820,9 +1100,46 @@ public class OnlineExamService {
 
     private static UUID uuid(Object v) {
         if (v == null) return null;
+        String s = v.toString().trim();
+        if (s.isEmpty()) return null;
         try {
-            return UUID.fromString(v.toString());
+            return UUID.fromString(s);
         } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static List<UUID> uuidList(Object v) {
+        if (!(v instanceof List<?> list)) return List.of();
+        List<UUID> out = new ArrayList<>();
+        for (Object o : list) {
+            UUID id = uuid(o);
+            if (id != null) out.add(id);
+        }
+        return out;
+    }
+
+    private static boolean truthy(Object v) {
+        if (v instanceof Boolean b) return b;
+        if (v == null) return false;
+        String s = v.toString().trim();
+        return "true".equalsIgnoreCase(s) || "1".equals(s);
+    }
+
+    private static int intVal(Object v, int d) {
+        if (v == null || v.toString().isBlank()) return d;
+        try {
+            return (int) Double.parseDouble(v.toString().trim());
+        } catch (NumberFormatException e) {
+            return d;
+        }
+    }
+
+    private static Integer nullableInt(Object v) {
+        if (v == null || v.toString().isBlank()) return null;
+        try {
+            return (int) Double.parseDouble(v.toString().trim());
+        } catch (NumberFormatException e) {
             return null;
         }
     }

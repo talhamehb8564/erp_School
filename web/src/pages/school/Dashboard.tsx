@@ -29,7 +29,7 @@ function StaffDash() {
         <div>
           <p className="kicker">Live school census</p>
           <h1>School dashboard</h1>
-          <p>Aggregates from /api/v1/dashboard/school — not a static template.</p>
+          <p>Students, staff and unpaid challans for this school.</p>
         </div>
         <Donut value={active} max={Math.max(students, 1)} label="Active students" />
       </div>
@@ -53,7 +53,7 @@ function StaffDash() {
           <div className="card">
             <h3>Operations</h3>
             <p>Pending fee proofs {m.pendingFeeProofs ?? 0} · Active users {m.activeUsers ?? 0}</p>
-            <p className="hint">Mark attendance, search results by roll number, or generate monthly challans. Every action writes to Neon.</p>
+            <p className="hint">Mark attendance, search results by roll number, or generate monthly challans.</p>
           </div>
         </div>
       </QueryState>
