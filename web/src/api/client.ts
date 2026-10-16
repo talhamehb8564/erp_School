@@ -22,7 +22,7 @@ export class ApiError extends Error {
 const getInflight = new Map<string, Promise<unknown>>();
 const getTtlCache = new Map<string, { exp: number; data: unknown }>();
 const GET_TTL_MS = 45_000;
-const CACHEABLE_GET = /^\/api\/v1\/(classes|subjects|sections|campuses|tenants\/me|settings|school-settings|teacher-assignments|public\/school|notifications\/unread-count|dashboard\/school|portals\/(teacher|parent|student|account|principal)|announcements|calendar(\/events)?|homework|online-exams(\/mine)?|exams\/sessions|fees\/structures|fees\/charge-types|students\/me|parents\/me\/children|teacher\/timetable(\/today)?)(\?|$)/;
+const CACHEABLE_GET = /^\/api\/v1\/(auth\/me|classes|subjects|sections|campuses|tenants\/me|settings|school-settings|teacher-assignments|public\/school|notifications\/unread-count|dashboard\/school|portals\/(teacher|parent|student|account|principal)|announcements|calendar(\/events)?|homework|online-exams(\/mine)?|exams\/sessions|fees\/structures|fees\/charge-types|students(\/me)?|users|parents\/me\/children|teacher\/timetable(\/today)?)(\?|$)/;
 let authEpoch = 0;
 
 export function getAccessToken() {
@@ -80,10 +80,11 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 const REQUEST_TIMEOUT_MS = 45_000;
+const GET_TIMEOUT_MS = 12_000;
 
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   const ctrl = new AbortController();
-  const timer = window.setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: ctrl.signal });
   } catch (e) {
@@ -139,7 +140,9 @@ async function send<T>(
     headers.set("Content-Type", "application/json");
   }
   const startedEpoch = getAuthEpoch();
-  const res = await fetchWithTimeout(path, { ...init, headers });
+  const method = (init.method || "GET").toUpperCase();
+  const timeoutMs = method === "GET" || method === "HEAD" ? GET_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+  const res = await fetchWithTimeout(path, { ...init, headers }, timeoutMs);
   if (
     res.status === 401 &&
     retry &&

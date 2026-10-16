@@ -22,6 +22,7 @@ import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.student.service.StudentAccessService;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.user.entity.UserRole;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -138,18 +139,28 @@ public class HomeworkService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> mine() {
+        return mine(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> mine(Integer limit) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         UserRole role = TenantContext.getRole();
+        PageRequest page = limit != null && limit > 0 ? PageRequest.of(0, limit) : null;
         if (role == UserRole.TEACHER) {
-            return toMaps(homeworkRepository.findByTenantIdAndTeacherUserIdOrderByDueDateDesc(tenantId, TenantContext.getUserId()));
+            return toMaps(page == null
+                    ? homeworkRepository.findByTenantIdAndTeacherUserIdOrderByDueDateDesc(tenantId, TenantContext.getUserId())
+                    : homeworkRepository.findByTenantIdAndTeacherUserIdOrderByDueDateDesc(tenantId, TenantContext.getUserId(), page));
         }
         if (role == UserRole.STUDENT) {
             Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
-            return forClass(me.getClassId(), me.getSectionId());
+            return cap(forClass(me.getClassId(), me.getSectionId()), limit);
         }
         if (role == UserRole.SCHOOL_ADMIN || role == UserRole.PRINCIPAL || role == UserRole.ERP_OWNER) {
-            return toMaps(homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId));
+            return toMaps(page == null
+                    ? homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId)
+                    : homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId, page));
         }
         if (role == UserRole.PARENT) {
             List<UUID> linkedIds = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
@@ -180,9 +191,16 @@ public class HomeworkService {
                     .values()
                     .stream()
                     .toList();
-            return toMaps(parentRows);
+            return cap(toMaps(parentRows), limit);
         }
         throw new ResourceNotFoundException("Use classId and sectionId filters");
+    }
+
+    private static List<Map<String, Object>> cap(List<Map<String, Object>> rows, Integer limit) {
+        if (limit == null || limit <= 0 || rows.size() <= limit) {
+            return rows;
+        }
+        return List.copyOf(rows.subList(0, limit));
     }
 
     @Transactional(readOnly = true)

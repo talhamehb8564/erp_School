@@ -107,6 +107,8 @@ class AuthServiceTest {
         assertThat(response.getRefreshToken()).isNotBlank();
         assertThat(response.getUser().getRole()).isEqualTo(UserRole.TEACHER);
         assertThat(response.getUser().getTenantId()).isEqualTo(tenantId);
+        assertThat(response.getTenant()).isNotNull();
+        assertThat(response.getTenant().getId()).isEqualTo(tenantId);
         verify(refreshTokenRepository).save(ArgumentMatchers.any());
     }
 

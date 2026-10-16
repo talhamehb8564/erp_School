@@ -1,5 +1,6 @@
 package com.erpschool.auth.dto;
 
+import com.erpschool.tenant.dto.TenantResponse;
 import com.erpschool.user.dto.UserResponse;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,4 +14,5 @@ public class AuthResponse {
     private final String tokenType;
     private final long expiresIn;
     private final UserResponse user;
+    private final TenantResponse tenant;
 }

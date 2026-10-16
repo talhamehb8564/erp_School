@@ -250,22 +250,15 @@ public class FeeService {
             return List.of();
         }
         UUID tenantId = TenantGuard.requireTenantId(null);
-        return toMaps(challanRepository.findByTenantIdAndStudentIdInOrderByMonthDesc(tenantId, studentIds));
+        List<FeeChallan> rows = challanRepository.findByTenantIdAndStudentIdInOrderByMonthDesc(tenantId, studentIds);
+        return overlayOverdue(rows, toMaps(rows));
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> studentChallans(UUID studentId) {
         Student student = studentAccessService.requireStudent(studentId);
-        LocalDate today = LocalDate.now();
         List<FeeChallan> rows = challanRepository.findByTenantIdAndStudentIdOrderByMonthDesc(student.getTenantId(), studentId);
-        for (FeeChallan c : rows) {
-            if (c.isPastDue(today)) {
-                c.setStatus(ChallanStatus.OVERDUE);
-                c.setUpdatedBy(TenantContext.getUserId());
-                challanRepository.save(c);
-            }
-        }
-        return toMaps(rows);
+        return overlayOverdue(rows, toMaps(rows));
     }
 
     @Transactional(readOnly = true)
@@ -552,6 +545,16 @@ public class FeeService {
         m.put("totalPayable", c.getTotalPayable());
         m.put("status", c.getStatus());
         return m;
+    }
+
+    private List<Map<String, Object>> overlayOverdue(List<FeeChallan> rows, List<Map<String, Object>> maps) {
+        LocalDate today = LocalDate.now();
+        for (int i = 0; i < rows.size() && i < maps.size(); i++) {
+            if (rows.get(i).isPastDue(today)) {
+                maps.get(i).put("status", ChallanStatus.OVERDUE);
+            }
+        }
+        return maps;
     }
 
     private List<Map<String, Object>> toMaps(List<FeeChallan> rows) {

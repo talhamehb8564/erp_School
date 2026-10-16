@@ -3,14 +3,19 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useSession } from "./lib/session";
 import { homeFor } from "./lib/routes";
 import Welcome from "./pages/Welcome";
-import LoginPage from "./pages/LoginPage";
-import PortalPage from "./pages/PortalPage";
-import OwnerApp, { OwnerHome, SchoolDetail, Schools, Subscriptions } from "./pages/OwnerApp";
-import SchoolApp from "./pages/SchoolApp";
-import ChangePassword from "./pages/ChangePassword";
 import { Loading } from "./ui/kit";
 import ErrorBoundary from "./ui/ErrorBoundary";
 import type { Role } from "./lib/types";
+
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const PortalPage = lazy(() => import("./pages/PortalPage"));
+const OwnerApp = lazy(() => import("./pages/OwnerApp"));
+const OwnerHome = lazy(() => import("./pages/OwnerApp").then((m) => ({ default: m.OwnerHome })));
+const Schools = lazy(() => import("./pages/OwnerApp").then((m) => ({ default: m.Schools })));
+const SchoolDetail = lazy(() => import("./pages/OwnerApp").then((m) => ({ default: m.SchoolDetail })));
+const Subscriptions = lazy(() => import("./pages/OwnerApp").then((m) => ({ default: m.Subscriptions })));
+const SchoolApp = lazy(() => import("./pages/SchoolApp"));
+const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 
 const Dashboard = lazy(() => import("./pages/school/Dashboard"));
 const StudentsPage = lazy(() => import("./pages/school/People").then((m) => ({ default: m.StudentsPage })));

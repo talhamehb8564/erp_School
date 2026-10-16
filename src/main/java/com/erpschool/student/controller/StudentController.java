@@ -52,8 +52,9 @@ public class StudentController {
             @RequestParam(required = false) UUID classId,
             @RequestParam(required = false) UUID sectionId,
             @RequestParam(required = false) String academicSession,
+            @RequestParam(required = false) String q,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(studentService.list(classId, sectionId, academicSession, pageable)));
+        return ResponseEntity.ok(ApiResponse.ok(studentService.list(classId, sectionId, academicSession, q, pageable)));
     }
 
     @GetMapping("/students/me")

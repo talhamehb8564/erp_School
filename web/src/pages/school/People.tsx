@@ -15,9 +15,13 @@ export function StudentsPage() {
   const [session, setSession] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
+  const dq = useDebounced(q);
   const sessions = Array.from(new Set(classes.map((c) => c.academicSession).filter(Boolean))) as string[];
   const visibleClasses = session ? classes.filter((c) => c.academicSession === session) : classes;
-  const list = useAsync(() => studentApi.list(classId || undefined, undefined, page, session || undefined), [classId, page, session]);
+  const list = useAsync(
+    () => studentApi.list(classId || undefined, undefined, page, session || undefined, dq || undefined),
+    [classId, page, session, dq],
+  );
   const [open, setOpen] = useState(false);
   const toast = useToast();
   const [form, setForm] = useState({
@@ -25,10 +29,7 @@ export function StudentsPage() {
   });
   const [promo, setPromo] = useState({ fromClassId: "", fromSectionId: "", toClassId: "", toSectionId: "" });
   const [promoOpen, setPromoOpen] = useState(false);
-  const rows = (list.data?.content || []).filter((s) => {
-    const n = `${s.user?.fullName || ""} ${s.admissionNumber || ""}`.toLowerCase();
-    return !q || n.includes(q.toLowerCase());
-  });
+  const rows = list.data?.content || [];
   return (
     <>
       <div className="page-title">
@@ -41,7 +42,7 @@ export function StudentsPage() {
         ) : null}
       </div>
       <div className="row" style={{ marginBottom: 12 }}>
-        <Search value={q} onChange={setQ} placeholder="Search name or admission no." />
+        <Search value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Search name or admission no." />
         <select className="search" value={session} onChange={(e) => { setSession(e.target.value); setClassId(""); setPage(0); }}>
           <option value="">All sessions</option>
           {sessions.map((s) => <option key={s} value={s}>{s}</option>)}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useSession } from "../lib/session";
 import { useBranding } from "../lib/branding";
@@ -28,6 +28,11 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
   const toast = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    void import("./SchoolApp");
+    void import("./OwnerApp");
+  }, []);
 
   if (user) return <Navigate to={homeFor(user)} replace />;
   if (!expected) return <Navigate to="/" replace />;

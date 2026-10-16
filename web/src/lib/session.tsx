@@ -111,6 +111,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!getAccessToken()) {
+      setLoading(false);
+      return;
+    }
+    if (user) {
+      const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+      if (typeof idle === "function") {
+        const id = idle(() => { void reload(); }, { timeout: 800 });
+        const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+        return () => cancel?.(id);
+      }
+      const t = window.setTimeout(() => { void reload(); }, 200);
+      return () => window.clearTimeout(t);
+    }
     void reload();
   }, [reload]);
 
@@ -120,18 +134,29 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(LOCKED_EVENT, onLocked);
   }, []);
 
+  const applyTenant = (u: User, tenant?: Tenant | null) => {
+    if (u.role === "ERP_OWNER") {
+      setTenant(null);
+      setForcedLocked(false);
+      return true;
+    }
+    if (tenant) {
+      setTenant(tenant);
+      setForcedLocked(LOCKED_STATUSES.includes(tenant.status));
+      return true;
+    }
+    return false;
+  };
+
   const login = useCallback(async (username: string, password: string, expected?: Role) => {
     const payload = await authApi.login(username.trim(), password);
     setTokens(payload.accessToken, payload.refreshToken);
     if (expected && payload.user.role !== expected) {
-      try {
-        await authApi.logout(payload.refreshToken);
-      } catch {
-        /* ignore */
-      }
+      const rt = payload.refreshToken;
       clearTokens();
       persist(null);
       setTenant(null);
+      if (rt) void authApi.logout(rt).catch(() => undefined);
       throw new ApiError(403, {
         success: false,
         errorCode: "WRONG_PORTAL",
@@ -139,26 +164,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       });
     }
     persist(payload.user);
-    await loadTenant(payload.user);
+    if (!applyTenant(payload.user, payload.tenant)) {
+      await loadTenant(payload.user);
+    }
     setLoading(false);
     return payload.user;
   }, []);
 
   const logout = useCallback(async (opts?: { remote?: boolean }) => {
-    if (opts?.remote !== false) {
-      const rt = getRefreshToken();
-      try {
-        if (rt) await authApi.logout(rt);
-      } catch {
-        /* still clear locally */
-      }
-    }
+    const rt = opts?.remote !== false ? getRefreshToken() : null;
     clearTokens();
     persist(null);
     setTenant(null);
     setForcedLocked(false);
     localStorage.removeItem(CHILD_KEY);
     setChildIdState(null);
+    if (rt) void authApi.logout(rt).catch(() => undefined);
   }, []);
 
   const setChildId = useCallback((id: string | null) => {

@@ -5,6 +5,8 @@ import com.erpschool.student.entity.StudentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -59,4 +61,37 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
     long countByTenantIdAndStatus(UUID tenantId, StudentStatus status);
 
     long countByTenantIdAndClassId(UUID tenantId, UUID classId);
+
+    @Query("""
+            select s from Student s
+            where s.tenantId = :tenantId
+              and (:campusId is null or s.campusId = :campusId)
+              and (:classId is null or s.classId = :classId)
+              and (:sectionId is null or s.sectionId = :sectionId)
+              and (:filterClasses = false or s.classId in :classIds)
+              and (
+                    lower(coalesce(s.admissionNumber, '')) like :like
+                 or lower(coalesce(s.rollNumber, '')) like :like
+                 or lower(coalesce(s.cnic, '')) like :like
+                 or exists (
+                      select 1 from User u
+                      where u.id = s.userId
+                        and u.tenantId = :tenantId
+                        and (
+                              lower(u.firstName) like :like
+                           or lower(u.lastName) like :like
+                           or lower(concat(u.firstName, ' ', coalesce(u.lastName, ''))) like :like
+                        )
+                 )
+              )
+            """)
+    Page<Student> search(
+            @Param("tenantId") UUID tenantId,
+            @Param("campusId") UUID campusId,
+            @Param("classId") UUID classId,
+            @Param("sectionId") UUID sectionId,
+            @Param("filterClasses") boolean filterClasses,
+            @Param("classIds") Collection<UUID> classIds,
+            @Param("like") String like,
+            Pageable pageable);
 }

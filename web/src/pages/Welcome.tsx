@@ -94,12 +94,20 @@ export default function Welcome() {
 
   if (loading && !school) {
     return (
-      <div className="site-boot">
-        <div className="site-boot-card">
-          <div className="skeleton-line" style={{ width: 120 }} />
-          <div className="skeleton-line" style={{ width: 240, height: 28, marginTop: 12 }} />
-          <p className="hint">Loading school website…</p>
-        </div>
+      <div className="site">
+        <header className="site-nav">
+          <span className="site-brand">
+            <div className="mark">S</div>
+            <div><strong>School</strong></div>
+          </span>
+        </header>
+        <section className="site-hero" id="top">
+          <div className="site-hero-media site-slide-plain" />
+          <div className="site-hero-copy">
+            <p className="kicker">Welcome</p>
+            <h1>Loading school website…</h1>
+          </div>
+        </section>
       </div>
     );
   }

@@ -162,11 +162,12 @@ export const academicApi = {
 };
 
 export const studentApi = {
-  list: (classId?: string, sectionId?: string, page = 0, academicSession?: string) => {
-    const p = new URLSearchParams({ size: "50", page: String(page) });
+  list: (classId?: string, sectionId?: string, page = 0, academicSession?: string, q?: string) => {
+    const p = new URLSearchParams({ size: "20", page: String(page) });
     if (classId) p.set("classId", classId);
     if (sectionId) p.set("sectionId", sectionId);
     if (academicSession) p.set("academicSession", academicSession);
+    if (q) p.set("q", q);
     return api.get<Page<StudentUser>>(`${v1}/students?${p}`);
   },
   get: (id: string) => api.get<StudentUser>(`${v1}/students/${id}`),

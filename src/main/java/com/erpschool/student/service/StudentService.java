@@ -184,7 +184,7 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<StudentDtos.Response> list(UUID classId, UUID sectionId, String academicSession, Pageable pageable) {
+    public PageResponse<StudentDtos.Response> list(UUID classId, UUID sectionId, String academicSession, String q, Pageable pageable) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         Page<Student> page;
         UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
@@ -199,7 +199,22 @@ public class StudentService {
                 return emptyStudents(page);
             }
         }
-        if (classId == null && sessionClassIds != null) {
+        String like = normalizeSearch(q);
+        if (like != null) {
+            boolean filterClasses = classId == null && sessionClassIds != null;
+            java.util.Collection<UUID> classIds = filterClasses
+                    ? sessionClassIds
+                    : java.util.List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            page = studentRepository.search(
+                    tenantId,
+                    campusId,
+                    classId,
+                    sectionId,
+                    filterClasses,
+                    classIds,
+                    like,
+                    pageable);
+        } else if (classId == null && sessionClassIds != null) {
             if (campusId != null) {
                 page = studentRepository.findByTenantIdAndCampusIdAndClassIdIn(tenantId, campusId, sessionClassIds, pageable);
             } else {
@@ -231,6 +246,17 @@ public class StudentService {
                 .first(page.isFirst())
                 .last(page.isLast())
                 .build();
+    }
+
+    private static String normalizeSearch(String q) {
+        if (q == null) {
+            return null;
+        }
+        String trimmed = q.trim().toLowerCase().replace("%", "").replace("_", "");
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return "%" + trimmed + "%";
     }
 
     private static PageResponse<StudentDtos.Response> emptyStudents(Page<Student> page) {

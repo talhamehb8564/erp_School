@@ -32,7 +32,10 @@ export default function SchoolApp() {
 
   useEffect(() => {
     if (!user || locked) return;
-    void notificationApi.unread().then((r) => setUnread(r.unread)).catch(() => undefined);
+    const t = window.setTimeout(() => {
+      void notificationApi.unread().then((r) => setUnread(r.unread)).catch(() => undefined);
+    }, 400);
+    return () => window.clearTimeout(t);
   }, [user, locked]);
 
   useEffect(() => {

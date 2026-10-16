@@ -10,6 +10,7 @@ import com.erpschool.common.util.HttpRequestUtils;
 import com.erpschool.common.util.TokenHasher;
 import com.erpschool.config.AppProperties;
 import com.erpschool.security.JwtService;
+import com.erpschool.tenant.dto.TenantResponse;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.repository.TenantRepository;
 import com.erpschool.user.dto.UserResponse;
@@ -102,7 +103,8 @@ public class AuthService {
                     AuditService.LOGIN_FAILED, "User", user.getId().toString(), Map.of("reason", "bad_password"));
             throw new UnauthorizedException("Invalid username or password");
         }
-        assertTenantAllowsLogin(user);
+        Tenant tenant = loadTenantForLogin(user);
+        assertTenantAllowsLogin(user, tenant);
 
         AuthResponse response = writeTx.execute(status -> {
             User persistent = userRepository.findById(user.getId())
@@ -111,7 +113,7 @@ public class AuthService {
             persistent.setLockedUntil(null);
             persistent.setLastLoginAt(Instant.now());
             userRepository.saveAndFlush(persistent);
-            return issueTokens(persistent, request);
+            return issueTokens(persistent, request, tenant);
         });
 
         auditService.record(user.getTenantId(), user.getId(), user.getUsername(), user.getRole().name(),
@@ -137,10 +139,11 @@ public class AuthService {
             refreshTokenRepository.save(stored);
             throw new UnauthorizedException("Account is not active");
         }
-        assertTenantAllowsLogin(user);
+        Tenant tenant = loadTenantForLogin(user);
+        assertTenantAllowsLogin(user, tenant);
         stored.revoke();
         refreshTokenRepository.save(stored);
-        return issueTokens(user, request);
+        return issueTokens(user, request, tenant);
     }
 
     @Transactional
@@ -230,7 +233,7 @@ public class AuthService {
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
     }
 
-    private AuthResponse issueTokens(User user, HttpServletRequest request) {
+    private AuthResponse issueTokens(User user, HttpServletRequest request, Tenant tenant) {
         String accessToken = jwtService.createAccessToken(user);
         String refreshToken = TokenHasher.randomToken();
 
@@ -249,6 +252,7 @@ public class AuthService {
                 .tokenType("Bearer")
                 .expiresIn(jwtService.getAccessTtlSeconds())
                 .user(UserResponse.from(user))
+                .tenant(tenant == null ? null : TenantResponse.from(tenant))
                 .build();
     }
 
@@ -266,12 +270,21 @@ public class AuthService {
         user.setLockedUntil(persistent.getLockedUntil());
     }
 
-    private void assertTenantAllowsLogin(User user) {
+    private Tenant loadTenantForLogin(User user) {
+        if (user.getRole() == UserRole.ERP_OWNER) {
+            return null;
+        }
+        return tenantRepository.findById(user.getTenantId())
+                .orElseThrow(() -> new UnauthorizedException("School account is not available"));
+    }
+
+    private void assertTenantAllowsLogin(User user, Tenant tenant) {
         if (user.getRole() == UserRole.ERP_OWNER) {
             return;
         }
-        Tenant tenant = tenantRepository.findById(user.getTenantId())
-                .orElseThrow(() -> new UnauthorizedException("School account is not available"));
+        if (tenant == null) {
+            throw new UnauthorizedException("School account is not available");
+        }
         if (tenant.allowsSchoolLogin()) {
             return;
         }

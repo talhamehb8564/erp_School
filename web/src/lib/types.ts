@@ -67,6 +67,7 @@ export interface AuthPayload {
   tokenType: string;
   expiresIn: number;
   user: User;
+  tenant?: Tenant | null;
 }
 
 export interface Tenant {
