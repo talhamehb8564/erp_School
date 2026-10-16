@@ -10,6 +10,7 @@ import { Badge, Button, Empty, Field, Form, QueryState, Table, useAsync } from "
 
 type QuestionDraft = {
   id?: string;
+  _key?: string;
   questionType: string;
   prompt: string;
   marks?: number | string;
@@ -513,7 +514,7 @@ function StaffExam({ examId }: { examId: string }) {
       shortRequired: data.shortRequired == null ? "" : str(data.shortRequired),
       longRequired: data.longRequired == null ? "" : str(data.longRequired),
     });
-    setQuestions(((data.questions as QuestionDraft[]) || []).map((q) => ({ ...q })));
+    setQuestions(((data.questions as QuestionDraft[]) || []).map((q) => ({ ...q, _key: q.id || q._key || crypto.randomUUID() })));
   }, [data]);
 
   const status = str(data?.status);
@@ -522,12 +523,36 @@ function StaffExam({ examId }: { examId: string }) {
   const assignmentLocked = Boolean(data?.assignmentLocked);
   const sectionOpts = sections[meta.classId] || [];
 
-  const addQuestion = (questionType: string) => {
-    setQuestions((q) => [...q, { questionType, prompt: "", optionA: "", optionB: "", optionC: "", optionD: "", correctOption: "" }]);
+  const addQuestion = (questionType: string, after?: number) => {
+    const row: QuestionDraft = {
+      _key: crypto.randomUUID(),
+      questionType,
+      prompt: "",
+      optionA: "",
+      optionB: "",
+      optionC: "",
+      optionD: "",
+      correctOption: "",
+    };
+    setQuestions((q) => {
+      let at = after;
+      if (at == null) {
+        at = -1;
+        q.forEach((item, n) => { if (item.questionType === questionType) at = n; });
+      }
+      if (at < 0 || at >= q.length) return [...q, row];
+      const next = q.slice();
+      next.splice(at + 1, 0, row);
+      return next;
+    });
+    window.setTimeout(() => {
+      document.getElementById(`exam-q-${row._key}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 40);
   };
   const patchQ = (i: number, patch: Partial<QuestionDraft>) => {
     setQuestions((qs) => qs.map((q, n) => (n === i ? { ...q, ...patch } : q)));
   };
+  const addLabel = (type: string) => type === "MCQ" ? "Add New MCQ" : type === "SHORT" ? "Add New Short Question" : "Add New Long Question";
 
   return (
     <>
@@ -610,15 +635,16 @@ function StaffExam({ examId }: { examId: string }) {
             </div>
             <div className="card">
               <h3>Questions</h3>
-              {!questionsLocked ? (
+              {questionsLocked ? <p className="hint">Questions lock after the exam is scheduled.</p> : null}
+              {!questions.length && !questionsLocked ? (
                 <div className="row" style={{ marginBottom: 12 }}>
-                  <Button kind="ghost" onClick={() => addQuestion("MCQ")}>Add MCQ</Button>
-                  <Button kind="ghost" onClick={() => addQuestion("SHORT")}>Add short</Button>
-                  <Button kind="ghost" onClick={() => addQuestion("LONG")}>Add long</Button>
+                  <Button kind="ghost" onClick={() => addQuestion("MCQ")}>Add New MCQ</Button>
+                  <Button kind="ghost" onClick={() => addQuestion("SHORT")}>Add New Short Question</Button>
+                  <Button kind="ghost" onClick={() => addQuestion("LONG")}>Add New Long Question</Button>
                 </div>
-              ) : <p className="hint">Questions lock after the exam is scheduled.</p>}
+              ) : null}
               {questions.map((q, i) => (
-                <div key={q.id || i} className="exam-q">
+                <div key={q._key || q.id || i} id={q._key ? `exam-q-${q._key}` : undefined} className="exam-q">
                   <div className="row">
                     <strong>{i + 1}. {q.questionType}</strong>
                     {!questionsLocked ? <Button kind="ghost" onClick={() => setQuestions(questions.filter((_, n) => n !== i))}>Remove</Button> : null}
@@ -641,9 +667,19 @@ function StaffExam({ examId }: { examId: string }) {
                     <Field label="Reference answer (staff only, used for auto-match)"><textarea value={q.referenceAnswer || ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { referenceAnswer: e.target.value })} /></Field>
                   )}
                   <Field label="Marks (blank = default)"><input type="number" value={q.marks ?? ""} disabled={questionsLocked} onChange={(e) => patchQ(i, { marks: e.target.value })} /></Field>
+                  {!questionsLocked ? (
+                    <Button kind="ghost" onClick={() => addQuestion(q.questionType, i)}>{addLabel(q.questionType)}</Button>
+                  ) : null}
                 </div>
               ))}
-              {!questionsLocked ? (
+              {questions.length > 0 && !questionsLocked ? (
+                <div className="row" style={{ margin: "12px 0" }}>
+                  <Button kind="ghost" onClick={() => addQuestion("MCQ")}>Add New MCQ</Button>
+                  <Button kind="ghost" onClick={() => addQuestion("SHORT")}>Add New Short Question</Button>
+                  <Button kind="ghost" onClick={() => addQuestion("LONG")}>Add New Long Question</Button>
+                </div>
+              ) : null}
+              {!questionsLocked && questions.length ? (
                 <Button kind="brass" loadingText="Saving questions…" onClick={async () => {
                   await onlineExamApi.saveQuestions(examId, questions.map((q) => ({
                     questionType: q.questionType,

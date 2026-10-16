@@ -15,6 +15,25 @@ interface Lookups {
 
 const Ctx = createContext<Lookups | null>(null);
 
+const LOOKUP_PREFIXES = [
+  "/app/students",
+  "/app/users",
+  "/app/academics",
+  "/app/timetable",
+  "/app/attendance",
+  "/app/homework",
+  "/app/exams",
+  "/app/online-exams",
+  "/app/fees",
+  "/app/salaries",
+  "/app/announcements",
+  "/app/calendar",
+];
+
+export function lookupsNeeded(pathname: string) {
+  return LOOKUP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 export function LookupsProvider({ children, enabled }: { children: React.ReactNode; enabled: boolean }) {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -53,15 +72,9 @@ export function LookupsProvider({ children, enabled }: { children: React.ReactNo
 
   useEffect(() => {
     if (!enabled) return;
-    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
-    if (typeof idle === "function") {
-      const id = idle(() => { void reload(); });
-      const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
-      return () => cancel?.(id);
-    }
-    const t = window.setTimeout(() => { void reload(); }, 280);
-    return () => window.clearTimeout(t);
-  }, [enabled, reload]);
+    if (classes.length || subjects.length) return;
+    void reload();
+  }, [enabled, reload, classes.length, subjects.length]);
 
   const classMap = useMemo(() => new Map(classes.map((c) => [c.id, c.name])), [classes]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);

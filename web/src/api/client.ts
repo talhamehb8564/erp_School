@@ -21,8 +21,8 @@ export class ApiError extends Error {
 
 const getInflight = new Map<string, Promise<unknown>>();
 const getTtlCache = new Map<string, { exp: number; data: unknown }>();
-const GET_TTL_MS = 15_000;
-const CACHEABLE_GET = /^\/api\/v1\/(classes|subjects|sections|campuses|tenants\/me|settings|teacher-assignments|public\/school|notifications\/unread-count)(\?|$)/;
+const GET_TTL_MS = 20_000;
+const CACHEABLE_GET = /^\/api\/v1\/(classes|subjects|sections|campuses|tenants\/me|settings|teacher-assignments|public\/school|notifications\/unread-count|dashboard\/school|portals\/(teacher|parent|student|account|principal)|announcements|calendar)(\?|$)/;
 let authEpoch = 0;
 
 export function getAccessToken() {

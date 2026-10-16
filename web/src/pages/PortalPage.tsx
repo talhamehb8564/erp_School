@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useBranding } from "../lib/branding";
+import RotatingLine from "../ui/RotatingLine";
 
 const roles = [
   { to: "/login/student", title: "Student", hint: "Timetable, homework, online exams and results" },
@@ -29,7 +30,8 @@ export default function PortalPage() {
       <section className="portal-hero">
         <p className="kicker">Sign in</p>
         <h1>{name} Portal</h1>
-        <p>Choose your role to sign in. School name and colours come from the public school profile.</p>
+        <RotatingLine />
+        <p className="hint">Choose your role. School name and colours come from the public school profile.</p>
       </section>
       <div className="role-grid portal-grid">
         {roles.map((r) => (

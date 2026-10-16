@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import ChangePassword from "./ChangePassword";
 import { reportApi, subscriptionApi, tenantApi, userApi } from "../api/services";
@@ -8,12 +8,14 @@ import { useToast } from "../lib/toast";
 import { applyTheme, readTheme, type Theme } from "../lib/theme";
 import { ApiError } from "../api/client";
 import { Badge, Bars, Button, Donut, Empty, Field, FileLink, Form, Modal, Pager, QueryState, Search, Stat, Table, useAsync, useDebounced } from "../ui/kit";
+import UserMenu from "../ui/UserMenu";
 import type { Tenant, TenantStatus } from "../lib/types";
 
 export default function OwnerApp() {
   const { user, logout } = useSession();
   const loc = useLocation();
   const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [loc.pathname]);
   const [theme, setTheme] = useState<Theme>(readTheme());
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
@@ -43,10 +45,11 @@ export default function OwnerApp() {
         <NavLink className="nav-link" to="/admin/app/subscriptions" onClick={() => setOpen(false)}>
           Subscriptions
         </NavLink>
-        <div style={{ flex: 1 }} />
-        <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
-          Sign out
-        </Button>
+        <div className="sidebar-foot">
+          <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
+            Sign out
+          </Button>
+        </div>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -58,9 +61,10 @@ export default function OwnerApp() {
             <strong>{user?.fullName}</strong>
           </div>
           <div className="row">
-            <button className="icon-btn" onClick={toggleTheme} title="Theme">
+            <button type="button" className="icon-btn" onClick={toggleTheme} title="Theme">
               {theme === "dark" ? "☀" : "☾"}
             </button>
+            <UserMenu passwordTo="/admin/app/password" />
           </div>
         </header>
         <div className="content">

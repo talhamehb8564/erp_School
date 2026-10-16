@@ -88,9 +88,10 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
 .role-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 20px;
   padding: 18px; text-align: left; cursor: pointer; box-shadow: var(--shadow);
-  transition: transform .18s ease, border-color .18s;
+  transition: transform .18s ease, border-color .18s, box-shadow .18s;
 }
-.role-card:hover { transform: translateY(-3px); border-color: var(--brass-2); }
+.role-card:hover { transform: translateY(-3px); border-color: var(--brass-2); box-shadow: 0 12px 28px color-mix(in srgb, var(--brand) 16%, transparent); }
+.role-card:focus-visible { outline: 2px solid var(--brass-2); outline-offset: 3px; }
 .role-card small { color: var(--muted); display: block; margin-top: 6px; }
 .role-card.wide { grid-column: 1 / -1; }
 
@@ -99,8 +100,24 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
   width: min(460px, 100%);
   background: var(--card); border: 1px solid var(--line); border-radius: 28px;
   padding: 32px; box-shadow: var(--shadow);
+  animation: rise .42s ease both;
 }
 .auth-card h1 { margin: 8px 0 6px; font-size: 34px; }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.rotating-line {
+  min-height: 1.45em;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: .01em;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .28s ease, transform .28s ease;
+}
+.rotating-line.on { opacity: 1; transform: none; }
 .hint { color: var(--muted); margin: 0 0 22px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -142,6 +159,15 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
 .sidebar {
   background: var(--sidebar-bg);
   color: var(--sidebar-ink); padding: 22px 16px; display: flex; flex-direction: column; gap: 8px;
+  position: sticky; top: 0; height: 100dvh; overflow-y: auto;
+}
+.sidebar-foot {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0 4px;
+  background: linear-gradient(transparent, var(--sidebar-bg) 36%);
+  z-index: 2;
 }
 .nav-link {
   display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; color: color-mix(in srgb, var(--sidebar-ink) 82%, transparent);
@@ -261,6 +287,10 @@ th { color: var(--muted); font-weight: 560; background: color-mix(in srgb, var(-
   width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center;
   background: var(--accent-2); font-weight: 650;
 }
+.user-menu-btn { border: 0; cursor: pointer; font: inherit; color: inherit; }
+.user-menu-id { padding: 8px 12px 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.user-menu-id strong { display: block; }
+.user-menu-id span { font-size: 12px; color: var(--muted); word-break: break-all; }
 .icon-btn {
   width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--bg-2); cursor: pointer;
@@ -409,8 +439,10 @@ th { color: var(--muted); font-weight: 560; background: color-mix(in srgb, var(-
 }
 .site-notice { margin: 16px 8%; }
 .portal-page { padding-bottom: 48px; }
-.portal-hero { padding: 56px 8% 8px; }
+.portal-hero { padding: 56px 8% 8px; animation: rise .42s ease both; }
 .portal-hero h1 { font-size: clamp(36px, 5vw, 64px); margin: 8px 0; }
+.portal-hero .rotating-line { font-size: clamp(16px, 2vw, 20px); color: var(--ink); opacity: .72; }
+.portal-hero .rotating-line.on { opacity: .88; }
 .portal-grid { padding: 12px 8% 40px; }
 
 .exam-timer {
@@ -422,7 +454,7 @@ th { color: var(--muted); font-weight: 560; background: color-mix(in srgb, var(-
 .exam-q { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .card { border-top: 3px solid color-mix(in srgb, var(--brand-3) 45%, transparent); }
 
-.sidebar { overflow-y: auto; }
+.topbar { z-index: 12; }
 .topbar-copy { min-width: 0; }
 .topbar-copy strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(48vw, 420px); }
 .content { width: 100%; max-width: 1240px; margin: 0 auto; }

@@ -240,12 +240,17 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const fnRef = useRef(fn);
+  const dataRef = useRef<T | null>(null);
   fnRef.current = fn;
+  dataRef.current = data;
   const reload = useCallback(async () => {
-    setLoading(true);
+    const blocking = dataRef.current == null;
+    if (blocking) setLoading(true);
     setError(null);
     try {
-      setData(await fnRef.current());
+      const next = await fnRef.current();
+      dataRef.current = next;
+      setData(next);
     } catch (e) {
       setError(e);
     } finally {
@@ -254,12 +259,14 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const blocking = dataRef.current == null;
+    if (blocking) setLoading(true);
     setError(null);
     void (async () => {
       try {
         const next = await fnRef.current();
         if (!cancelled) {
+          dataRef.current = next;
           setData(next);
           setError(null);
         }

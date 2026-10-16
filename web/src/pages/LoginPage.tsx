@@ -6,6 +6,7 @@ import type { Role } from "../lib/types";
 import { ROLE_LABEL } from "../lib/types";
 import { homeFor } from "../lib/routes";
 import { Button, Field, Form } from "../ui/kit";
+import RotatingLine from "../ui/RotatingLine";
 import { useToast } from "../lib/toast";
 
 const MAP: Record<string, Role> = {
@@ -46,6 +47,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
           </div>
         </div>
         <h1>{owner ? "ERP Owner" : ROLE_LABEL[expected]}</h1>
+        <RotatingLine />
         <p className="hint">
           {owner
             ? "Sign in with your platform owner account."

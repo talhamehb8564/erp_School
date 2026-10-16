@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import { auditApi, notificationApi } from "../api/services";
-import { LookupsProvider, useLookups } from "../lib/lookups";
-import { initials } from "../lib/format";
+import { LookupsProvider, lookupsNeeded, useLookups } from "../lib/lookups";
 import { useSession } from "../lib/session";
 import { applyBrand, applyTheme, readTheme, type Theme } from "../lib/theme";
 import { useBranding } from "../lib/branding";
@@ -10,6 +9,7 @@ import { SCHOOL_NAV } from "../lib/nav";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
 import { Button, ErrorBox } from "../ui/kit";
+import UserMenu from "../ui/UserMenu";
 import ErrorBoundary from "../ui/ErrorBoundary";
 
 const NAV_GROUPS: { label: string; tos: string[] }[] = [
@@ -27,6 +27,8 @@ export default function SchoolApp() {
   const [theme, setTheme] = useState<Theme>(readTheme());
   const [unread, setUnread] = useState(0);
   const loc = useLocation();
+
+  useEffect(() => { setOpen(false); }, [loc.pathname]);
 
   useEffect(() => {
     if (!user || locked) return;
@@ -58,7 +60,7 @@ export default function SchoolApp() {
   };
 
   return (
-    <LookupsProvider enabled={!locked}>
+    <LookupsProvider enabled={!locked && lookupsNeeded(loc.pathname)}>
       <div className="shell" data-role={role}>
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -78,10 +80,11 @@ export default function SchoolApp() {
               </div>
             );
           })}
-          <div style={{ flex: 1 }} />
-          <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
-            Sign out
-          </Button>
+          <div className="sidebar-foot">
+            <Button kind="ghost" loadingText="Signing out…" onClick={() => logout()}>
+              Sign out
+            </Button>
+          </div>
         </aside>
         <div className="main">
           <header className="topbar">
@@ -93,8 +96,8 @@ export default function SchoolApp() {
               <strong>{user.fullName}</strong>
             </div>
             <div className="row">
-              <button className="icon-btn" onClick={toggleTheme}>{theme === "dark" ? "☀" : "☾"}</button>
-              <div className="avatar">{initials(user.fullName)}</div>
+              <button type="button" className="icon-btn" onClick={toggleTheme} title="Theme">{theme === "dark" ? "☀" : "☾"}</button>
+              <UserMenu passwordTo="/app/password" />
             </div>
           </header>
           <div className="content">
