@@ -60,7 +60,7 @@ export default function SchoolApp() {
   };
 
   return (
-    <LookupsProvider enabled={!locked && lookupsNeeded(loc.pathname)} prefetch={!locked && loc.pathname === "/app"}>
+    <LookupsProvider enabled={!locked && lookupsNeeded(loc.pathname)} prefetch={!locked}>
       <div className="shell" data-role={role}>
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -88,7 +88,7 @@ export default function SchoolApp() {
         </aside>
         <div className="main">
           <header className="topbar">
-            <button className="icon-btn burger" onClick={() => setOpen((v) => !v)}>
+            <button type="button" className="icon-btn burger" aria-label="Open menu" onClick={() => setOpen((v) => !v)}>
               ☰
             </button>
             <div className="topbar-copy">

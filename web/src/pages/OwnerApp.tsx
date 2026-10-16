@@ -53,7 +53,7 @@ export default function OwnerApp() {
       </aside>
       <div className="main">
         <header className="topbar">
-          <button className="icon-btn burger" onClick={() => setOpen((v) => !v)}>
+          <button type="button" className="icon-btn burger" aria-label="Open menu" onClick={() => setOpen((v) => !v)}>
             ☰
           </button>
           <div>

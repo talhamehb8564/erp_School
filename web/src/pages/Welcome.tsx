@@ -173,7 +173,7 @@ export default function Welcome() {
             {school?.tagline ? <div className="hint">{school.tagline}</div> : null}
           </div>
         </a>
-        <nav className={`site-links ${menu ? "open" : ""}`}>
+        <nav className={`site-links ${menu ? "open" : ""}`} aria-label="Site">
           <a href="#about" onClick={closeMenu}>About</a>
           <a href="#principal" onClick={closeMenu}>Principal</a>
           <a href="#academics" onClick={closeMenu}>Academics</a>
@@ -181,6 +181,7 @@ export default function Welcome() {
           <a href="#gallery" onClick={closeMenu}>Life at school</a>
           <a href="#campuses" onClick={closeMenu}>Campuses</a>
           <a href="#contact" onClick={closeMenu}>Contact</a>
+          <Link to="/portals" className="btn brass site-links-portal" onClick={closeMenu}>School Portal</Link>
         </nav>
         <div className="site-nav-right">
           {campuses.length ? (
@@ -188,50 +189,52 @@ export default function Welcome() {
               {campuses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           ) : null}
-          <Link to="/portals" className="btn brass">School Portal</Link>
+          <Link to="/portals" className="btn brass site-nav-portal">School Portal</Link>
           <button type="button" className="icon-btn site-burger" aria-label="Menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>☰</button>
         </div>
       </header>
       {menu ? <button type="button" className="site-scrim" aria-label="Close menu" onClick={closeMenu} /> : null}
 
       <section className="site-hero" id="top" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-        {heroes.map((h, i) => (
-          <div key={h.imageUrl + i} className={`site-slide ${i === slide ? "on" : ""}`}>
-            <img src={h.imageUrl} alt="" />
-            <div className="site-hero-copy">
-              <p className="kicker glow-kicker">{campus?.name || "Welcome"}</p>
-              <h1>{h.title || name}</h1>
-              {h.caption || school?.tagline ? <p className="hl">{h.caption || school?.tagline}</p> : null}
+        <div className="site-hero-media">
+          {heroes.map((h, i) => (
+            <div key={h.imageUrl + i} className={`site-slide ${i === slide ? "on" : ""}`}>
+              <img src={h.imageUrl} alt="" loading={i === 0 ? "eager" : "lazy"} />
             </div>
-          </div>
-        ))}
-        {heroes.length > 1 ? (
-          <>
-            <button type="button" className="site-arrow prev" aria-label="Previous slide" onClick={() => setSlide((n) => (n - 1 + heroes.length) % heroes.length)}>‹</button>
-            <button type="button" className="site-arrow next" aria-label="Next slide" onClick={() => setSlide((n) => (n + 1) % heroes.length)}>›</button>
-            <div className="site-dots">
-              {heroes.map((_, i) => (
-                <button key={i} type="button" className={i === slide ? "on" : ""} onClick={() => setSlide(i)} aria-label={`Slide ${i + 1}`} />
-              ))}
-            </div>
-          </>
-        ) : null}
+          ))}
+          {heroes.length > 1 ? (
+            <>
+              <button type="button" className="site-arrow prev" aria-label="Previous slide" onClick={() => setSlide((n) => (n - 1 + heroes.length) % heroes.length)}>‹</button>
+              <button type="button" className="site-arrow next" aria-label="Next slide" onClick={() => setSlide((n) => (n + 1) % heroes.length)}>›</button>
+              <div className="site-dots">
+                {heroes.map((_, i) => (
+                  <button key={i} type="button" className={i === slide ? "on" : ""} onClick={() => setSlide(i)} aria-label={`Slide ${i + 1}`} />
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+        <div className="site-hero-copy">
+          <p className="kicker">{campus?.name || "Welcome"}</p>
+          <h1>{heroes[slide]?.title || name}</h1>
+          {heroes[slide]?.caption || school?.tagline ? <p>{heroes[slide]?.caption || school?.tagline}</p> : null}
+        </div>
       </section>
 
       {created ? <div className="notice site-notice">{created.message} Sign in as <span className="pwd">{created.username}</span>{created.password ? <> / <span className="pwd">{created.password}</span></> : null}</div> : null}
 
       <div className={`site-banner ${noticeCustom ? "live" : "sample"}`}>
         <div>
-          <p className="kicker glow-kicker">{noticeCustom ? "Announcement" : "Sample notice"}</p>
-          <strong className="hl">{noticeTitle}</strong>
+          <p className="kicker">{noticeCustom ? "Announcement" : "Sample notice"}</p>
+          <strong>{noticeTitle}</strong>
           <p>{noticeBody}</p>
         </div>
       </div>
 
       <Reveal>
         <section id="about" className="site-section">
-          <p className="kicker glow-kicker">About</p>
-          <h2 className="hl">{name}</h2>
+          <p className="kicker">About</p>
+          <h2>{name}</h2>
           <TypeLine text={school?.aboutText || DEFAULT_ABOUT} className={school?.aboutText ? undefined : "sample-copy"} />
         </section>
       </Reveal>
@@ -256,7 +259,7 @@ export default function Welcome() {
 
       <Reveal>
         <section id="academics" className="site-section">
-          <p className="kicker glow-kicker">Academics</p>
+          <p className="kicker">Academics</p>
           <h2>Programmes</h2>
           {programs.isDefault ? <p className="sample-copy">Sample programmes rotate here until School Admin publishes real copy. Separate programmes with a blank line in Website settings.</p> : null}
           <ProgramsBlock items={programs.items} sample={programs.isDefault} />
@@ -272,7 +275,7 @@ export default function Welcome() {
             {highlights.items.map((line, i) => (
               <article key={line + i} className={`holder-card ${highlights.isDefault ? "sample" : ""}`}>
                 <span className="holder-index">{String(i + 1).padStart(2, "0")}</span>
-                <strong className="pulse-hl">{line}</strong>
+                <strong>{line}</strong>
               </article>
             ))}
           </div>
@@ -478,7 +481,7 @@ function ProgramsBlock({ items, sample }: { items: { title: string; body: string
         ))}
       </div>
       <div className="program-copy">
-        <h3 className="hl">{cur.title}</h3>
+        <h3>{cur.title}</h3>
         <TypeLine key={`${cur.title}-${i}`} text={cur.body} className={sample ? "sample-copy" : undefined} />
       </div>
     </div>

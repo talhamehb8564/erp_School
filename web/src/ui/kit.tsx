@@ -225,7 +225,7 @@ export function Table({ headers, rows }: { headers: string[]; rows: ReactNode[][
           {rows.map((r, i) => (
             <tr key={i}>
               {r.map((c, j) => (
-                <td key={j}>{c}</td>
+                <td key={j} data-label={headers[j] || ""}>{c}</td>
               ))}
             </tr>
           ))}

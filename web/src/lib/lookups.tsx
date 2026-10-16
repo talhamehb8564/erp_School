@@ -67,7 +67,7 @@ export function LookupsProvider({ children, enabled, prefetch }: { children: Rea
     } finally {
       setLoading(false);
     }
-  }, [enabled]);
+  }, []);
 
   useEffect(() => {
     if (classes.length || subjects.length) return;
