@@ -4,20 +4,25 @@ import { publicApi, setupApi } from "../api/services";
 import { useBranding } from "../lib/branding";
 import {
   DEFAULT_ABOUT,
-  DEFAULT_ACADEMICS,
   DEFAULT_ACHIEVEMENTS,
   DEFAULT_NOTICE_BODY,
   DEFAULT_NOTICE_TITLE,
   DEFAULT_PRINCIPAL_MESSAGE,
-  DEFAULT_PRINCIPAL_PHOTO,
   galleryFor,
   heroesFor,
+  mapOf,
+  mapsEmbedUrl,
   mapsSearchUrl,
   osmEmbed,
+  principalFor,
+  principalPhotos,
+  programsFor,
   youtubeId,
 } from "../lib/site";
 import { Button, Field, Form } from "../ui/kit";
+import TypeLine from "../ui/TypeLine";
 import { useToast } from "../lib/toast";
+import type { PublicMedia } from "../lib/branding";
 
 function Reveal({ children, className }: { children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -38,10 +43,10 @@ function Reveal({ children, className }: { children: ReactNode; className?: stri
   return <div ref={ref} className={`reveal ${on ? "on" : ""} ${className || ""}`}>{children}</div>;
 }
 
-function SocialLink({ href, label, children }: { href?: string; label: string; children: ReactNode }) {
+function SocialLink({ href, label, network, children }: { href?: string; label: string; network: string; children: ReactNode }) {
   if (!href) return null;
   return (
-    <a className="soc" href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
+    <a className={`soc ${network}`} href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
       {children}
       <span>{label}</span>
     </a>
@@ -83,6 +88,8 @@ export default function Welcome() {
     instagram: campus?.instagramUrl || school?.instagramUrl,
     youtube: campus?.youtubeUrl || school?.youtubeUrl,
     twitter: campus?.twitterUrl || school?.twitterUrl,
+    linkedin: school?.linkedinUrl,
+    whatsapp: campus?.whatsappUrl || school?.whatsappUrl,
   }), [campus, school]);
 
   if (loading && !school) {
@@ -133,23 +140,25 @@ export default function Welcome() {
   const name = school?.name || "School";
   const letter = name.trim().charAt(0).toUpperCase() || "S";
   const gallery = galleryFor(school);
-  const principal = school?.principal;
-  const principalPhoto = principal?.photoUrl || DEFAULT_PRINCIPAL_PHOTO;
+  const principal = principalFor(campus, school);
+  const photos = principalPhotos(principal);
   const principalName = principal?.name || "Principal";
-  const principalTitle = principal?.title || "Principal";
+  const principalTitle = principal?.title || `Principal · ${campus?.name || "Campus"}`;
   const principalMessage = principal?.message || DEFAULT_PRINCIPAL_MESSAGE;
-  const principalDefault = !principal?.message;
+  const principalDefault = Boolean(principal?.isDefault) || !principal?.message;
   const showPrincipal = principal?.published !== false;
   const noticeCustom = Boolean(school?.notice?.published && school.notice.title);
   const noticeTitle = noticeCustom ? school?.notice?.title : DEFAULT_NOTICE_TITLE;
   const noticeBody = noticeCustom ? school?.notice?.body : DEFAULT_NOTICE_BODY;
   const videoUrl = noticeCustom ? school?.notice?.videoUrl : "";
   const yt = youtubeId(videoUrl);
-  const lat = school?.map?.lat != null ? Number(school.map.lat) : NaN;
-  const lng = school?.map?.lng != null ? Number(school.map.lng) : NaN;
+  const geo = mapOf(campus, school);
+  const lat = geo.lat != null && geo.lat !== "" ? Number(geo.lat) : NaN;
+  const lng = geo.lng != null && geo.lng !== "" ? Number(geo.lng) : NaN;
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
-  const mapQuery = school?.map?.place || [contact.address, contact.city, name].filter(Boolean).join(", ");
+  const mapQuery = geo.place || [contact.address, contact.city, name].filter(Boolean).join(", ");
   const hasContact = Boolean(contact.phone || contact.email || contact.address);
+  const programs = programsFor(school);
 
   const closeMenu = () => setMenu(false);
 
@@ -188,9 +197,9 @@ export default function Welcome() {
           <div key={h.imageUrl + i} className={`site-slide ${i === slide ? "on" : ""}`}>
             <img src={h.imageUrl} alt="" />
             <div className="site-hero-copy">
-              <p className="kicker">{campus?.name || "Welcome"}</p>
+              <p className="kicker glow-kicker">{campus?.name || "Welcome"}</p>
               <h1>{h.title || name}</h1>
-              {h.caption || school?.tagline ? <p>{h.caption || school?.tagline}</p> : null}
+              {h.caption || school?.tagline ? <p className="hl">{h.caption || school?.tagline}</p> : null}
             </div>
           </div>
         ))}
@@ -211,36 +220,33 @@ export default function Welcome() {
 
       <div className={`site-banner ${noticeCustom ? "live" : "sample"}`}>
         <div>
-          <p className="kicker">{noticeCustom ? "Announcement" : "Sample notice"}</p>
-          <strong>{noticeTitle}</strong>
+          <p className="kicker glow-kicker">{noticeCustom ? "Announcement" : "Sample notice"}</p>
+          <strong className="hl">{noticeTitle}</strong>
           <p>{noticeBody}</p>
         </div>
       </div>
 
       <Reveal>
         <section id="about" className="site-section">
-          <p className="kicker">About</p>
-          <h2>{name}</h2>
-          {school?.aboutText
-            ? <p>{school.aboutText}</p>
-            : <p className="sample-copy">{DEFAULT_ABOUT}</p>}
+          <p className="kicker glow-kicker">About</p>
+          <h2 className="hl">{name}</h2>
+          <TypeLine text={school?.aboutText || DEFAULT_ABOUT} className={school?.aboutText ? undefined : "sample-copy"} />
         </section>
       </Reveal>
 
       {showPrincipal ? (
         <Reveal>
           <section id="principal" className="site-section alt site-principal">
-            <div className="principal-photo">
-              <img src={principalPhoto} alt={principalName} />
-              <div>
-                <strong>{principalName}</strong>
-                <span>{principalTitle}</span>
-              </div>
-            </div>
+            <PrincipalGallery photos={photos.items} name={principalName} sample={photos.isDefault} />
             <div className="principal-copy">
-              <p className="kicker">{principalDefault ? "Sample message" : "From the Principal"}</p>
+              <p className="kicker glow-kicker">{principalDefault ? "Sample message" : `${campus?.name || "Campus"} · Principal`}</p>
               <h2>Principal’s Message</h2>
-              {principalMessage.split(/\n+/).map((p, i) => <p key={i} className={principalDefault ? "sample-copy" : undefined}>{p}</p>)}
+              <p className="hint">{principalTitle}{campus?.name ? ` · ${campus.name}` : ""}</p>
+              {principalMessage.split(/\n+/).map((p, i) => (
+                i === 0
+                  ? <TypeLine key={`${campus?.id || "p"}-${i}`} text={p} className={principalDefault ? "sample-copy" : undefined} />
+                  : <p key={i} className={principalDefault ? "sample-copy" : undefined}>{p}</p>
+              ))}
             </div>
           </section>
         </Reveal>
@@ -248,16 +254,13 @@ export default function Welcome() {
 
       <Reveal>
         <section id="academics" className="site-section">
-          <p className="kicker">Academics</p>
+          <p className="kicker glow-kicker">Academics</p>
           <h2>Programmes</h2>
-          <div className="site-split">
-            <div>
-              {school?.academicsText ? <p>{school.academicsText}</p> : <p className="sample-copy">{DEFAULT_ACADEMICS}</p>}
-            </div>
-            <div>
-              <p className="kicker">Highlights</p>
-              {school?.achievementsText ? <p>{school.achievementsText}</p> : <p className="sample-copy">{DEFAULT_ACHIEVEMENTS}</p>}
-            </div>
+          {programs.isDefault ? <p className="sample-copy">Sample programmes rotate here until School Admin publishes real copy. Separate programmes with a blank line in Website settings.</p> : null}
+          <ProgramsBlock items={programs.items} sample={programs.isDefault} />
+          <div className="site-highlights">
+            <p className="kicker">Highlights</p>
+            {school?.achievementsText ? <p>{school.achievementsText}</p> : <p className="sample-copy">{DEFAULT_ACHIEVEMENTS}</p>}
           </div>
         </section>
       </Reveal>
@@ -331,31 +334,44 @@ export default function Welcome() {
               <p className="sample-copy">Phone, email and address appear here after School Admin publishes them. Nothing below is an invented school contact.</p>
             )}
             <div className="site-social">
-              <SocialLink href={contact.facebook} label="Facebook">
+              <SocialLink href={contact.facebook} label="Facebook" network="facebook">
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="currentColor" d="M13.5 9H16V6h-2.5C11.6 6 11 7.1 11 8.8V9H9v3h2v6h3v-6h2.2l.3-3H14V8.9c0-.5.2-.9.5-.9z" /></svg>
               </SocialLink>
-              <SocialLink href={contact.instagram} label="Instagram">
+              <SocialLink href={contact.instagram} label="Instagram" network="instagram">
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="currentColor" d="M8 4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4zm8 1.8H8A2.2 2.2 0 0 0 5.8 8v8A2.2 2.2 0 0 0 8 18.2h8A2.2 2.2 0 0 0 18.2 16V8A2.2 2.2 0 0 0 16 5.8zM12 8.5A3.5 3.5 0 1 1 8.5 12 3.5 3.5 0 0 1 12 8.5zm0 1.7A1.8 1.8 0 1 0 13.8 12 1.8 1.8 0 0 0 12 10.2zM16.7 7.4a.9.9 0 1 1-.9.9.9.9 0 0 1 .9-.9z" /></svg>
               </SocialLink>
-              <SocialLink href={contact.youtube} label="YouTube">
+              <SocialLink href={contact.youtube} label="YouTube" network="youtube">
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="currentColor" d="M22 12.2s0-3.2-.4-4.6a2.9 2.9 0 0 0-2-2C18 5.2 12 5.2 12 5.2s-6 0-7.6.4a2.9 2.9 0 0 0-2 2C2 9 2 12.2 2 12.2s0 3.2.4 4.6a2.9 2.9 0 0 0 2 2c1.6.4 7.6.4 7.6.4s6 0 7.6-.4a2.9 2.9 0 0 0 2-2c.4-1.4.4-4.6.4-4.6zM10 15.5v-6.6l5.5 3.3z" /></svg>
               </SocialLink>
-              <SocialLink href={contact.twitter} label="X">
+              <SocialLink href={contact.twitter} label="X" network="twitter">
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="currentColor" d="M14.7 10.5 21 3h-2.2l-5 5.9L9.7 3H3l6.7 10.1L3 21h2.2l5.5-6.5 4.4 6.5H21l-6.3-10.5zm-1.9 2.3-.6-.9L6.4 4.5h2.2l4.7 6.9.6.9 6.2 9.2h-2.2l-5.1-7.7z" /></svg>
               </SocialLink>
-              <SocialLink href={school?.linkedinUrl} label="LinkedIn">
+              <SocialLink href={contact.linkedin} label="LinkedIn" network="linkedin">
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="currentColor" d="M6.5 9H4v11h2.5zm.2-3.8A1.7 1.7 0 1 0 5 6.9a1.7 1.7 0 0 0 1.7-1.7zM20 20h-2.5v-5.6c0-1.6-.6-2.2-1.6-2.2s-1.7.9-1.7 2.3V20H12V9h2.4v1.5a2.8 2.8 0 0 1 2.5-1.6c1.9 0 3.1 1.2 3.1 3.8z" /></svg>
               </SocialLink>
+              <SocialLink href={contact.whatsapp} label="WhatsApp" network="whatsapp">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="currentColor" d="M12.04 2a10 10 0 0 0-8.6 15.1L2 22l5.05-1.4A10 10 0 1 0 12.04 2zm5.84 14.25c-.24.68-1.4 1.26-1.94 1.3-.5.04-1.12.06-1.8-.11a16.4 16.4 0 0 1-7.2-6.3 4.3 4.3 0 0 1-.9-2.28c0-1.27.66-1.9 1.02-2.16.3-.22.78-.32 1.25-.01.16.1.36.38.47.66.12.3.24.6.26.64.12.24.02.5-.1.7l-.38.58c-.12.18-.26.3-.1.58a8.2 8.2 0 0 0 1.5 1.86 7.4 7.4 0 0 0 2.16 1.4c.28.12.44.1.6-.08l.7-1c.16-.22.4-.18.66-.1.26.08 1.64.77 1.92.91.28.14.46.22.54.34.08.14.08.78-.16 1.46z" /></svg>
+              </SocialLink>
             </div>
-            {hasCoords ? (
+            {hasCoords || mapQuery ? (
               <div className="site-map">
-                <iframe title="School map" src={osmEmbed(lat, lng)} loading="lazy" />
-                <a className="btn ghost sm" href={`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`} target="_blank" rel="noopener noreferrer">Open map</a>
+                <iframe
+                  title="School map"
+                  src={hasCoords ? osmEmbed(lat, lng) : mapsEmbedUrl(mapQuery)}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+                <a
+                  className="btn brass sm"
+                  href={hasCoords ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}` : mapsSearchUrl(mapQuery)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Show on Map
+                </a>
               </div>
-            ) : mapQuery ? (
-              <p><a className="btn ghost sm" href={mapsSearchUrl(mapQuery)} target="_blank" rel="noopener noreferrer">Open location in maps</a></p>
             ) : (
-              <p className="sample-copy">A map appears here after coordinates or an address are published.</p>
+              <p className="sample-copy">A map appears here after coordinates or an address are published. No location is invented.</p>
             )}
           </div>
           <div className="card site-form">
@@ -366,6 +382,18 @@ export default function Welcome() {
         </section>
       </Reveal>
 
+      <section className="site-cta">
+        <div>
+          <p className="kicker glow-kicker">Portals</p>
+          <h2>Sign in to {name}</h2>
+          <p>Students, parents and staff use the school portal. Public pages stay on this website.</p>
+        </div>
+        <div className="row">
+          <Link to="/portals" className="btn brass">School Portal</Link>
+          <a href="#contact" className="btn ghost">Contact the school</a>
+        </div>
+      </section>
+
       <footer className="site-foot">
         <div className="site-brand">
           {school?.logoUrl ? <img src={school.logoUrl} alt="" /> : <div className="mark">{letter}</div>}
@@ -374,8 +402,70 @@ export default function Welcome() {
             <div className="hint">{campus?.name}</div>
           </div>
         </div>
-        <Link to="/portals" className="btn ghost">Login</Link>
+        <nav className="site-foot-links">
+          <a href="#about">About</a>
+          <a href="#principal">Principal</a>
+          <a href="#contact">Contact</a>
+          <Link to="/portals" className="btn brass sm">Login</Link>
+        </nav>
       </footer>
+    </div>
+  );
+}
+
+function PrincipalGallery({ photos, name, sample }: { photos: PublicMedia[]; name: string; sample?: boolean }) {
+  const [i, setI] = useState(0);
+  useEffect(() => { setI(0); }, [photos.map((p) => p.imageUrl).join("|")]);
+  useEffect(() => {
+    if (photos.length < 2) return;
+    const id = window.setInterval(() => setI((n) => (n + 1) % photos.length), 5400);
+    return () => window.clearInterval(id);
+  }, [photos.length]);
+  const current = photos[i] || photos[0];
+  return (
+    <div className="principal-photo">
+      <div className="principal-slides">
+        {photos.map((p, n) => (
+          <img key={p.imageUrl + n} className={n === i ? "on" : ""} src={p.imageUrl} alt={p.caption || name} />
+        ))}
+      </div>
+      {photos.length > 1 ? (
+        <div className="principal-dots">
+          {photos.map((_, n) => (
+            <button key={n} type="button" className={n === i ? "on" : ""} aria-label={`Principal photograph ${n + 1}`} onClick={() => setI(n)} />
+          ))}
+        </div>
+      ) : null}
+      <div>
+        <strong>{name}</strong>
+        <span>{current?.caption || (sample ? "Sample photographs for this layout" : "Principal")}</span>
+      </div>
+    </div>
+  );
+}
+
+function ProgramsBlock({ items, sample }: { items: { title: string; body: string }[]; sample?: boolean }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (items.length < 2) return;
+    const id = window.setInterval(() => setI((n) => (n + 1) % items.length), 7000);
+    return () => window.clearInterval(id);
+  }, [items.length]);
+  const cur = items[i] || items[0];
+  if (!cur) return null;
+  return (
+    <div className="site-programs">
+      <div className="program-tabs">
+        {items.map((p, n) => (
+          <button type="button" key={p.title + n} className={n === i ? "on" : ""} onClick={() => setI(n)}>
+            {p.title}
+          </button>
+        ))}
+      </div>
+      <div className="program-copy">
+        <h3 className="hl">{cur.title}</h3>
+        <TypeLine key={`${cur.title}-${i}`} text={cur.body} className={sample ? "sample-copy" : undefined} />
+      </div>
     </div>
   );
 }

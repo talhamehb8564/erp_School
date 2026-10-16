@@ -23,13 +23,17 @@ export interface PublicCampus {
   instagramUrl?: string;
   youtubeUrl?: string;
   twitterUrl?: string;
+  whatsappUrl?: string;
   hero?: PublicMedia[];
+  principal?: PublicPrincipal;
+  map?: PublicMap;
 }
 
 export interface PublicPrincipal {
   name?: string;
   title?: string;
   photoUrl?: string;
+  photos?: PublicMedia[];
   message?: string;
   published?: boolean;
   isDefault?: boolean;
@@ -72,6 +76,7 @@ export interface PublicSchool {
   youtubeUrl?: string;
   twitterUrl?: string;
   linkedinUrl?: string;
+  whatsappUrl?: string;
   gallery?: PublicMedia[];
   principal?: PublicPrincipal;
   notice?: PublicNotice;

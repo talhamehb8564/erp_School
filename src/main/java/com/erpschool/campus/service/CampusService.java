@@ -61,6 +61,12 @@ public class CampusService {
         if (incoming.getYoutubeUrl() != null) campus.setYoutubeUrl(incoming.getYoutubeUrl());
         if (incoming.getTwitterUrl() != null) campus.setTwitterUrl(incoming.getTwitterUrl());
         if (incoming.getHeroJson() != null) campus.setHeroJson(incoming.getHeroJson());
+        if (incoming.isWebsiteGeoUpdate()) {
+            campus.setMapLat(incoming.getMapLat());
+            campus.setMapLng(incoming.getMapLng());
+            campus.setMapPlace(incoming.getMapPlace());
+            campus.setWhatsappUrl(incoming.getWhatsappUrl());
+        }
         campus.setUpdatedBy(TenantContext.getUserId());
         Campus saved = campusRepository.save(campus);
         catalogCache.evictTenant(saved.getTenantId());

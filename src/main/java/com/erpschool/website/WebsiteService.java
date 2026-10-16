@@ -1,7 +1,10 @@
 package com.erpschool.website;
 
+import com.erpschool.campus.entity.Campus;
+import com.erpschool.campus.repository.CampusRepository;
 import com.erpschool.common.cache.CatalogCache;
 import com.erpschool.common.exception.BusinessException;
+import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.settings.entity.SchoolSettings;
@@ -9,12 +12,15 @@ import com.erpschool.settings.repository.SchoolSettingsRepository;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.repository.TenantRepository;
+import com.erpschool.user.entity.UserRole;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,15 +31,18 @@ public class WebsiteService {
     private final SchoolSettingsRepository settingsRepository;
     private final CatalogCache catalogCache;
     private final WebsiteInquiryRepository inquiryRepository;
+    private final CampusRepository campusRepository;
 
     public WebsiteService(TenantRepository tenantRepository,
                           SchoolSettingsRepository settingsRepository,
                           CatalogCache catalogCache,
-                          WebsiteInquiryRepository inquiryRepository) {
+                          WebsiteInquiryRepository inquiryRepository,
+                          CampusRepository campusRepository) {
         this.tenantRepository = tenantRepository;
         this.settingsRepository = settingsRepository;
         this.catalogCache = catalogCache;
         this.inquiryRepository = inquiryRepository;
+        this.campusRepository = campusRepository;
     }
 
     @Transactional(readOnly = true)
@@ -63,6 +72,7 @@ public class WebsiteService {
         if (body.containsKey("youtubeUrl")) tenant.setYoutubeUrl(str(body, "youtubeUrl"));
         if (body.containsKey("twitterUrl")) tenant.setTwitterUrl(str(body, "twitterUrl"));
         if (body.containsKey("linkedinUrl")) tenant.setLinkedinUrl(str(body, "linkedinUrl"));
+        if (body.containsKey("whatsappUrl")) tenant.setWhatsappUrl(str(body, "whatsappUrl"));
         if (body.containsKey("gallery")) tenant.setGalleryJson(JsonLists.write(body.get("gallery")));
         if (body.containsKey("mapLat")) tenant.setMapLat(decimal(body.get("mapLat")));
         if (body.containsKey("mapLng")) tenant.setMapLng(decimal(body.get("mapLng")));
@@ -96,13 +106,32 @@ public class WebsiteService {
     @Transactional
     public Map<String, Object> savePrincipal(Map<String, Object> body) {
         Tenant tenant = requireTenant();
-        if (body.containsKey("principalName")) tenant.setPrincipalName(str(body, "principalName"));
-        if (body.containsKey("principalTitle")) tenant.setPrincipalTitle(str(body, "principalTitle"));
-        if (body.containsKey("principalPhotoUrl")) tenant.setPrincipalPhotoUrl(str(body, "principalPhotoUrl"));
-        if (body.containsKey("principalMessage")) tenant.setPrincipalMessage(str(body, "principalMessage"));
-        if (body.containsKey("principalPublished")) tenant.setPrincipalPublished(truthy(body.get("principalPublished")));
-        tenant.setUpdatedBy(TenantContext.getUserId());
-        tenantRepository.save(tenant);
+        UUID pinned = TenantContext.getCampusId();
+        UUID requested = uuid(body.get("campusId"));
+        if (TenantContext.getRole() == UserRole.PRINCIPAL && pinned != null && requested != null && !pinned.equals(requested)) {
+            throw new ForbiddenException("You can only edit the Principal profile for your campus");
+        }
+        UUID campusId = pinned != null ? pinned : requested;
+        if (campusId == null) {
+            throw new BusinessException("Select a campus for this Principal profile");
+        }
+        Campus campus = campusRepository.findById(campusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Campus", campusId));
+        TenantGuard.assertSameTenant(campus.getTenantId());
+        if (body.containsKey("principalName")) campus.setPrincipalName(str(body, "principalName"));
+        if (body.containsKey("principalTitle")) campus.setPrincipalTitle(str(body, "principalTitle"));
+        if (body.containsKey("principalPhotoUrl")) campus.setPrincipalPhotoUrl(str(body, "principalPhotoUrl"));
+        if (body.containsKey("principalMessage")) campus.setPrincipalMessage(str(body, "principalMessage"));
+        if (body.containsKey("principalPublished")) campus.setPrincipalPublished(truthy(body.get("principalPublished")));
+        if (body.containsKey("principalPhotos")) {
+            campus.setPrincipalPhotosJson(JsonLists.write(body.get("principalPhotos")));
+        }
+        List<Map<String, Object>> photos = JsonLists.publicMedia(campus.getPrincipalPhotosJson(), false);
+        if (!photos.isEmpty()) {
+            campus.setPrincipalPhotoUrl(String.valueOf(photos.get(0).get("imageUrl")));
+        }
+        campus.setUpdatedBy(TenantContext.getUserId());
+        campusRepository.save(campus);
         catalogCache.evictTenant(tenant.getId());
         return view(tenant);
     }
@@ -164,12 +193,29 @@ public class WebsiteService {
         m.put("youtubeUrl", tenant.getYoutubeUrl());
         m.put("twitterUrl", tenant.getTwitterUrl());
         m.put("linkedinUrl", tenant.getLinkedinUrl());
+        m.put("whatsappUrl", tenant.getWhatsappUrl());
         m.put("gallery", JsonLists.read(tenant.getGalleryJson()));
         m.put("principalName", tenant.getPrincipalName());
         m.put("principalTitle", tenant.getPrincipalTitle());
         m.put("principalPhotoUrl", tenant.getPrincipalPhotoUrl());
+        m.put("principalPhotos", JsonLists.read(tenant.getPrincipalPhotosJson()));
         m.put("principalMessage", tenant.getPrincipalMessage());
         m.put("principalPublished", tenant.isPrincipalPublished());
+        List<Map<String, Object>> campuses = new ArrayList<>();
+        for (Campus campus : campusRepository.findByTenantIdOrderByNameAsc(tenant.getId())) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", campus.getId());
+            row.put("name", campus.getName());
+            row.put("code", campus.getCode());
+            row.put("principalName", campus.getPrincipalName());
+            row.put("principalTitle", campus.getPrincipalTitle());
+            row.put("principalPhotoUrl", campus.getPrincipalPhotoUrl());
+            row.put("principalPhotos", JsonLists.read(campus.getPrincipalPhotosJson()));
+            row.put("principalMessage", campus.getPrincipalMessage());
+            row.put("principalPublished", campus.isPrincipalPublished());
+            campuses.add(row);
+        }
+        m.put("campuses", campuses);
         m.put("mapLat", tenant.getMapLat());
         m.put("mapLng", tenant.getMapLng());
         m.put("mapPlace", tenant.getMapPlace());
@@ -202,6 +248,17 @@ public class WebsiteService {
         if (v instanceof Boolean b) return b;
         if (v == null) return false;
         return "true".equalsIgnoreCase(v.toString()) || "1".equals(v.toString());
+    }
+
+    private static UUID uuid(Object v) {
+        if (v == null) return null;
+        String s = v.toString().trim();
+        if (s.isEmpty()) return null;
+        try {
+            return UUID.fromString(s);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static BigDecimal decimal(Object v) {

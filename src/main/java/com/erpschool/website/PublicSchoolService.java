@@ -60,16 +60,15 @@ public class PublicSchoolService {
         school.put("youtubeUrl", tenant.getYoutubeUrl());
         school.put("twitterUrl", tenant.getTwitterUrl());
         school.put("linkedinUrl", tenant.getLinkedinUrl());
+        school.put("whatsappUrl", tenant.getWhatsappUrl());
         school.put("gallery", JsonLists.publicMedia(tenant.getGalleryJson(), false));
-        boolean principalCustom = tenant.getPrincipalMessage() != null && !tenant.getPrincipalMessage().isBlank();
-        Map<String, Object> principal = new LinkedHashMap<>();
-        principal.put("name", tenant.getPrincipalName());
-        principal.put("title", tenant.getPrincipalTitle());
-        principal.put("photoUrl", tenant.getPrincipalPhotoUrl());
-        principal.put("message", tenant.getPrincipalMessage());
-        principal.put("published", tenant.isPrincipalPublished());
-        principal.put("isDefault", !principalCustom);
-        school.put("principal", principal);
+        school.put("principal", principalView(
+                tenant.getPrincipalName(),
+                tenant.getPrincipalTitle(),
+                tenant.getPrincipalPhotoUrl(),
+                tenant.getPrincipalPhotosJson(),
+                tenant.getPrincipalMessage(),
+                tenant.isPrincipalPublished()));
         boolean noticeCustom = tenant.isNoticePublished()
                 && tenant.getNoticeTitle() != null && !tenant.getNoticeTitle().isBlank();
         Map<String, Object> notice = new LinkedHashMap<>();
@@ -100,7 +99,23 @@ public class PublicSchoolService {
             row.put("instagramUrl", campus.getInstagramUrl());
             row.put("youtubeUrl", campus.getYoutubeUrl());
             row.put("twitterUrl", campus.getTwitterUrl());
+            row.put("whatsappUrl", campus.getWhatsappUrl());
             row.put("hero", JsonLists.publicMedia(campus.getHeroJson(), true));
+            Map<String, Object> campusPrincipal = principalView(
+                    campus.getPrincipalName(),
+                    campus.getPrincipalTitle(),
+                    campus.getPrincipalPhotoUrl(),
+                    campus.getPrincipalPhotosJson(),
+                    campus.getPrincipalMessage(),
+                    campus.isPrincipalPublished());
+            if (!Boolean.TRUE.equals(campusPrincipal.get("isDefault"))) {
+                row.put("principal", campusPrincipal);
+            }
+            Map<String, Object> campusMap = new LinkedHashMap<>();
+            campusMap.put("lat", campus.getMapLat());
+            campusMap.put("lng", campus.getMapLng());
+            campusMap.put("place", campus.getMapPlace());
+            row.put("map", campusMap);
             campuses.add(row);
         }
         Map<String, Object> out = new LinkedHashMap<>();
@@ -111,6 +126,29 @@ public class PublicSchoolService {
 
     Tenant resolvePublic(String code) {
         return resolve(code);
+    }
+
+    private static Map<String, Object> principalView(String name, String title, String photo, String photosJson,
+                                                     String message, boolean published) {
+        java.util.List<Map<String, Object>> photos = JsonLists.publicMedia(photosJson, false);
+        boolean custom = (message != null && !message.isBlank())
+                || (name != null && !name.isBlank())
+                || (photo != null && !photo.isBlank())
+                || !photos.isEmpty();
+        Map<String, Object> principal = new LinkedHashMap<>();
+        principal.put("name", name);
+        principal.put("title", title);
+        String photoUrl = photo;
+        if ((photoUrl == null || photoUrl.isBlank()) && !photos.isEmpty()) {
+            Object first = photos.get(0).get("imageUrl");
+            photoUrl = first == null ? null : first.toString();
+        }
+        principal.put("photoUrl", photoUrl);
+        principal.put("photos", photos);
+        principal.put("message", message);
+        principal.put("published", published);
+        principal.put("isDefault", !custom);
+        return principal;
     }
 
     private Tenant resolve(String code) {

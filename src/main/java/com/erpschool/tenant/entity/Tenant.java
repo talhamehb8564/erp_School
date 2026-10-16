@@ -86,6 +86,9 @@ public class Tenant extends BaseEntity {
     @Column(name = "linkedin_url", length = 300)
     private String linkedinUrl;
 
+    @Column(name = "whatsapp_url", length = 300)
+    private String whatsappUrl;
+
     @Column(name = "gallery_json", columnDefinition = "TEXT")
     private String galleryJson;
 
@@ -97,6 +100,9 @@ public class Tenant extends BaseEntity {
 
     @Column(name = "principal_photo_url", length = 500)
     private String principalPhotoUrl;
+
+    @Column(name = "principal_photos_json", columnDefinition = "TEXT")
+    private String principalPhotosJson;
 
     @Column(name = "principal_message", columnDefinition = "TEXT")
     private String principalMessage;

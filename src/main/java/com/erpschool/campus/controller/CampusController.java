@@ -73,6 +73,14 @@ public class CampusController {
                 campus.setHeroJson("[]");
             }
         }
+        if (request.getMapLat() != null || request.getMapLng() != null
+                || request.getMapPlace() != null || request.getWhatsappUrl() != null) {
+            campus.setWebsiteGeoUpdate(true);
+            campus.setMapLat(parseDecimal(request.getMapLat()));
+            campus.setMapLng(parseDecimal(request.getMapLng()));
+            campus.setMapPlace(emptyToNull(request.getMapPlace()));
+            campus.setWhatsappUrl(emptyToNull(request.getWhatsappUrl()));
+        }
         return ResponseEntity.ok(ApiResponse.ok("Campus updated", campusService.update(id, campus)));
     }
 
@@ -91,6 +99,25 @@ public class CampusController {
         private String instagramUrl;
         private String youtubeUrl;
         private String twitterUrl;
+        private String whatsappUrl;
+        private String mapLat;
+        private String mapLng;
+        private String mapPlace;
         private java.util.List<java.util.Map<String, Object>> hero;
+    }
+
+    private static String emptyToNull(String v) {
+        if (v == null) return null;
+        String s = v.trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    private static java.math.BigDecimal parseDecimal(String v) {
+        if (v == null || v.isBlank()) return null;
+        try {
+            return new java.math.BigDecimal(v.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

@@ -137,7 +137,11 @@ export interface Campus {
   instagramUrl?: string;
   youtubeUrl?: string;
   twitterUrl?: string;
+  whatsappUrl?: string;
   heroJson?: string;
+  mapLat?: number | string | null;
+  mapLng?: number | string | null;
+  mapPlace?: string;
 }
 
 export interface SchoolClass {

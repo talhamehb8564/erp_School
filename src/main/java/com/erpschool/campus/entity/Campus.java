@@ -1,9 +1,11 @@
 package com.erpschool.campus.entity;
 
 import com.erpschool.common.entity.TenantAwareEntity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -56,4 +58,44 @@ public class Campus extends TenantAwareEntity {
 
     @Column(name = "accent_color", length = 16)
     private String accentColor;
+
+    @JsonIgnore
+    @Column(name = "principal_name", length = 200)
+    private String principalName;
+
+    @JsonIgnore
+    @Column(name = "principal_title", length = 120)
+    private String principalTitle;
+
+    @JsonIgnore
+    @Column(name = "principal_photo_url", length = 500)
+    private String principalPhotoUrl;
+
+    @JsonIgnore
+    @Column(name = "principal_message", columnDefinition = "TEXT")
+    private String principalMessage;
+
+    @JsonIgnore
+    @Column(name = "principal_published", nullable = false)
+    private boolean principalPublished = true;
+
+    @JsonIgnore
+    @Column(name = "principal_photos_json", columnDefinition = "TEXT")
+    private String principalPhotosJson;
+
+    @Column(name = "map_lat", precision = 10, scale = 7)
+    private java.math.BigDecimal mapLat;
+
+    @Column(name = "map_lng", precision = 10, scale = 7)
+    private java.math.BigDecimal mapLng;
+
+    @Column(name = "map_place", length = 300)
+    private String mapPlace;
+
+    @Column(name = "whatsapp_url", length = 300)
+    private String whatsappUrl;
+
+    @Transient
+    @JsonIgnore
+    private boolean websiteGeoUpdate;
 }

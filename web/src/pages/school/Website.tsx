@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { campusApi, fileApi, websiteApi } from "../../api/services";
 import { ApiError } from "../../api/client";
 import { useBranding } from "../../lib/branding";
@@ -29,12 +29,29 @@ export default function WebsitePage() {
   return <AdminWebsite />;
 }
 
+type CampusPrincipal = {
+  id: string;
+  name: string;
+  principalName?: string;
+  principalTitle?: string;
+  principalPhotoUrl?: string;
+  principalPhotos?: Hero[];
+  principalMessage?: string;
+  principalPublished?: boolean;
+};
+
 function PrincipalWebsite() {
   const toast = useToast();
   const { user } = useSession();
   const { reload: reloadBrand } = useBranding();
   const site = useAsync(() => websiteApi.get());
   const loaded = site.data;
+  const campuses = useMemo(
+    () => (Array.isArray(loaded?.campuses) ? loaded.campuses : []) as CampusPrincipal[],
+    [loaded],
+  );
+  const pinned = user?.campusId || "";
+  const [campusId, setCampusId] = useState(pinned);
   const [form, setForm] = useState({
     principalName: "",
     principalTitle: "Principal",
@@ -42,25 +59,40 @@ function PrincipalWebsite() {
     principalMessage: "",
     principalPublished: true,
   });
+  const [photos, setPhotos] = useState<Hero[]>([]);
   const [busyFile, setBusyFile] = useState(false);
 
   useEffect(() => {
-    if (!loaded) return;
-    setForm({
-      principalName: String(loaded.principalName || user?.fullName || ""),
-      principalTitle: String(loaded.principalTitle || "Principal"),
-      principalPhotoUrl: String(loaded.principalPhotoUrl || ""),
-      principalMessage: String(loaded.principalMessage || ""),
-      principalPublished: loaded.principalPublished !== false,
+    if (!campuses.length) return;
+    setCampusId((cur) => {
+      if (pinned && campuses.some((c) => c.id === pinned)) return pinned;
+      if (cur && campuses.some((c) => c.id === cur)) return cur;
+      return campuses[0].id;
     });
-  }, [loaded, user?.fullName]);
+  }, [campuses, pinned]);
+
+  useEffect(() => {
+    const row = campuses.find((c) => c.id === campusId);
+    if (!row) return;
+    setForm({
+      principalName: String(row.principalName || user?.fullName || ""),
+      principalTitle: String(row.principalTitle || "Principal"),
+      principalPhotoUrl: String(row.principalPhotoUrl || ""),
+      principalMessage: String(row.principalMessage || ""),
+      principalPublished: row.principalPublished !== false,
+    });
+    const list = Array.isArray(row.principalPhotos) ? row.principalPhotos : [];
+    setPhotos(list.length ? list : (row.principalPhotoUrl ? [{ imageUrl: String(row.principalPhotoUrl) }] : []));
+  }, [campusId, campuses, user?.fullName]);
+
+  const lockedCampus = Boolean(pinned);
 
   return (
     <>
       <div className="page-title">
         <div>
           <h1>Principal’s message</h1>
-          <p>Your portrait and words appear on the public website. School Admin cannot overwrite this section.</p>
+          <p>Each branch has its own Principal. School Admin cannot overwrite this section. Photographs are stored as uploaded files.</p>
         </div>
         <a className="btn ghost" href="/" target="_blank" rel="noreferrer">Preview website</a>
       </div>
@@ -68,14 +100,26 @@ function PrincipalWebsite() {
         <div className="grid two">
           <div className="card">
             <Form busyLabel="Publishing…" onSubmit={async () => {
-              await websiteApi.savePrincipal({ ...form });
-              toast("ok", "Principal profile saved");
+              const photoUrl = form.principalPhotoUrl || photos[0]?.imageUrl || "";
+              await websiteApi.savePrincipal({
+                ...form,
+                principalPhotoUrl: photoUrl,
+                principalPhotos: photos,
+                campusId,
+              });
+              toast("ok", "Principal profile saved for this branch");
               await site.reload();
               await reloadBrand();
             }}>
+              <Field label="Campus">
+                <select value={campusId} disabled={lockedCampus} onChange={(e) => setCampusId(e.target.value)} required>
+                  {campuses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+              {lockedCampus ? <p className="hint">Your account is assigned to this campus. Other branches are edited by that campus Principal.</p> : null}
               <Field label="Display name"><input value={form.principalName} onChange={(e) => setForm({ ...form, principalName: e.target.value })} /></Field>
               <Field label="Designation"><input value={form.principalTitle} onChange={(e) => setForm({ ...form, principalTitle: e.target.value })} /></Field>
-              <Field label="Portrait">
+              <Field label="Photographs">
                 <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={busyFile} onChange={async (e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
@@ -83,27 +127,46 @@ function PrincipalWebsite() {
                   setBusyFile(true);
                   try {
                     const url = await uploadFile(f, toast);
-                    setForm((cur) => ({ ...cur, principalPhotoUrl: url }));
+                    setPhotos((cur) => [...cur, { imageUrl: url, caption: "" }]);
+                    setForm((cur) => cur.principalPhotoUrl ? cur : { ...cur, principalPhotoUrl: url });
                     toast("ok", "Photograph uploaded");
                   } catch { /* toasted */ } finally {
                     setBusyFile(false);
                   }
                 }} />
               </Field>
-              {form.principalPhotoUrl ? <img src={form.principalPhotoUrl} alt="" style={{ width: 160, height: 200, objectFit: "cover", borderRadius: 16 }} /> : null}
+              <p className="hint">Add a portrait plus photographs at school, at events, or with students. The first image is the profile portrait.</p>
+              <div className="site-gallery" style={{ marginTop: 8 }}>
+                {photos.map((p, i) => (
+                  <figure key={p.imageUrl + i}>
+                    <img src={p.imageUrl} alt="" />
+                    <input placeholder="Caption" value={p.caption || ""} onChange={(e) => setPhotos(photos.map((x, n) => n === i ? { ...x, caption: e.target.value } : x))} />
+                    <div className="row">
+                      <Button kind="ghost" onClick={() => {
+                        if (i === 0) return;
+                        const next = photos.slice();
+                        const [row] = next.splice(i, 1);
+                        next.splice(i - 1, 0, row);
+                        setPhotos(next);
+                      }}>Up</Button>
+                      <Button kind="ghost" onClick={() => setPhotos(photos.filter((_, n) => n !== i))}>Remove</Button>
+                    </div>
+                  </figure>
+                ))}
+              </div>
               <Field label="Message"><textarea rows={10} value={form.principalMessage} onChange={(e) => setForm({ ...form, principalMessage: e.target.value })} /></Field>
               <label className="chip">
                 <input type="checkbox" checked={form.principalPublished} onChange={(e) => setForm({ ...form, principalPublished: e.target.checked })} />
-                Publish on the public website
+                Publish on the public website for this branch
               </label>
               <Button type="submit" kind="brass" loadingText="Publishing…">Save and publish</Button>
             </Form>
           </div>
           <div className="card">
-            <p className="kicker">Preview</p>
+            <p className="kicker">Preview · {campuses.find((c) => c.id === campusId)?.name}</p>
             <h3>Principal’s Message</h3>
             <div className="site-principal" style={{ display: "grid", gap: 16 }}>
-              {form.principalPhotoUrl ? <img src={form.principalPhotoUrl} alt="" style={{ width: 140, height: 170, objectFit: "cover", borderRadius: 16 }} /> : null}
+              {(photos[0]?.imageUrl || form.principalPhotoUrl) ? <img src={photos[0]?.imageUrl || form.principalPhotoUrl} alt="" style={{ width: 140, height: 170, objectFit: "cover", borderRadius: 16 }} /> : null}
               <div>
                 <strong>{form.principalName || "Principal"}</strong>
                 <p className="hint">{form.principalTitle}</p>
@@ -146,6 +209,7 @@ function AdminWebsite() {
       youtubeUrl: String(loaded.youtubeUrl || ""),
       twitterUrl: String(loaded.twitterUrl || ""),
       linkedinUrl: String(loaded.linkedinUrl || ""),
+      whatsappUrl: String(loaded.whatsappUrl || ""),
       primaryColor: String(loaded.primaryColor || "#1c2740"),
       accentColor: String(loaded.accentColor || "#c08956"),
       secondaryColor: String(loaded.secondaryColor || "#1f4d43"),
@@ -228,7 +292,8 @@ function AdminWebsite() {
             </Field>
             {form.logoUrl ? <img src={form.logoUrl} alt="" style={{ height: 48 }} /> : null}
             <Field label="About"><textarea value={form.aboutText || ""} onChange={(e) => setForm({ ...form, aboutText: e.target.value })} rows={4} /></Field>
-            <Field label="Academics"><textarea value={form.academicsText || ""} onChange={(e) => setForm({ ...form, academicsText: e.target.value })} rows={3} /></Field>
+            <Field label="Academics / programmes"><textarea value={form.academicsText || ""} onChange={(e) => setForm({ ...form, academicsText: e.target.value })} rows={6} /></Field>
+            <p className="hint">Separate programmes with a blank line. The first line of each block is the heading shown on the public site.</p>
             <Field label="Achievements"><textarea value={form.achievementsText || ""} onChange={(e) => setForm({ ...form, achievementsText: e.target.value })} rows={3} /></Field>
             <div className="row">
               <Field label="Public email"><input value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
@@ -247,6 +312,7 @@ function AdminWebsite() {
             <Field label="YouTube"><input value={form.youtubeUrl || ""} onChange={(e) => setForm({ ...form, youtubeUrl: e.target.value })} /></Field>
             <Field label="X / Twitter"><input value={form.twitterUrl || ""} onChange={(e) => setForm({ ...form, twitterUrl: e.target.value })} /></Field>
             <Field label="LinkedIn"><input value={form.linkedinUrl || ""} onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })} /></Field>
+            <Field label="WhatsApp"><input value={form.whatsappUrl || ""} onChange={(e) => setForm({ ...form, whatsappUrl: e.target.value })} placeholder="https://wa.me/…" /></Field>
 
             <h3>Public notice &amp; video</h3>
             <p className="hint">Shown on the public website when published. Video is optional — YouTube URL or an uploaded MP4.</p>
@@ -284,11 +350,7 @@ function AdminWebsite() {
                 </figure>
               ))}
             </div>
-            {loaded?.principalName || loaded?.principalMessage ? (
-              <p className="hint">Principal’s message is managed in the Principal portal and is not changed by this form.</p>
-            ) : (
-              <p className="hint">The public site shows a marked sample Principal’s message until the Principal publishes their own.</p>
-            )}
+            <p className="hint">Each branch Principal publishes their own name, photographs and message. This form never overwrites those fields.</p>
             <Button type="submit" kind="brass" loadingText="Saving…">Save global website</Button>
           </Form>
         </div>
@@ -312,6 +374,10 @@ function CampusWebsite({ campus, onSaved }: { campus: Campus; onSaved: () => voi
   const [instagramUrl, setInstagramUrl] = useState(campus.instagramUrl || "");
   const [youtubeUrl, setYoutubeUrl] = useState(campus.youtubeUrl || "");
   const [twitterUrl, setTwitterUrl] = useState(campus.twitterUrl || "");
+  const [whatsappUrl, setWhatsappUrl] = useState(campus.whatsappUrl || "");
+  const [mapLat, setMapLat] = useState(campus.mapLat == null ? "" : String(campus.mapLat));
+  const [mapLng, setMapLng] = useState(campus.mapLng == null ? "" : String(campus.mapLng));
+  const [mapPlace, setMapPlace] = useState(campus.mapPlace || "");
   const [hero, setHero] = useState<Hero[]>(() => {
     try {
       return campus.heroJson ? JSON.parse(campus.heroJson) as Hero[] : [];
@@ -333,7 +399,7 @@ function CampusWebsite({ campus, onSaved }: { campus: Campus; onSaved: () => voi
       <h3>{campus.name}</h3>
       <p className="hint">Branch contact and hero slider. Logo and colours stay global.</p>
       <Form busyLabel="Saving campus…" onSubmit={async () => {
-        await campusApi.update(campus.id, { name: campus.name, code: campus.code, email, phone, address, city, facebookUrl, instagramUrl, youtubeUrl, twitterUrl, hero });
+        await campusApi.update(campus.id, { name: campus.name, code: campus.code, email, phone, address, city, facebookUrl, instagramUrl, youtubeUrl, twitterUrl, whatsappUrl, hero, mapLat, mapLng, mapPlace });
         toast("ok", `${campus.name} website updated`);
         onSaved();
       }}>
@@ -345,6 +411,13 @@ function CampusWebsite({ campus, onSaved }: { campus: Campus; onSaved: () => voi
         <Field label="Instagram"><input value={instagramUrl} onChange={(e) => setInstagramUrl(e.target.value)} /></Field>
         <Field label="YouTube"><input value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} /></Field>
         <Field label="X / Twitter"><input value={twitterUrl} onChange={(e) => setTwitterUrl(e.target.value)} /></Field>
+        <Field label="WhatsApp"><input value={whatsappUrl} onChange={(e) => setWhatsappUrl(e.target.value)} placeholder="https://wa.me/…" /></Field>
+        <div className="row">
+          <Field label="Map latitude"><input value={mapLat} onChange={(e) => setMapLat(e.target.value)} placeholder="Leave empty until known" /></Field>
+          <Field label="Map longitude"><input value={mapLng} onChange={(e) => setMapLng(e.target.value)} /></Field>
+        </div>
+        <Field label="Map place name (optional)"><input value={mapPlace} onChange={(e) => setMapPlace(e.target.value)} /></Field>
+        <p className="hint">Branch map uses these coordinates when set. Do not invent a pin. Multiple hero images power this campus slider.</p>
         <div className="row">
           <Button type="button" kind="ghost" disabled={busyFile} onClick={async () => {
             const input = document.createElement("input");
