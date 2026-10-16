@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { publicApi } from "../api/services";
 import { applyBrand } from "./theme";
@@ -110,15 +110,17 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(publicSite);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState("");
+  const hasSchool = useRef(false);
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    setLoading(!hasSchool.current);
     setError("");
     try {
       const data = await publicApi.school();
       const next = data.school;
       const list = data.campuses || [];
       setSchool(next);
+      hasSchool.current = Boolean(next);
       setCampuses(list);
       setMissing(!next);
       applyBrand(next?.primaryColor, next?.accentColor, next?.secondaryColor);

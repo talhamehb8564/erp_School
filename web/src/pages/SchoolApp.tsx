@@ -60,7 +60,7 @@ export default function SchoolApp() {
   };
 
   return (
-    <LookupsProvider enabled={!locked && lookupsNeeded(loc.pathname)}>
+    <LookupsProvider enabled={!locked && lookupsNeeded(loc.pathname)} prefetch={!locked && loc.pathname === "/app"}>
       <div className="shell" data-role={role}>
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -136,7 +136,10 @@ function ActivityBar({ enabled }: { enabled: boolean }) {
   const [items, setItems] = useState<{ id: string; action: string; createdAt?: string }[]>([]);
   useEffect(() => {
     if (!enabled || locked) return;
-    void auditApi.mine().then((page) => setItems(page.content || [])).catch(() => undefined);
+    const t = window.setTimeout(() => {
+      void auditApi.mine().then((page) => setItems(page.content || [])).catch(() => undefined);
+    }, 480);
+    return () => window.clearTimeout(t);
   }, [enabled, locked]);
   if (!items.length) return null;
   return (

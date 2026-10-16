@@ -34,15 +34,14 @@ const ReportsPage = lazy(() => import("./pages/school/Comms").then((m) => ({ def
 
 function Guard({ roles, children }: { roles?: Role[]; children: ReactNode }) {
   const { user, loading } = useSession();
-  if (loading) return <Loading label="Restoring session…" />;
+  if (!user && loading) return <Loading label="Restoring session…" />;
   if (!user) return <Navigate to="/" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={homeFor(user)} replace />;
   return <>{children}</>;
 }
 
 function PublicOnly({ children }: { children: ReactNode }) {
-  const { user, loading } = useSession();
-  if (loading) return <Loading />;
+  const { user } = useSession();
   if (user) return <Navigate to={homeFor(user)} replace />;
   return <>{children}</>;
 }
@@ -57,9 +56,9 @@ function RoleGate({ roles, children }: { roles: Role[]; children: ReactNode }) {
 
 function HomeRedirect() {
   const { user, loading } = useSession();
+  if (user) return <Navigate to={homeFor(user)} replace />;
   if (loading) return <Loading />;
-  if (!user) return <Navigate to="/" replace />;
-  return <Navigate to={homeFor(user)} replace />;
+  return <Navigate to="/" replace />;
 }
 
 export default function App() {

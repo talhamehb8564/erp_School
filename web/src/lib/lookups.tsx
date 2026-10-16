@@ -34,7 +34,7 @@ export function lookupsNeeded(pathname: string) {
   return LOOKUP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-export function LookupsProvider({ children, enabled }: { children: React.ReactNode; enabled: boolean }) {
+export function LookupsProvider({ children, enabled, prefetch }: { children: React.ReactNode; enabled: boolean; prefetch?: boolean }) {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [sections, setSections] = useState<Record<string, Section[]>>({});
@@ -42,7 +42,6 @@ export function LookupsProvider({ children, enabled }: { children: React.ReactNo
   const [error, setError] = useState<unknown>(null);
 
   const reload = useCallback(async () => {
-    if (!enabled) return;
     setLoading(true);
     setError(null);
     try {
@@ -71,10 +70,21 @@ export function LookupsProvider({ children, enabled }: { children: React.ReactNo
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled) return;
     if (classes.length || subjects.length) return;
-    void reload();
-  }, [enabled, reload, classes.length, subjects.length]);
+    if (enabled) {
+      void reload();
+      return;
+    }
+    if (!prefetch) return;
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(() => { void reload(); }, { timeout: 1200 });
+      const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      return () => cancel?.(id);
+    }
+    const t = window.setTimeout(() => { void reload(); }, 400);
+    return () => window.clearTimeout(t);
+  }, [enabled, prefetch, reload, classes.length, subjects.length]);
 
   const classMap = useMemo(() => new Map(classes.map((c) => [c.id, c.name])), [classes]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);

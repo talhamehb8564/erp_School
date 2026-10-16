@@ -20,19 +20,23 @@ export function applyBrand(primary?: string | null, accent?: string | null, seco
     root.setProperty("--navy", primary);
     root.setProperty("--forest", primary);
     root.setProperty("--accent", primary);
+    root.setProperty("--btn", `color-mix(in srgb, ${primary} 58%, #2a0508)`);
+    root.setProperty("--btn-hover", `color-mix(in srgb, ${primary} 38%, #1a0204)`);
     root.setProperty("--sidebar-bg", `color-mix(in srgb, ${primary} 88%, #05070c)`);
   } else {
     root.removeProperty("--brand");
     root.removeProperty("--navy");
     root.removeProperty("--forest");
     root.removeProperty("--accent");
+    root.removeProperty("--btn");
+    root.removeProperty("--btn-hover");
     root.removeProperty("--sidebar-bg");
   }
   if (accent) {
     root.setProperty("--brand-2", accent);
     root.setProperty("--brass", accent);
     root.setProperty("--brass-2", accent);
-    root.setProperty("--accent-2", `color-mix(in srgb, ${accent} 22%, transparent)`);
+    root.setProperty("--accent-2", `color-mix(in srgb, ${accent} 18%, transparent)`);
   } else {
     root.removeProperty("--brand-2");
     root.removeProperty("--brass");

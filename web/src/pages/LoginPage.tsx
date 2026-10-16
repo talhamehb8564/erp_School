@@ -38,7 +38,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <Link to={owner ? "/" : "/portals"} className="kicker">← {owner ? "Home" : "All portals"}</Link>
+        <Link to={owner ? "/" : "/portals"} className="back-link">← {owner ? "Home" : "All portals"}</Link>
         <div className="site-brand" style={{ margin: "12px 0 8px" }}>
           {school?.logoUrl && !owner ? <img src={school.logoUrl} alt="" style={{ width: 42, height: 42, objectFit: "cover", borderRadius: 12 }} /> : <div className="mark">{letter}</div>}
           <div>

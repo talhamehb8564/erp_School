@@ -4,7 +4,6 @@ import { publicApi, setupApi } from "../api/services";
 import { useBranding } from "../lib/branding";
 import {
   DEFAULT_ABOUT,
-  DEFAULT_ACHIEVEMENTS,
   DEFAULT_NOTICE_BODY,
   DEFAULT_NOTICE_TITLE,
   DEFAULT_PRINCIPAL_MESSAGE,
@@ -17,6 +16,7 @@ import {
   principalFor,
   principalPhotos,
   programsFor,
+  highlightsFor,
   youtubeId,
 } from "../lib/site";
 import { Button, Field, Form } from "../ui/kit";
@@ -141,7 +141,7 @@ export default function Welcome() {
   const letter = name.trim().charAt(0).toUpperCase() || "S";
   const gallery = galleryFor(school);
   const principal = principalFor(campus, school);
-  const photos = principalPhotos(principal);
+  const photos = principalPhotos(principal, campus?.name);
   const principalName = principal?.name || "Principal";
   const principalTitle = principal?.title || `Principal · ${campus?.name || "Campus"}`;
   const principalMessage = principal?.message || DEFAULT_PRINCIPAL_MESSAGE;
@@ -159,6 +159,7 @@ export default function Welcome() {
   const mapQuery = geo.place || [contact.address, contact.city, name].filter(Boolean).join(", ");
   const hasContact = Boolean(contact.phone || contact.email || contact.address);
   const programs = programsFor(school);
+  const highlights = highlightsFor(school);
 
   const closeMenu = () => setMenu(false);
 
@@ -176,6 +177,7 @@ export default function Welcome() {
           <a href="#about" onClick={closeMenu}>About</a>
           <a href="#principal" onClick={closeMenu}>Principal</a>
           <a href="#academics" onClick={closeMenu}>Academics</a>
+          <a href="#highlights" onClick={closeMenu}>Highlights</a>
           <a href="#gallery" onClick={closeMenu}>Life at school</a>
           <a href="#campuses" onClick={closeMenu}>Campuses</a>
           <a href="#contact" onClick={closeMenu}>Contact</a>
@@ -236,12 +238,12 @@ export default function Welcome() {
 
       {showPrincipal ? (
         <Reveal>
-          <section id="principal" className="site-section alt site-principal">
-            <PrincipalGallery photos={photos.items} name={principalName} sample={photos.isDefault} />
+          <section id="principal" className="site-section alt site-principal branch-swap" key={campus?.id || "principal"}>
+            <PrincipalGallery photos={photos.items} name={principalName} sample={photos.isDefault} branch={campus?.name} />
             <div className="principal-copy">
-              <p className="kicker glow-kicker">{principalDefault ? "Sample message" : `${campus?.name || "Campus"} · Principal`}</p>
+              <p className="kicker">{principalDefault ? `Sample · ${campus?.name || "campus"}` : campus?.name || "Campus"}</p>
               <h2>Principal’s Message</h2>
-              <p className="hint">{principalTitle}{campus?.name ? ` · ${campus.name}` : ""}</p>
+              <p className="principal-meta">{principalName} · {principalTitle}</p>
               {principalMessage.split(/\n+/).map((p, i) => (
                 i === 0
                   ? <TypeLine key={`${campus?.id || "p"}-${i}`} text={p} className={principalDefault ? "sample-copy" : undefined} />
@@ -258,9 +260,21 @@ export default function Welcome() {
           <h2>Programmes</h2>
           {programs.isDefault ? <p className="sample-copy">Sample programmes rotate here until School Admin publishes real copy. Separate programmes with a blank line in Website settings.</p> : null}
           <ProgramsBlock items={programs.items} sample={programs.isDefault} />
-          <div className="site-highlights">
-            <p className="kicker">Highlights</p>
-            {school?.achievementsText ? <p>{school.achievementsText}</p> : <p className="sample-copy">{DEFAULT_ACHIEVEMENTS}</p>}
+        </section>
+      </Reveal>
+
+      <Reveal>
+        <section id="highlights" className="site-section site-holders">
+          <p className="kicker">Position holders</p>
+          <h2><span className="pulse-hl">Highlights</span></h2>
+          {highlights.isDefault ? <p className="sample-copy">Sample honours until School Admin publishes real names from Website settings.</p> : null}
+          <div className="holder-grid">
+            {highlights.items.map((line, i) => (
+              <article key={line + i} className={`holder-card ${highlights.isDefault ? "sample" : ""}`}>
+                <span className="holder-index">{String(i + 1).padStart(2, "0")}</span>
+                <strong className="pulse-hl">{line}</strong>
+              </article>
+            ))}
           </div>
         </section>
       </Reveal>
@@ -413,9 +427,10 @@ export default function Welcome() {
   );
 }
 
-function PrincipalGallery({ photos, name, sample }: { photos: PublicMedia[]; name: string; sample?: boolean }) {
+function PrincipalGallery({ photos, name, sample, branch }: { photos: PublicMedia[]; name: string; sample?: boolean; branch?: string }) {
   const [i, setI] = useState(0);
-  useEffect(() => { setI(0); }, [photos.map((p) => p.imageUrl).join("|")]);
+  const sig = photos.map((p) => p.imageUrl).join("|");
+  useEffect(() => { setI(0); }, [sig]);
   useEffect(() => {
     if (photos.length < 2) return;
     const id = window.setInterval(() => setI((n) => (n + 1) % photos.length), 5400);
@@ -438,7 +453,7 @@ function PrincipalGallery({ photos, name, sample }: { photos: PublicMedia[]; nam
       ) : null}
       <div>
         <strong>{name}</strong>
-        <span>{current?.caption || (sample ? "Sample photographs for this layout" : "Principal")}</span>
+        <span>{current?.caption || (sample ? `Sample for ${branch || "this branch"}` : branch || "Principal")}</span>
       </div>
     </div>
   );

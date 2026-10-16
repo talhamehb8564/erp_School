@@ -31,7 +31,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   });
   const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(getAccessToken()) && !user);
   const [forcedLocked, setForcedLocked] = useState(false);
   const [childId, setChildIdState] = useState<string | null>(() => localStorage.getItem(CHILD_KEY));
 

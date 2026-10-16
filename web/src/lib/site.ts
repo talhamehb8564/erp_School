@@ -81,22 +81,54 @@ export function programsFor(school: PublicSchool | null): { items: { title: stri
   return { items, isDefault: false };
 }
 
-export function principalFor(campus: PublicCampus | null, school: PublicSchool | null): PublicPrincipal | null {
+export function principalFor(campus: PublicCampus | null, _school: PublicSchool | null): PublicPrincipal | null {
+  const branch = campus?.name || "this campus";
   const campusP = campus?.principal;
   if (campusP && campusP.published === false && !campusP.isDefault) return null;
-  if (campusP && !campusP.isDefault) return campusP;
-  const schoolP = school?.principal;
-  if (schoolP && schoolP.published === false && !schoolP.isDefault) return null;
-  return schoolP || null;
+  if (campusP && !campusP.isDefault) {
+    return {
+      ...campusP,
+      title: campusP.title || `Principal, ${branch}`,
+    };
+  }
+  return {
+    name: `Principal · ${branch}`,
+    title: `Principal, ${branch}`,
+    photoUrl: DEFAULT_PRINCIPAL_PHOTO,
+    photos: [{ imageUrl: DEFAULT_PRINCIPAL_PHOTO, caption: `Sample portrait for ${branch}. Replace from the Principal portal.` }],
+    message: `This is a sample Principal’s message for ${branch} only.\n\nEach branch has its own Principal. Image, name and words on this page always follow the campus you selected. Publish ${branch}’s profile from the Principal portal — this placeholder is not an official statement.`,
+    published: true,
+    isDefault: true,
+  };
 }
 
-export function principalPhotos(principal: PublicPrincipal | null): { items: PublicMedia[]; isDefault: boolean } {
+export function principalPhotos(principal: PublicPrincipal | null, campusName?: string): { items: PublicMedia[]; isDefault: boolean } {
   const custom = [
     ...(principal?.photos || []),
-    ...(principal?.photoUrl ? [{ imageUrl: principal.photoUrl }] : []),
+    ...(principal?.photoUrl ? [{ imageUrl: principal.photoUrl, caption: principal.photos?.[0]?.caption }] : []),
   ].filter((p, i, all) => p.imageUrl && all.findIndex((x) => x.imageUrl === p.imageUrl) === i);
   if (custom.length) return { items: custom, isDefault: false };
-  return { items: DEFAULT_PRINCIPAL_PHOTOS, isDefault: true };
+  const branch = campusName || "this branch";
+  return {
+    items: [{ imageUrl: DEFAULT_PRINCIPAL_PHOTO, caption: `Sample portrait for ${branch} — not a carousel of other campuses.` }],
+    isDefault: true,
+  };
+}
+
+export function highlightsFor(school: PublicSchool | null): { items: string[]; isDefault: boolean } {
+  const raw = school?.achievementsText?.trim();
+  if (!raw) {
+    return {
+      items: [
+        "Sample position holder — replace with a real name from Website settings.",
+        "Sample achievement — publish board results or awards for this school.",
+        "Sample highlight — this card is a layout placeholder, not a verified honour.",
+      ],
+      isDefault: true,
+    };
+  }
+  const items = raw.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+  return { items: items.length ? items : [raw], isDefault: false };
 }
 
 export function mapOf(campus: PublicCampus | null, school: PublicSchool | null): PublicMap {
