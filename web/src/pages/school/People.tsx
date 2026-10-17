@@ -75,7 +75,7 @@ export function StudentsPage() {
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
           <option value="GRADUATED">Graduated</option>
-          <option value="TRANSFERRED">Transferred</option>
+          <option value="LEFT_SCHOOL">Left school</option>
           <option value="">All statuses</option>
         </select>
       </div>
@@ -196,7 +196,7 @@ export function StudentsPage() {
             <select value={bulk.reason} onChange={(e) => setBulk({ ...bulk, reason: e.target.value })}>
               <option value="UNPAID_FEES">Unpaid fees</option>
               <option value="GRADUATED">Graduated</option>
-              <option value="TRANSFERRED">Transferred</option>
+              <option value="LEFT_SCHOOL">Left school</option>
               <option value="OTHER">Other</option>
             </select>
           </Field>

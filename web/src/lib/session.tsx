@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { authApi, tenantApi } from "../api/services";
-import { ApiError, LOCKED_EVENT, clearTokens, getAccessToken, getAuthEpoch, getRefreshToken, setTokens } from "../api/client";
+import { ApiError, AUTH_LOST_EVENT, LOCKED_EVENT, clearTokens, getAccessToken, getAuthEpoch, getRefreshToken, setTokens } from "../api/client";
 import type { Role, Tenant, User } from "./types";
 import { LOCKED_STATUSES } from "./types";
 
@@ -135,6 +135,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(LOCKED_EVENT, onLocked);
   }, []);
 
+  useEffect(() => {
+    const onLost = () => {
+      persist(null);
+      setTenant(null);
+      setForcedLocked(false);
+      localStorage.removeItem(CHILD_KEY);
+      setChildIdState(null);
+    };
+    window.addEventListener(AUTH_LOST_EVENT, onLost);
+    return () => window.removeEventListener(AUTH_LOST_EVENT, onLost);
+  }, []);
+
   const applyTenant = (u: User, tenant?: Tenant | null) => {
     if (u.role === "ERP_OWNER") {
       setTenant(null);
@@ -181,7 +193,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         await Promise.race([
           authApi.logout(rt).then(() => undefined, () => undefined),
           new Promise<void>((resolve) => {
-            window.setTimeout(resolve, 2500);
+            window.setTimeout(resolve, 400);
           }),
         ]);
       }

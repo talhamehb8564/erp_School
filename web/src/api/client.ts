@@ -4,6 +4,7 @@ const ACCESS = "atrium.access";
 const REFRESH = "atrium.refresh";
 
 export const LOCKED_EVENT = "atrium:subscription-inactive";
+export const AUTH_LOST_EVENT = "atrium:auth-lost";
 
 export class ApiError extends Error {
   status: number;
@@ -156,6 +157,10 @@ async function send<T>(
     }
     const ok = await tryRefresh();
     if (ok) return send<T>(path, init, false);
+    if (getAccessToken()) {
+      clearTokens();
+      window.dispatchEvent(new Event(AUTH_LOST_EVENT));
+    }
   }
   const text = await res.text();
   let json: { success?: boolean; data?: T; message?: string; errorCode?: string; errors?: { field: string; message: string }[] } | null = null;

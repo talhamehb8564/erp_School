@@ -413,11 +413,7 @@ public class StudentService {
     public StudentDtos.Response inactivate(UUID id, String reason) {
         Student s = studentAccessService.requireStudent(id);
         String code = reason == null ? "OTHER" : reason.trim().toUpperCase();
-        if ("GRADUATED".equals(code) || "GRADE_10_COMPLETE".equals(code)) {
-            s.setStatus(StudentStatus.GRADUATED);
-        } else {
-            s.setStatus(StudentStatus.INACTIVE);
-        }
+        s.setStatus(statusForReason(code));
         s.setInactiveReason(code);
         s.setUpdatedBy(TenantContext.getUserId());
         s = studentRepository.save(s);
@@ -447,14 +443,7 @@ public class StudentService {
         }
         UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
         String code = reason == null ? "OTHER" : reason.trim().toUpperCase();
-        StudentStatus toStatus;
-        if ("GRADUATED".equals(code) || "GRADE_10_COMPLETE".equals(code)) {
-            toStatus = StudentStatus.GRADUATED;
-        } else if ("TRANSFERRED".equals(code)) {
-            toStatus = StudentStatus.TRANSFERRED;
-        } else {
-            toStatus = StudentStatus.INACTIVE;
-        }
+        StudentStatus toStatus = statusForReason(code);
         long expected = studentRepository.countInScope(tenantId, classId, sectionId, campusId, StudentStatus.ACTIVE);
         if (expected <= 0) {
             throw new BusinessException("NO_STUDENTS", "No active students in this class/section");
@@ -482,6 +471,24 @@ public class StudentService {
         out.put("reason", code);
         out.put("status", toStatus);
         return out;
+    }
+
+    /**
+     * Canonical student statuses are ACTIVE, INACTIVE, GRADUATED, LEFT_SCHOOL
+     * (see chk_student_status). TRANSFERRED is accepted only as a reason alias
+     * for leaving the school — it is not an enum value and is not stored as status.
+     */
+    public static StudentStatus statusForReason(String code) {
+        if (code == null || code.isBlank()) {
+            return StudentStatus.INACTIVE;
+        }
+        if ("GRADUATED".equals(code) || "GRADE_10_COMPLETE".equals(code)) {
+            return StudentStatus.GRADUATED;
+        }
+        if ("LEFT_SCHOOL".equals(code) || "TRANSFERRED".equals(code)) {
+            return StudentStatus.LEFT_SCHOOL;
+        }
+        return StudentStatus.INACTIVE;
     }
 
     private void assertClassOnCampus(SchoolClass clazz) {

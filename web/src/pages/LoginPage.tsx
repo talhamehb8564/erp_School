@@ -4,7 +4,7 @@ import { useSession } from "../lib/session";
 import { useBranding } from "../lib/branding";
 import type { Role } from "../lib/types";
 import { ROLE_LABEL } from "../lib/types";
-import { homeFor } from "../lib/routes";
+import { homeFor, LOGIN_PORTALS } from "../lib/routes";
 import { Button, Field, Form } from "../ui/kit";
 import RotatingLine from "../ui/RotatingLine";
 import { useToast } from "../lib/toast";
@@ -35,7 +35,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
   }, []);
 
   if (user) return <Navigate to={homeFor(user)} replace />;
-  if (!expected) return <Navigate to="/" replace />;
+  if (!expected) return <Navigate to={LOGIN_PORTALS} replace />;
 
   const name = owner ? "ERP Owner" : school?.name || "School";
   const letter = (school?.name || "S").trim().charAt(0).toUpperCase();

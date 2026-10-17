@@ -23,7 +23,7 @@ export type ChallanStatus =
   | "PAYMENT_REJECTED"
   | "OVERDUE";
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "LEAVE";
-export type StudentStatus = "ACTIVE" | "INACTIVE" | "GRADUATED" | "TRANSFERRED";
+export type StudentStatus = "ACTIVE" | "INACTIVE" | "GRADUATED" | "LEFT_SCHOOL";
 export type HomeworkSubmissionStatus = "SUBMITTED" | "LATE" | "REVIEWED";
 export type SalaryStatus = "UNPAID" | "PAID";
 

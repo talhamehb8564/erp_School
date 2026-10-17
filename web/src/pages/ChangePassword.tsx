@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authApi } from "../api/services";
+import { LOGIN_PORTALS } from "../lib/routes";
 import { useSession } from "../lib/session";
 import { Button, Field, Form } from "../ui/kit";
 import { useToast } from "../lib/toast";
@@ -62,7 +63,7 @@ export default function ChangePassword() {
               ? `Username is now ${updated.username}. Sign in again.`
               : "Password updated. Sign in again.");
             await logout({ remote: false });
-            nav(user?.role === "ERP_OWNER" ? "/admin" : "/", { replace: true });
+            nav(LOGIN_PORTALS, { replace: true });
           }}
         >
           <Field label="Username">

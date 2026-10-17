@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useSession } from "./lib/session";
-import { homeFor } from "./lib/routes";
+import { homeFor, LOGIN_PORTALS } from "./lib/routes";
 import Welcome from "./pages/Welcome";
 import { Loading } from "./ui/kit";
 import ErrorBoundary from "./ui/ErrorBoundary";
@@ -40,7 +40,7 @@ const ReportsPage = lazy(() => import("./pages/school/Comms").then((m) => ({ def
 function Guard({ roles, children }: { roles?: Role[]; children: ReactNode }) {
   const { user, loading } = useSession();
   if (!user && loading) return <Loading label="Restoring session…" />;
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to={LOGIN_PORTALS} replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={homeFor(user)} replace />;
   return <>{children}</>;
 }
@@ -54,7 +54,7 @@ function PublicOnly({ children }: { children: ReactNode }) {
 function RoleGate({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { user } = useSession();
   if (!user || !roles.includes(user.role)) {
-    return <Navigate to={user ? homeFor(user) : "/"} replace />;
+    return <Navigate to={user ? homeFor(user) : LOGIN_PORTALS} replace />;
   }
   return <>{children}</>;
 }
@@ -63,7 +63,7 @@ function HomeRedirect() {
   const { user, loading } = useSession();
   if (user) return <Navigate to={homeFor(user)} replace />;
   if (loading) return <Loading />;
-  return <Navigate to="/" replace />;
+  return <Navigate to={LOGIN_PORTALS} replace />;
 }
 
 export default function App() {

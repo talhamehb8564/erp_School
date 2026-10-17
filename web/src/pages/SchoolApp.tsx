@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import { auditApi, notificationApi } from "../api/services";
 import { LookupsProvider, lookupsNeeded, useLookups } from "../lib/lookups";
+import { LOGIN_PORTALS } from "../lib/routes";
 import { useSession } from "../lib/session";
 import { applyBrand, applyTheme, readTheme, type Theme } from "../lib/theme";
 import { useBranding } from "../lib/branding";
@@ -47,7 +48,7 @@ export default function SchoolApp() {
     document.title = tenant?.name?.trim() || school?.name || "School";
   }, [tenant?.primaryColor, tenant?.accentColor, tenant?.secondaryColor, tenant?.name, school?.primaryColor, school?.accentColor, school?.secondaryColor, school?.name]);
 
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to={LOGIN_PORTALS} replace />;
   if (user.role === "ERP_OWNER") return <Navigate to="/admin/app" replace />;
   if (user.mustChangePassword && loc.pathname !== "/app/password") return <ChangePassword />;
   if (locked && loc.pathname !== "/app/billing") return <Locked />;
