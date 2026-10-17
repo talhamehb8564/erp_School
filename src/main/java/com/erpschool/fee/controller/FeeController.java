@@ -145,14 +145,19 @@ public class FeeController {
 
     @GetMapping("/proofs/pending")
     @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER')")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> pending() {
-        return ResponseEntity.ok(ApiResponse.ok(feeService.pendingProofs()));
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> pending(
+            @RequestParam(required = false) Integer limit) {
+        int n = limit == null ? 50 : limit;
+        return ResponseEntity.ok(ApiResponse.ok(feeService.pendingProofs(n)));
     }
 
     @GetMapping("/challans")
     @PreAuthorize("hasAnyRole('ERP_OWNER','ACCOUNT_OFFICER','PRINCIPAL')")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> byStatus(@RequestParam ChallanStatus status) {
-        return ResponseEntity.ok(ApiResponse.ok(feeService.byStatus(status)));
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> byStatus(
+            @RequestParam ChallanStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(feeService.byStatus(status, page, size)));
     }
 
     @PostMapping("/challans/mark-overdue")

@@ -16,8 +16,13 @@ export function FeesPage() {
   const ops = canOperateFees(user?.role);
   const viewer = canViewFees(user?.role);
   const structures = useAsync(() => (viewer ? feeApi.structures() : Promise.resolve([])), [user?.role]);
-  const pending = useAsync(() => (ops ? feeApi.pendingProofs() : Promise.resolve([])), [user?.role]);
-  const unpaid = useAsync(() => (user?.role === "PRINCIPAL" ? feeApi.byStatus("UNPAID") : Promise.resolve([])), [user?.role]);
+  const [unpaidPage, setUnpaidPage] = useState(0);
+  const unpaidSize = 50;
+  const pending = useAsync(() => (ops ? feeApi.pendingProofs(50) : Promise.resolve([])), [user?.role]);
+  const unpaid = useAsync(
+    () => (user?.role === "PRINCIPAL" ? feeApi.byStatus("UNPAID", unpaidPage, unpaidSize) : Promise.resolve([])),
+    [user?.role, unpaidPage],
+  );
   const me = useAsync(() => (user?.role === "STUDENT" ? studentApi.me() : Promise.resolve(null)), [user?.role]);
   const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
   const sid = useActiveStudentId(me.data?.id);
@@ -262,6 +267,12 @@ export function FeesPage() {
                   pretty(c.status),
                 ])}
               />
+              {unpaidPage > 0 || (unpaid.data || []).length >= unpaidSize ? (
+                <div className="row" style={{ marginTop: 12 }}>
+                  <Button kind="ghost" disabled={unpaidPage <= 0} onClick={() => setUnpaidPage((p) => Math.max(0, p - 1))}>Previous</Button>
+                  <Button kind="ghost" disabled={(unpaid.data || []).length < unpaidSize} onClick={() => setUnpaidPage((p) => p + 1)}>Next</Button>
+                </div>
+              ) : null}
             </QueryState>
           </div>
         )}

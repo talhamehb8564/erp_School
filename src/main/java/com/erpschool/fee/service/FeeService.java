@@ -36,6 +36,8 @@ import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.repository.TenantRepository;
 import com.erpschool.user.entity.User;
 import com.erpschool.user.repository.UserRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -354,8 +356,17 @@ public class FeeService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> pendingProofs() {
-        List<FeePaymentProof> proofs = proofRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(
-                TenantGuard.requireTenantId(null), ChallanStatus.PAYMENT_UNDER_VERIFICATION);
+        return pendingProofs(50);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> pendingProofs(int limit) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        boolean scoped = CampusScope.restricts();
+        UUID campusId = scoped ? CampusScope.current() : tenantId;
+        int n = Math.min(100, Math.max(1, limit));
+        List<FeePaymentProof> proofs = proofRepository.findPendingScoped(
+                tenantId, ChallanStatus.PAYMENT_UNDER_VERIFICATION, scoped, campusId, PageRequest.of(0, n));
         if (proofs.isEmpty()) {
             return List.of();
         }
@@ -391,21 +402,17 @@ public class FeeService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> pendingProofs(int limit) {
-        List<Map<String, Object>> rows = pendingProofs();
-        UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
-        if (campusId != null) {
-            rows = rows.stream().filter(m -> campusId.equals(m.get("campusId"))).toList();
-        }
-        if (limit > 0 && rows.size() > limit) {
-            return List.copyOf(rows.subList(0, limit));
-        }
-        return rows;
+    public List<Map<String, Object>> byStatus(ChallanStatus status) {
+        return byStatus(status, 0, 50);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> byStatus(ChallanStatus status) {
-        return toMaps(challanRepository.findByTenantIdAndStatus(TenantGuard.requireTenantId(null), status));
+    public List<Map<String, Object>> byStatus(ChallanStatus status, int page, int size) {
+        int s = Math.min(100, Math.max(1, size <= 0 ? 50 : size));
+        int p = Math.max(0, page);
+        return toMaps(challanRepository.findByTenantIdAndStatus(
+                TenantGuard.requireTenantId(null), status,
+                PageRequest.of(p, s, Sort.by(Sort.Direction.DESC, "dueDate"))));
     }
 
     @Transactional

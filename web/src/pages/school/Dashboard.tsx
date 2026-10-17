@@ -130,10 +130,10 @@ function TeacherDash() {
 }
 
 function AccountDash() {
-  const d = useAsync(() => portalApi.account());
-  const pending = (d.data?.pendingProofs as { id: string; transactionRef?: string; status?: string }[]) || [];
-  const unpaidRaw = d.data?.unpaidChallans;
-  const unpaidCount = Array.isArray(unpaidRaw) ? unpaidRaw.length : Number(unpaidRaw || 0);
+  const d = useAsync(() => reportApi.schoolDashboard());
+  const proofsQ = useAsync(() => feeApi.pendingProofs(12));
+  const pending = proofsQ.data || [];
+  const unpaidCount = Number(d.data?.unpaidChallans || 0);
   return (
     <>
       <div className="page-title"><div><h1>Finance desk</h1><p>Challans and payment proofs</p></div></div>
@@ -141,15 +141,17 @@ function AccountDash() {
         <div className="grid stats">
           <Stat label="Students" value={d.data?.students as number} loading={d.loading} />
           <Stat label="Unpaid" value={unpaidCount} loading={d.loading} />
-          <Stat label="Pending proofs" value={pending.length} loading={d.loading} />
+          <Stat label="Pending proofs" value={Number(d.data?.pendingFeeProofs || 0)} loading={d.loading} />
         </div>
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3>Proofs to verify</h3>
+      </QueryState>
+      <div className="card" style={{ marginTop: 16 }}>
+        <h3>Proofs to verify</h3>
+        <QueryState status={proofsQ} label="pending proofs">
           {!pending.length ? <Empty title="Queue is clear" /> : (
             <Table headers={["Proof", "Ref", "Status"]} rows={pending.map((p) => [p.id.slice(0, 8), p.transactionRef || "—", <Badge key={p.id} value={p.status} />])} />
           )}
-        </div>
-      </QueryState>
+        </QueryState>
+      </div>
     </>
   );
 }

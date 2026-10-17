@@ -121,7 +121,7 @@ function BrandMark({ name, code, logoUrl }: { name: string; code?: string; logoU
   const [broken, setBroken] = useState(false);
   const letter = (name || "S").trim().charAt(0).toUpperCase() || "S";
   return (
-    <div className="brand-mark" style={{ marginBottom: 16 }}>
+    <div className="brand-mark">
       {logoUrl && !broken ? (
         <img className="brand-logo" src={logoUrl} alt="" onError={() => setBroken(true)} />
       ) : (

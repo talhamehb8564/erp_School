@@ -302,8 +302,9 @@ export const feeApi = {
     api.post<FeeChallan>(`${v1}/fees/challans/${id}/proofs`, body),
   reviewProof: (id: string, approve: boolean, remarks?: string) =>
     api.post<FeeChallan>(`${v1}/fees/proofs/${id}/review`, { approve, remarks }),
-  pendingProofs: () => api.get<FeeProof[]>(`${v1}/fees/proofs/pending`),
-  byStatus: (status: ChallanStatus) => api.get<FeeChallan[]>(`${v1}/fees/challans?status=${status}`),
+  pendingProofs: (limit = 50) => api.get<FeeProof[]>(`${v1}/fees/proofs/pending?limit=${limit}`),
+  byStatus: (status: ChallanStatus, page = 0, size = 50) =>
+    api.get<FeeChallan[]>(`${v1}/fees/challans?status=${status}&page=${page}&size=${size}`),
   markOverdue: () => api.post<FeeChallan[]>(`${v1}/fees/challans/mark-overdue`),
   getChallan: (id: string) => api.get<FeeChallan & Record<string, unknown>>(`${v1}/fees/challans/${id}`),
   chargeTypes: () => api.get<FeeChargeType[]>(`${v1}/fees/charge-types`),

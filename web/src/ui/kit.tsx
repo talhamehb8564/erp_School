@@ -404,29 +404,78 @@ export function Bars({ items }: { items: { label: string; value: number; max?: n
 }
 
 export function Donut({ value, max, label }: { value: number; max: number; label: string }) {
-  const safeMax = Math.max(1, max);
-  const pct = Math.min(100, (value / safeMax) * 100);
+  const safeMax = Math.max(1, Number(max) || 1);
+  const raw = Number(value);
+  const clamped = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), safeMax) : 0;
+  const pct = Math.min(100, Math.max(0, (clamped / safeMax) * 100));
+  const showPct = safeMax === 100 || /%/.test(label);
+  const targetNum = showPct ? pct : clamped;
+  const [display, setDisplay] = useState(0);
+  const [arcPct, setArcPct] = useState(0);
+  const fromNum = useRef(0);
+  const fromPct = useRef(0);
+  const raf = useRef(0);
+
+  useEffect(() => {
+    const reduce = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      fromNum.current = targetNum;
+      fromPct.current = pct;
+      setDisplay(targetNum);
+      setArcPct(pct);
+      return;
+    }
+    const startNum = fromNum.current;
+    const startPct = fromPct.current;
+    const t0 = performance.now();
+    const dur = 1000;
+    const ease = (t: number) => 1 - (1 - t) ** 3;
+    cancelAnimationFrame(raf.current);
+    const tick = (now: number) => {
+      const u = Math.min(1, (now - t0) / dur);
+      const e = ease(u);
+      const n = startNum + (targetNum - startNum) * e;
+      const p = startPct + (pct - startPct) * e;
+      fromNum.current = n;
+      fromPct.current = p;
+      setDisplay(n);
+      setArcPct(p);
+      if (u < 1) raf.current = requestAnimationFrame(tick);
+      else {
+        fromNum.current = targetNum;
+        fromPct.current = pct;
+        setDisplay(targetNum);
+        setArcPct(pct);
+      }
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+  }, [targetNum, pct]);
+
   const r = 36;
   const c = 2 * Math.PI * r;
-  const dash = (pct / 100) * c;
+  const offset = c - (arcPct / 100) * c;
+  const shown = Math.round(display);
   return (
-    <div className="donut">
+    <div className="donut" role="img" aria-label={`${label} ${showPct ? `${Math.round(pct)} percent` : Math.round(clamped)}`}>
       <svg viewBox="0 0 88 88" width="88" height="88" aria-hidden>
         <circle cx="44" cy="44" r={r} fill="none" stroke="var(--accent-2)" strokeWidth="10" />
         <circle
+          className="donut-arc"
           cx="44"
           cy="44"
           r={r}
           fill="none"
           stroke="var(--accent)"
           strokeWidth="10"
-          strokeDasharray={`${dash} ${c}`}
+          strokeDasharray={c}
+          strokeDashoffset={offset}
           strokeLinecap="round"
           transform="rotate(-90 44 44)"
         />
       </svg>
       <div>
-        <b>{value}</b>
+        <b>{showPct ? `${shown}%` : shown}</b>
         <span>{label}</span>
       </div>
     </div>
