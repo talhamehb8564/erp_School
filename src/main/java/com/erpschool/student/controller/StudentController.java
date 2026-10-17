@@ -50,7 +50,7 @@ public class StudentController {
 
     @GetMapping("/students")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER','ACCOUNT_OFFICER')")
-    public ResponseEntity<ApiResponse<PageResponse<StudentDtos.Response>>> list(
+    public ResponseEntity<ApiResponse<PageResponse<StudentDtos.ListRow>>> list(
             @RequestParam(required = false) UUID classId,
             @RequestParam(required = false) UUID sectionId,
             @RequestParam(required = false) String academicSession,
@@ -75,7 +75,8 @@ public class StudentController {
             @Valid @RequestBody StudentDtos.InactivateBulkRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(
                 "Students inactivated",
-                studentService.inactivateBulk(request.getClassId(), request.getSectionId(), request.getReason())));
+                studentService.inactivateBulk(
+                        request.getClassId(), request.getSectionId(), request.getReason(), request.getNote())));
     }
 
     @GetMapping("/students/me")
@@ -108,9 +109,24 @@ public class StudentController {
     @PostMapping("/students/{id}/inactivate")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
     public ResponseEntity<ApiResponse<StudentDtos.Response>> inactivate(
-            @PathVariable UUID id, @RequestBody(required = false) InactivateRequest request) {
-        String reason = request == null ? "OTHER" : request.getReason();
-        return ResponseEntity.ok(ApiResponse.ok("Student inactivated", studentService.inactivate(id, reason)));
+            @PathVariable UUID id, @Valid @RequestBody StudentDtos.StatusChangeRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                "Student inactivated",
+                studentService.inactivate(id, request.getReason(), request.getNote())));
+    }
+
+    @PostMapping("/students/{id}/reactivate")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<StudentDtos.Response>> reactivate(
+            @PathVariable UUID id, @RequestBody(required = false) StudentDtos.ReactivateRequest request) {
+        String note = request == null ? null : request.getNote();
+        return ResponseEntity.ok(ApiResponse.ok("Student reactivated", studentService.reactivate(id, note)));
+    }
+
+    @GetMapping("/students/{id}/status-events")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL')")
+    public ResponseEntity<ApiResponse<List<StudentDtos.StatusEventRow>>> statusEvents(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(studentService.statusHistory(id)));
     }
 
     @PostMapping("/students/{id}/parents")
@@ -149,9 +165,4 @@ public class StudentController {
         private List<UUID> studentIds;
     }
 
-    @Getter
-    @Setter
-    public static class InactivateRequest {
-        private String reason;
-    }
 }

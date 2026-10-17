@@ -284,7 +284,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   return { data, error, loading, reload, setData };
 }
 
-export function useDebounced<T>(value: T, ms = 320) {
+export function useDebounced<T>(value: T, ms = 200) {
   const [v, setV] = useState(value);
   useEffect(() => {
     const t = window.setTimeout(() => setV(value), ms);

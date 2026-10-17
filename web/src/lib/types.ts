@@ -199,6 +199,7 @@ export interface StudentUser {
   rollNumber?: string;
   cnic?: string;
   inactiveReason?: string;
+  inactiveNote?: string;
   photoUrl?: string;
   gender?: string;
   dateOfBirth?: string;
@@ -209,6 +210,20 @@ export interface StudentUser {
   guardianPhone?: string;
   fullName?: string;
   user?: User;
+}
+
+export interface StudentStatusEvent {
+  id: string;
+  studentId: string;
+  campusId?: string;
+  fromStatus?: StudentStatus;
+  toStatus?: StudentStatus;
+  reasonCode?: string;
+  reasonNote?: string;
+  actorUserId?: string;
+  actorUsername?: string;
+  bulk?: boolean;
+  createdAt?: string;
 }
 
 export interface StudentRosterRow {

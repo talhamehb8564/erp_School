@@ -16,8 +16,10 @@ import com.erpschool.student.dto.StudentDtos;
 import com.erpschool.student.entity.ParentStudent;
 import com.erpschool.student.entity.Student;
 import com.erpschool.student.entity.StudentStatus;
+import com.erpschool.student.entity.StudentStatusEvent;
 import com.erpschool.student.repository.ParentStudentRepository;
 import com.erpschool.student.repository.StudentRepository;
+import com.erpschool.student.repository.StudentStatusEventRepository;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.repository.TenantRepository;
@@ -58,6 +60,9 @@ public class StudentService {
     private final AcademicService academicService;
     private final DocumentSequenceService documentSequenceService;
     private final AuditService auditService;
+    private final StudentStatusEventRepository statusEventRepository;
+
+    private static final UUID NIL = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     public StudentService(StudentRepository studentRepository,
                           ParentStudentRepository parentStudentRepository,
@@ -67,7 +72,8 @@ public class StudentService {
                           TenantRepository tenantRepository,
                           AcademicService academicService,
                           DocumentSequenceService documentSequenceService,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          StudentStatusEventRepository statusEventRepository) {
         this.studentRepository = studentRepository;
         this.parentStudentRepository = parentStudentRepository;
         this.studentAccessService = studentAccessService;
@@ -77,6 +83,7 @@ public class StudentService {
         this.academicService = academicService;
         this.documentSequenceService = documentSequenceService;
         this.auditService = auditService;
+        this.statusEventRepository = statusEventRepository;
     }
 
     @Transactional
@@ -190,8 +197,8 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<StudentDtos.Response> list(UUID classId, UUID sectionId, String academicSession, String q,
-                                                   StudentStatus status, Pageable pageable) {
+    public PageResponse<StudentDtos.ListRow> list(UUID classId, UUID sectionId, String academicSession, String q,
+                                                  StudentStatus status, Pageable pageable) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
         java.util.Set<UUID> sessionClassIds = null;
@@ -201,13 +208,11 @@ public class StudentService {
                     .map(SchoolClass::getId)
                     .collect(Collectors.toSet());
             if (sessionClassIds.isEmpty() || (classId != null && !sessionClassIds.contains(classId))) {
-                return emptyStudents(Page.empty(pageable));
+                return emptyListRows(Page.empty(pageable));
             }
         }
         boolean filterClasses = classId == null && sessionClassIds != null;
-        Collection<UUID> classIds = filterClasses
-                ? sessionClassIds
-                : List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        Collection<UUID> classIds = filterClasses ? sessionClassIds : List.of(NIL);
         Page<Student> page = studentRepository.search(
                 tenantId,
                 campusId,
@@ -219,10 +224,10 @@ public class StudentService {
                 normalizeSearch(q),
                 pageable);
         Map<UUID, UserResponse> users = usersById(page.getContent());
-        List<StudentDtos.Response> content = page.getContent().stream()
-                .map(s -> StudentDtos.from(s, users.get(s.getUserId())))
+        List<StudentDtos.ListRow> content = page.getContent().stream()
+                .map(s -> StudentDtos.listRow(s, users.get(s.getUserId())))
                 .toList();
-        return PageResponse.<StudentDtos.Response>builder()
+        return PageResponse.<StudentDtos.ListRow>builder()
                 .content(content)
                 .page(page.getNumber())
                 .size(page.getSize())
@@ -280,8 +285,8 @@ public class StudentService {
         return "%" + trimmed + "%";
     }
 
-    private static PageResponse<StudentDtos.Response> emptyStudents(Page<Student> page) {
-        return PageResponse.<StudentDtos.Response>builder()
+    private static PageResponse<StudentDtos.ListRow> emptyListRows(Page<Student> page) {
+        return PageResponse.<StudentDtos.ListRow>builder()
                 .content(List.of())
                 .page(page.getNumber())
                 .size(page.getSize())
@@ -410,25 +415,69 @@ public class StudentService {
     }
 
     @Transactional
-    public StudentDtos.Response inactivate(UUID id, String reason) {
+    public StudentDtos.Response inactivate(UUID id, String reason, String note) {
         Student s = studentAccessService.requireStudent(id);
-        String code = reason == null ? "OTHER" : reason.trim().toUpperCase();
-        s.setStatus(statusForReason(code));
-        s.setInactiveReason(code);
+        if (s.getStatus() != StudentStatus.ACTIVE) {
+            throw new BusinessException("ALREADY_INACTIVE", "This student is not active");
+        }
+        StatusReason parsed = parseReason(reason, note);
+        StudentStatus previous = s.getStatus();
+        s.setStatus(parsed.status());
+        s.setInactiveReason(parsed.code());
+        s.setInactiveNote(parsed.note());
         s.setUpdatedBy(TenantContext.getUserId());
         s = studentRepository.save(s);
         if (s.getUserId() != null) {
-            userRepository.findById(s.getUserId()).ifPresent(account -> {
-                account.setStatus(UserStatus.INACTIVE);
-                userRepository.save(account);
-            });
+            Instant now = Instant.now();
+            inactivateUserAccounts(s.getTenantId(), List.of(s.getUserId()), TenantContext.getUserId(), now);
         }
-        auditService.record("STUDENT_INACTIVATED", "Student", s.getId().toString(), Map.of("reason", code));
+        recordEvent(s, previous, parsed.status(), parsed.code(), parsed.note(), false);
+        auditService.record("STUDENT_INACTIVATED", "Student", s.getId().toString(), eventAudit(s, previous, parsed));
         return StudentDtos.from(s, loadUser(s.getUserId()));
     }
 
     @Transactional
-    public Map<String, Object> inactivateBulk(UUID classId, UUID sectionId, String reason) {
+    public StudentDtos.Response reactivate(UUID id, String note) {
+        Student s = studentAccessService.requireStudent(id);
+        if (s.getStatus() == StudentStatus.ACTIVE) {
+            throw new BusinessException("ALREADY_ACTIVE", "This student is already active");
+        }
+        StudentStatus previous = s.getStatus();
+        String noteText = trimNote(note);
+        s.setStatus(StudentStatus.ACTIVE);
+        s.setUpdatedBy(TenantContext.getUserId());
+        s = studentRepository.save(s);
+        if (s.getUserId() != null) {
+            Instant now = Instant.now();
+            userRepository.updateStatusForIds(
+                    s.getTenantId(), List.of(s.getUserId()), UserStatus.ACTIVE, now, TenantContext.getUserId());
+        }
+        recordEvent(s, previous, StudentStatus.ACTIVE, "REACTIVATED", noteText, false);
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("fromStatus", previous.name());
+        details.put("toStatus", StudentStatus.ACTIVE.name());
+        details.put("reason", "REACTIVATED");
+        if (noteText != null) {
+            details.put("note", noteText);
+        }
+        details.put("campusId", s.getCampusId());
+        details.put("keptReason", s.getInactiveReason());
+        auditService.record("STUDENT_REACTIVATED", "Student", s.getId().toString(), details);
+        return StudentDtos.from(s, loadUser(s.getUserId()));
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentDtos.StatusEventRow> statusHistory(UUID id) {
+        Student s = studentAccessService.requireStudent(id);
+        return statusEventRepository.findByTenantIdAndStudentIdOrderByCreatedAtDesc(s.getTenantId(), s.getId())
+                .stream()
+                .limit(50)
+                .map(StudentDtos::eventRow)
+                .toList();
+    }
+
+    @Transactional
+    public Map<String, Object> inactivateBulk(UUID classId, UUID sectionId, String reason, String note) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         UUID actor = TenantContext.getUserId();
         SchoolClass clazz = academicService.requireClass(classId);
@@ -442,8 +491,7 @@ public class StudentService {
             sectionName = section.getName();
         }
         UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
-        String code = reason == null ? "OTHER" : reason.trim().toUpperCase();
-        StudentStatus toStatus = statusForReason(code);
+        StatusReason parsed = parseReason(reason, note);
         long expected = studentRepository.countInScope(tenantId, classId, sectionId, campusId, StudentStatus.ACTIVE);
         if (expected <= 0) {
             throw new BusinessException("NO_STUDENTS", "No active students in this class/section");
@@ -451,15 +499,38 @@ public class StudentService {
         List<UUID> userIds = studentRepository.findUserIdsInScope(
                 tenantId, classId, sectionId, campusId, StudentStatus.ACTIVE);
         Instant now = Instant.now();
+        statusEventRepository.insertBulkEvents(
+                tenantId,
+                classId,
+                sectionId != null,
+                sectionId == null ? NIL : sectionId,
+                campusId != null,
+                campusId == null ? NIL : campusId,
+                StudentStatus.ACTIVE.name(),
+                parsed.status().name(),
+                parsed.code(),
+                parsed.note(),
+                actor,
+                TenantContext.getUsername(),
+                now);
         int updated = studentRepository.bulkUpdateStatusInScope(
-                tenantId, classId, sectionId, campusId, StudentStatus.ACTIVE, toStatus, code, actor, now);
+                tenantId, classId, sectionId, campusId, StudentStatus.ACTIVE, parsed.status(),
+                parsed.code(), parsed.note(), actor, now);
         inactivateUserAccounts(tenantId, userIds, actor, now);
         Map<String, Object> details = new LinkedHashMap<>();
-        details.put("reason", code);
+        details.put("reason", parsed.code());
+        if (parsed.note() != null) {
+            details.put("note", parsed.note());
+        }
+        details.put("fromStatus", StudentStatus.ACTIVE.name());
+        details.put("toStatus", parsed.status().name());
         details.put("count", updated);
         details.put("classId", classId.toString());
         if (sectionId != null) {
             details.put("sectionId", sectionId.toString());
+        }
+        if (campusId != null) {
+            details.put("campusId", campusId.toString());
         }
         auditService.record("STUDENT_BULK_INACTIVATED", "Student", classId.toString(), details);
         Map<String, Object> out = new LinkedHashMap<>();
@@ -468,8 +539,9 @@ public class StudentService {
         out.put("className", clazz.getName());
         out.put("sectionId", sectionId);
         out.put("sectionName", sectionName);
-        out.put("reason", code);
-        out.put("status", toStatus);
+        out.put("reason", parsed.code());
+        out.put("note", parsed.note());
+        out.put("status", parsed.status());
         return out;
     }
 
@@ -489,6 +561,69 @@ public class StudentService {
             return StudentStatus.LEFT_SCHOOL;
         }
         return StudentStatus.INACTIVE;
+    }
+
+    public record StatusReason(String code, String note, StudentStatus status) {
+    }
+
+    public static StatusReason parseReason(String reason, String note) {
+        String code = reason == null ? "" : reason.trim().toUpperCase().replace(' ', '_');
+        if ("FEE_NOT_PAID".equals(code) || "FEE_UNPAID".equals(code)) {
+            code = "UNPAID_FEES";
+        }
+        if (code.isBlank()) {
+            throw new BusinessException("REASON_REQUIRED", "A reason is required");
+        }
+        if (!java.util.Set.of("UNPAID_FEES", "LEFT_SCHOOL", "TRANSFERRED", "PARENT_REQUEST", "GRADUATED", "OTHER")
+                .contains(code)) {
+            throw new BusinessException("REASON_INVALID", "Choose a valid reason");
+        }
+        String trimmed = trimNote(note);
+        if ("OTHER".equals(code) && trimmed == null) {
+            throw new BusinessException("REASON_REQUIRED", "Describe the reason when Other is selected");
+        }
+        return new StatusReason(code, trimmed, statusForReason(code));
+    }
+
+    private static String trimNote(String note) {
+        if (note == null) {
+            return null;
+        }
+        String trimmed = note.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() > 300 ? trimmed.substring(0, 300) : trimmed;
+    }
+
+    private void recordEvent(Student student, StudentStatus from, StudentStatus to,
+                             String reasonCode, String reasonNote, boolean bulk) {
+        StudentStatusEvent event = new StudentStatusEvent();
+        event.setTenantId(student.getTenantId());
+        event.setCampusId(student.getCampusId());
+        event.setStudentId(student.getId());
+        event.setFromStatus(from);
+        event.setToStatus(to);
+        event.setReasonCode(reasonCode);
+        event.setReasonNote(reasonNote);
+        event.setActorUserId(TenantContext.getUserId());
+        event.setActorUsername(TenantContext.getUsername());
+        event.setBulk(bulk);
+        event.setCreatedAt(Instant.now());
+        statusEventRepository.save(event);
+    }
+
+    private static Map<String, Object> eventAudit(Student student, StudentStatus previous, StatusReason parsed) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("fromStatus", previous.name());
+        details.put("toStatus", parsed.status().name());
+        details.put("reason", parsed.code());
+        if (parsed.note() != null) {
+            details.put("note", parsed.note());
+        }
+        details.put("campusId", student.getCampusId());
+        details.put("tenantId", student.getTenantId());
+        return details;
     }
 
     private void assertClassOnCampus(SchoolClass clazz) {

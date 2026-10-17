@@ -53,6 +53,9 @@ public class Student extends TenantAwareEntity {
     @Column(name = "inactive_reason", length = 40)
     private String inactiveReason;
 
+    @Column(name = "inactive_note", length = 300)
+    private String inactiveNote;
+
     @Column(name = "photo_url", length = 500)
     private String photoUrl;
 

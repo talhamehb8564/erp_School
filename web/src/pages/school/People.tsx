@@ -5,7 +5,17 @@ import { pretty } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { Badge, Button, Field, Form, Modal, Pager, QueryState, Search, Table, studentLabel, useAsync, useDebounced } from "../../ui/kit";
 import { useSession } from "../../lib/session";
-import type { Role } from "../../lib/types";
+import type { Role, StudentUser } from "../../lib/types";
+
+const STATUS_REASONS = [
+  { code: "UNPAID_FEES", label: "Fee not paid" },
+  { code: "LEFT_SCHOOL", label: "Left school" },
+  { code: "TRANSFERRED", label: "Transferred" },
+  { code: "PARENT_REQUEST", label: "Parent request" },
+  { code: "OTHER", label: "Other" },
+];
+
+const BULK_REASONS = [...STATUS_REASONS, { code: "GRADUATED", label: "Graduated" }];
 
 export function StudentsPage() {
   const { user } = useSession();
@@ -32,7 +42,15 @@ export function StudentsPage() {
   const [promo, setPromo] = useState({ fromClassId: "", fromSectionId: "", toClassId: "", toSectionId: "" });
   const [promoOpen, setPromoOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulk, setBulk] = useState({ classId: "", sectionId: "", reason: "UNPAID_FEES" });
+  const [bulk, setBulk] = useState({ classId: "", sectionId: "", reason: "UNPAID_FEES", note: "" });
+  const [inactivateFor, setInactivateFor] = useState<StudentUser | null>(null);
+  const [inactivateForm, setInactivateForm] = useState({ reason: "UNPAID_FEES", note: "" });
+  const [reactivateFor, setReactivateFor] = useState<StudentUser | null>(null);
+  const [historyFor, setHistoryFor] = useState<StudentUser | null>(null);
+  const history = useAsync(
+    () => (historyFor ? studentApi.statusEvents(historyFor.id) : Promise.resolve([])),
+    [historyFor?.id],
+  );
   const bulkPreview = useAsync(
     () => (bulkOpen && bulk.classId
       ? studentApi.list(bulk.classId, bulk.sectionId || undefined, 0, undefined, undefined, "ACTIVE")
@@ -83,16 +101,27 @@ export function StudentsPage() {
         <Table
           headers={canEnrol ? ["Admission", "Name", "CNIC", "Class", "Roll", "Status", ""] : ["Admission", "Name", "CNIC", "Class", "Roll", "Status"]}
           rows={rows.map((s) => {
-            const cells = [s.admissionNumber, studentLabel(s), s.cnic || "—", className(s.classId), s.rollNumber || "—", <Badge key={s.id} value={s.status} />];
+            const cells = [
+              s.admissionNumber,
+              studentLabel(s),
+              s.cnic || "—",
+              className(s.classId),
+              s.rollNumber || "—",
+              <span key={`st${s.id}`}>
+                <Badge value={s.status} />
+                {s.inactiveReason ? <span className="hint"> · {pretty(s.inactiveReason)}</span> : null}
+              </span>,
+            ];
             if (canEnrol) {
               cells.push(
-                s.status === "ACTIVE"
-                  ? <Button key={`in${s.id}`} kind="danger" loadingText="Inactivating…" onClick={async () => {
-                    await studentApi.inactivate(s.id, "UNPAID_FEES");
-                    toast("ok", "Student inactivated. History is kept.");
-                    void list.reload();
-                  }}>Inactivate</Button>
-                  : "—",
+                <div key={`act${s.id}`} className="row">
+                  <Button kind="ghost" onClick={() => setHistoryFor(s)}>History</Button>
+                  {s.status === "ACTIVE" ? (
+                    <Button kind="danger" onClick={() => { setInactivateFor(s); setInactivateForm({ reason: "UNPAID_FEES", note: "" }); }}>Inactivate</Button>
+                  ) : (
+                    <Button kind="ok" onClick={() => setReactivateFor(s)}>Reactivate</Button>
+                  )}
+                </div>,
               );
             }
             return cells;
@@ -175,6 +204,7 @@ export function StudentsPage() {
             classId: bulk.classId,
             sectionId: bulk.sectionId || undefined,
             reason: bulk.reason,
+            note: bulk.reason === "OTHER" ? bulk.note.trim() : bulk.note.trim() || undefined,
           });
           toast("ok", `Deactivated ${result.inactivated} students in ${result.className || bulkClassLabel}. History is kept.`);
           setBulkOpen(false);
@@ -193,13 +223,19 @@ export function StudentsPage() {
             </select>
           </Field>
           <Field label="Reason">
-            <select value={bulk.reason} onChange={(e) => setBulk({ ...bulk, reason: e.target.value })}>
-              <option value="UNPAID_FEES">Unpaid fees</option>
-              <option value="GRADUATED">Graduated</option>
-              <option value="LEFT_SCHOOL">Left school</option>
-              <option value="OTHER">Other</option>
+            <select value={bulk.reason} onChange={(e) => setBulk({ ...bulk, reason: e.target.value })} required>
+              {BULK_REASONS.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
             </select>
           </Field>
+          {bulk.reason === "OTHER" ? (
+            <Field label="Custom reason">
+              <input value={bulk.note} onChange={(e) => setBulk({ ...bulk, note: e.target.value })} required placeholder="Describe why" />
+            </Field>
+          ) : (
+            <Field label="Note (optional)">
+              <input value={bulk.note} onChange={(e) => setBulk({ ...bulk, note: e.target.value })} placeholder="Extra detail kept in history" />
+            </Field>
+          )}
           {bulk.classId ? (
             <p>
               You are about to deactivate <strong>{bulkPreview.loading ? "…" : bulkCount}</strong> students from {bulkClassLabel}, {bulkSectionLabel}. Continue?
@@ -207,6 +243,65 @@ export function StudentsPage() {
           ) : null}
           <Button type="submit" kind="danger" loadingText="Deactivating…" disabled={!bulk.classId || bulkPreview.loading || bulkCount === 0}>Deactivate students</Button>
         </Form>
+      </Modal>
+      <Modal title="Inactivate student" open={!!inactivateFor} onClose={() => setInactivateFor(null)}>
+        <p className="hint">{inactivateFor ? `${studentLabel(inactivateFor)} is not inactivated until you confirm a reason. Attendance, marks and fees stay in the database.` : ""}</p>
+        <Form busyLabel="Inactivating…" onSubmit={async () => {
+          if (!inactivateFor) return;
+          if (!inactivateForm.reason) throw new Error("Choose a reason.");
+          if (inactivateForm.reason === "OTHER" && !inactivateForm.note.trim()) throw new Error("Describe the reason.");
+          await studentApi.inactivate(inactivateFor.id, inactivateForm.reason, inactivateForm.note.trim() || undefined);
+          toast("ok", "Student inactivated. The reason is stored in history.");
+          setInactivateFor(null);
+          void list.reload();
+        }}>
+          <Field label="Reason">
+            <select value={inactivateForm.reason} onChange={(e) => setInactivateForm({ ...inactivateForm, reason: e.target.value })} required>
+              {STATUS_REASONS.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
+            </select>
+          </Field>
+          {inactivateForm.reason === "OTHER" ? (
+            <Field label="Custom reason">
+              <input value={inactivateForm.note} onChange={(e) => setInactivateForm({ ...inactivateForm, note: e.target.value })} required placeholder="Required when Other is selected" />
+            </Field>
+          ) : (
+            <Field label="Note (optional)">
+              <input value={inactivateForm.note} onChange={(e) => setInactivateForm({ ...inactivateForm, note: e.target.value })} />
+            </Field>
+          )}
+          <Button type="submit" kind="danger" loadingText="Inactivating…">Confirm inactivate</Button>
+        </Form>
+      </Modal>
+      <Modal title="Reactivate student" open={!!reactivateFor} onClose={() => setReactivateFor(null)}>
+        <p>
+          Reactivate {reactivateFor ? studentLabel(reactivateFor) : "this student"}? They will show in active lists again. Previous inactivation reasons stay in history.
+        </p>
+        <Form busyLabel="Reactivating…" onSubmit={async () => {
+          if (!reactivateFor) return;
+          await studentApi.reactivate(reactivateFor.id);
+          toast("ok", "Student is active again. Previous reasons were kept.");
+          setReactivateFor(null);
+          void list.reload();
+        }}>
+          <Button type="submit" kind="ok" loadingText="Reactivating…">Confirm reactivate</Button>
+        </Form>
+      </Modal>
+      <Modal title="Status history" open={!!historyFor} onClose={() => setHistoryFor(null)}>
+        <p className="hint">{historyFor ? studentLabel(historyFor) : ""} — previous reasons are never deleted.</p>
+        <QueryState status={history} label="status history">
+          {(history.data || []).length ? (
+            <Table
+              headers={["When", "From", "To", "Reason", "By"]}
+              rows={(history.data || []).map((e) => [
+                e.createdAt ? new Date(e.createdAt).toLocaleString() : "—",
+                pretty(e.fromStatus),
+                pretty(e.toStatus),
+                `${pretty(e.reasonCode)}${e.reasonNote ? ` — ${e.reasonNote}` : ""}${e.bulk ? " (bulk)" : ""}`,
+                e.actorUsername || "—",
+              ])}
+            />
+          ) : <p className="hint">No status changes recorded yet.</p>}
+        </QueryState>
       </Modal>
     </>
   );

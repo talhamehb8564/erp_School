@@ -19,6 +19,7 @@ import type {
   Page,
   SchoolClass,
   StudentRosterRow,
+  StudentStatusEvent,
   SchoolEvent,
   SchoolSettings,
   Section,
@@ -182,8 +183,12 @@ export const studentApi = {
   enroll: (body: Record<string, unknown>) => api.post<EnrollResponse>(`${v1}/students`, body),
   update: (id: string, body: Record<string, unknown>) => api.put<StudentUser>(`${v1}/students/${id}`, body),
   promote: (body: Record<string, unknown>) => api.post<StudentUser[]>(`${v1}/students/promote`, body),
-  inactivate: (id: string, reason: string) => api.post<StudentUser>(`${v1}/students/${id}/inactivate`, { reason }),
-  inactivateBulk: (body: { classId: string; sectionId?: string; reason: string }) =>
+  inactivate: (id: string, reason: string, note?: string) =>
+    api.post<StudentUser>(`${v1}/students/${id}/inactivate`, { reason, note }),
+  reactivate: (id: string, note?: string) =>
+    api.post<StudentUser>(`${v1}/students/${id}/reactivate`, { note }),
+  statusEvents: (id: string) => api.get<StudentStatusEvent[]>(`${v1}/students/${id}/status-events`),
+  inactivateBulk: (body: { classId: string; sectionId?: string; reason: string; note?: string }) =>
     api.post<{ inactivated: number; className?: string; sectionName?: string; reason: string; status?: string }>(`${v1}/students/inactivate-bulk`, body),
   linkParent: (id: string, parentUserId: string, relationship?: string) =>
     api.post<unknown>(`${v1}/students/${id}/parents`, { parentUserId, relationship }),

@@ -129,6 +129,7 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
             update Student s
             set s.status = :toStatus,
                 s.inactiveReason = :reason,
+                s.inactiveNote = :note,
                 s.updatedBy = :actorId,
                 s.updatedAt = :now
             where s.tenantId = :tenantId
@@ -145,6 +146,7 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
             @Param("fromStatus") StudentStatus fromStatus,
             @Param("toStatus") StudentStatus toStatus,
             @Param("reason") String reason,
+            @Param("note") String note,
             @Param("actorId") UUID actorId,
             @Param("now") Instant now);
 

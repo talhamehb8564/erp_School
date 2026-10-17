@@ -35,7 +35,7 @@ export default function SchoolApp() {
     if (!user || locked) return;
     const t = window.setTimeout(() => {
       void notificationApi.unread().then((r) => setUnread(r.unread)).catch(() => undefined);
-    }, 400);
+    }, 1200);
     return () => window.clearTimeout(t);
   }, [user, locked]);
 
@@ -64,7 +64,7 @@ export default function SchoolApp() {
   };
 
   return (
-    <LookupsProvider enabled={!locked && lookupsNeeded(loc.pathname)} prefetch={!locked}>
+    <LookupsProvider enabled={!locked && lookupsNeeded(loc.pathname)} prefetch={false}>
       <div className="shell" data-role={role}>
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -142,7 +142,7 @@ function ActivityBar({ enabled }: { enabled: boolean }) {
     if (!enabled || locked) return;
     const t = window.setTimeout(() => {
       void auditApi.mine().then((page) => setItems(page.content || [])).catch(() => undefined);
-    }, 480);
+    }, 1800);
     return () => window.clearTimeout(t);
   }, [enabled, locked]);
   if (!items.length) return null;
