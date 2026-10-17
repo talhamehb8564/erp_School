@@ -97,4 +97,17 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                            @Param("status") UserStatus status,
                            @Param("now") Instant now,
                            @Param("actorId") UUID actorId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update User u
+            set u.lastLoginAt = :at,
+                u.failedLoginAttempts = 0,
+                u.lockedUntil = null,
+                u.status = :status
+            where u.id = :id
+            """)
+    int markSuccessfulLogin(@Param("id") UUID id,
+                            @Param("at") Instant at,
+                            @Param("status") UserStatus status);
 }

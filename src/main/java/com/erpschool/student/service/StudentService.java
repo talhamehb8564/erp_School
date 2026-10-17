@@ -213,16 +213,12 @@ public class StudentService {
         }
         boolean filterClasses = classId == null && sessionClassIds != null;
         Collection<UUID> classIds = filterClasses ? sessionClassIds : List.of(NIL);
-        Page<Student> page = studentRepository.search(
-                tenantId,
-                campusId,
-                classId,
-                sectionId,
-                status,
-                filterClasses,
-                classIds,
-                normalizeSearch(q),
-                pageable);
+        String like = normalizeSearch(q);
+        Page<Student> page = like == null
+                ? studentRepository.searchFiltered(
+                        tenantId, campusId, classId, sectionId, status, filterClasses, classIds, pageable)
+                : studentRepository.search(
+                        tenantId, campusId, classId, sectionId, status, filterClasses, classIds, like, pageable);
         Map<UUID, UserResponse> users = usersById(page.getContent());
         List<StudentDtos.ListRow> content = page.getContent().stream()
                 .map(s -> StudentDtos.listRow(s, users.get(s.getUserId())))

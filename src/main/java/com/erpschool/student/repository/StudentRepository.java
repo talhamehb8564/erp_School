@@ -158,9 +158,27 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
               and (:sectionId is null or s.sectionId = :sectionId)
               and (:status is null or s.status = :status)
               and (:filterClasses = false or s.classId in :classIds)
+            """)
+    Page<Student> searchFiltered(
+            @Param("tenantId") UUID tenantId,
+            @Param("campusId") UUID campusId,
+            @Param("classId") UUID classId,
+            @Param("sectionId") UUID sectionId,
+            @Param("status") StudentStatus status,
+            @Param("filterClasses") boolean filterClasses,
+            @Param("classIds") Collection<UUID> classIds,
+            Pageable pageable);
+
+    @Query("""
+            select s from Student s
+            where s.tenantId = :tenantId
+              and (:campusId is null or s.campusId = :campusId)
+              and (:classId is null or s.classId = :classId)
+              and (:sectionId is null or s.sectionId = :sectionId)
+              and (:status is null or s.status = :status)
+              and (:filterClasses = false or s.classId in :classIds)
               and (
-                    :like is null
-                 or lower(coalesce(s.admissionNumber, '')) like :like
+                    lower(coalesce(s.admissionNumber, '')) like :like
                  or lower(coalesce(s.rollNumber, '')) like :like
                  or lower(coalesce(s.cnic, '')) like :like
                  or exists (

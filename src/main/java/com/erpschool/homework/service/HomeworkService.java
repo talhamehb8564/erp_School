@@ -138,7 +138,8 @@ public class HomeworkService {
                 throw new com.erpschool.common.exception.ForbiddenException("Cannot view homework for unrelated classes");
             }
         }
-        return toMaps(homeworkRepository.findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(tenantId, classId, sectionId));
+        return toMaps(homeworkRepository.findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(
+                tenantId, classId, sectionId, PageRequest.of(0, 100)));
     }
 
     @Transactional(readOnly = true)
@@ -150,11 +151,11 @@ public class HomeworkService {
     public List<Map<String, Object>> mine(Integer limit) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         UserRole role = TenantContext.getRole();
-        PageRequest page = limit != null && limit > 0 ? PageRequest.of(0, limit) : null;
+        int cap = limit != null && limit > 0 ? Math.min(limit, 200) : 80;
+        PageRequest page = PageRequest.of(0, cap);
         if (role == UserRole.TEACHER) {
-            return toMaps(page == null
-                    ? homeworkRepository.findByTenantIdAndTeacherUserIdOrderByDueDateDesc(tenantId, TenantContext.getUserId())
-                    : homeworkRepository.findByTenantIdAndTeacherUserIdOrderByDueDateDesc(tenantId, TenantContext.getUserId(), page));
+            return toMaps(homeworkRepository.findByTenantIdAndTeacherUserIdOrderByDueDateDesc(
+                    tenantId, TenantContext.getUserId(), page));
         }
         if (role == UserRole.STUDENT) {
             Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
@@ -167,9 +168,7 @@ public class HomeworkService {
                     tenantId, me.getClassId(), me.getSectionId(), studentPage));
         }
         if (role == UserRole.SCHOOL_ADMIN || role == UserRole.PRINCIPAL || role == UserRole.ERP_OWNER) {
-            return toMaps(page == null
-                    ? homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId)
-                    : homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId, page));
+            return toMaps(homeworkRepository.findByTenantIdOrderByDueDateDesc(tenantId, page));
         }
         if (role == UserRole.PARENT) {
             List<UUID> linkedIds = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())

@@ -52,6 +52,18 @@ public class AuditService {
                        String entityType,
                        String entityId,
                        Map<String, Object> details) {
+        recordSameTransaction(tenantId, userId, username, role, action, entityType, entityId, details);
+    }
+
+    /** Persist on the caller's connection — login must not open a second Hikari checkout. */
+    public void recordSameTransaction(UUID tenantId,
+                                      UUID userId,
+                                      String username,
+                                      String role,
+                                      String action,
+                                      String entityType,
+                                      String entityId,
+                                      Map<String, Object> details) {
         AuditLog log = new AuditLog();
         log.setTenantId(tenantId);
         log.setUserId(userId);

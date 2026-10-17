@@ -67,22 +67,31 @@ public class AuthService {
     }
 
     /**
-     * BCrypt and audit run outside the write transaction so Neon/PgBouncer is not
-     * left idle-in-transaction, and REQUIRES_NEW audit does not need a second
-     * pooled connection while {@code users} is still locked.
+     * BCrypt runs outside the write transaction so Neon/PgBouncer is not left
+     * idle-in-transaction. User+tenant load share one read connection; last login,
+     * refresh token, and audit share one write connection (no extra Hikari checkout).
      */
     public AuthResponse login(String username, String password, HttpServletRequest request) {
         String identifier = username == null ? "" : username.trim();
-        User user = readTx.execute(status -> {
+        LoginRow loaded = readTx.execute(status -> {
             User found = userRepository.findByUsernameIgnoreCase(identifier).orElse(null);
             if (found == null && !identifier.isEmpty()) {
                 found = userRepository.findByEmailIgnoreCase(identifier).orElse(null);
             }
-            return found;
+            if (found == null) {
+                return new LoginRow(null, null);
+            }
+            Tenant school = null;
+            if (found.getRole() != UserRole.ERP_OWNER && found.getTenantId() != null) {
+                school = tenantRepository.findById(found.getTenantId()).orElse(null);
+            }
+            return new LoginRow(found, school);
         });
+        User user = loaded == null ? null : loaded.user();
         if (user == null) {
-            auditService.record(null, null, identifier, null, AuditService.LOGIN_FAILED,
-                    "User", null, Map.of("reason", "unknown_user"));
+            writeTx.executeWithoutResult(status -> auditService.recordSameTransaction(
+                    null, null, identifier, null, AuditService.LOGIN_FAILED,
+                    "User", null, Map.of("reason", "unknown_user")));
             throw new UnauthorizedException("Invalid username or password");
         }
         if (user.getStatus() == UserStatus.LOCKED) {
@@ -98,26 +107,32 @@ public class AuthService {
             throw new UnauthorizedException("Account is inactive");
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            writeTx.executeWithoutResult(status -> registerFailure(user));
-            auditService.record(user.getTenantId(), user.getId(), user.getUsername(), user.getRole().name(),
-                    AuditService.LOGIN_FAILED, "User", user.getId().toString(), Map.of("reason", "bad_password"));
+            writeTx.executeWithoutResult(status -> {
+                registerFailure(user);
+                auditService.recordSameTransaction(user.getTenantId(), user.getId(), user.getUsername(),
+                        user.getRole().name(), AuditService.LOGIN_FAILED, "User", user.getId().toString(),
+                        Map.of("reason", "bad_password"));
+            });
             throw new UnauthorizedException("Invalid username or password");
         }
-        Tenant tenant = loadTenantForLogin(user);
+        Tenant tenant = loaded != null ? loaded.tenant() : null;
+        if (user.getRole() != UserRole.ERP_OWNER && tenant == null) {
+            throw new UnauthorizedException("School account is not available");
+        }
         assertTenantAllowsLogin(user, tenant);
 
+        Instant now = Instant.now();
         AuthResponse response = writeTx.execute(status -> {
-            User persistent = userRepository.findById(user.getId())
-                    .orElseThrow(() -> new UnauthorizedException("Invalid username or password"));
-            persistent.setFailedLoginAttempts(0);
-            persistent.setLockedUntil(null);
-            persistent.setLastLoginAt(Instant.now());
-            userRepository.saveAndFlush(persistent);
-            return issueTokens(persistent, request, tenant);
+            userRepository.markSuccessfulLogin(user.getId(), now, UserStatus.ACTIVE);
+            user.setFailedLoginAttempts(0);
+            user.setLockedUntil(null);
+            user.setLastLoginAt(now);
+            user.setStatus(UserStatus.ACTIVE);
+            AuthResponse issued = issueTokens(user, request, tenant);
+            auditService.recordSameTransaction(user.getTenantId(), user.getId(), user.getUsername(),
+                    user.getRole().name(), AuditService.LOGIN_SUCCESS, "User", user.getId().toString(), null);
+            return issued;
         });
-
-        auditService.record(user.getTenantId(), user.getId(), user.getUsername(), user.getRole().name(),
-                AuditService.LOGIN_SUCCESS, "User", user.getId().toString(), null);
 
         if (response == null) {
             throw new UnauthorizedException("Unable to complete login");
@@ -296,5 +311,8 @@ public class AuthService {
         }
         throw new UnauthorizedException(
                 "Your school's ERP subscription is currently inactive. Please complete the payment and submit the payment proof to reactivate your account.");
+    }
+
+    private record LoginRow(User user, Tenant tenant) {
     }
 }
