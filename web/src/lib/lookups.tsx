@@ -17,7 +17,6 @@ const Ctx = createContext<Lookups | null>(null);
 
 const LOOKUP_PREFIXES = [
   "/app/students",
-  "/app/users",
   "/app/academics",
   "/app/timetable",
   "/app/attendance",

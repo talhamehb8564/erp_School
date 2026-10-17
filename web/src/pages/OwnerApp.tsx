@@ -98,7 +98,6 @@ export function OwnerHome() {
           Expire overdue
         </Button>
       </div>
-      <QueryState status={dash} label="platform dashboard">
       <div className="hero-strip card">
         <div>
           <p className="kicker">Network health</p>
@@ -107,6 +106,7 @@ export function OwnerHome() {
         </div>
         <Donut value={Number(dash.data?.schools || 0)} max={Math.max(Number(dash.data?.schools || 1), 1)} label="Schools" />
       </div>
+      <QueryState status={dash} label="platform dashboard">
       <div className="grid stats">
         <Stat label="Schools" value={dash.data?.schools} loading={dash.loading} />
         <Stat label="Users" value={dash.data?.users} loading={dash.loading} />

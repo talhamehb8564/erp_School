@@ -305,14 +305,41 @@ public class StudentService {
 
     @Transactional(readOnly = true)
     public StudentDtos.Response meAsStudent() {
-        UUID tenantId = TenantGuard.requireTenantId(null);
-        Student s = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
-                .orElseThrow(() -> new BusinessException("No student profile is linked to this account"));
+        Student s = requireLinkedStudent();
         return StudentDtos.from(s, loadUser(s.getUserId()));
     }
 
     @Transactional(readOnly = true)
+    public StudentDtos.ListRow meAsStudentRow() {
+        Student s = requireLinkedStudent();
+        return StudentDtos.listRow(s, loadUser(s.getUserId()));
+    }
+
+    private Student requireLinkedStudent() {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        return studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
+                .orElseThrow(() -> new BusinessException("No student profile is linked to this account"));
+    }
+
+    @Transactional(readOnly = true)
     public List<StudentDtos.Response> myChildren() {
+        List<Student> students = myChildrenStudents();
+        Map<UUID, UserResponse> users = usersById(students);
+        return students.stream()
+                .map(s -> StudentDtos.from(s, users.get(s.getUserId())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentDtos.ListRow> myChildrenRows() {
+        List<Student> students = myChildrenStudents();
+        Map<UUID, UserResponse> users = usersById(students);
+        return students.stream()
+                .map(s -> StudentDtos.listRow(s, users.get(s.getUserId())))
+                .toList();
+    }
+
+    private List<Student> myChildrenStudents() {
         UUID tenantId = TenantGuard.requireTenantId(null);
         List<UUID> studentIds = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
                 .stream()
@@ -323,11 +350,9 @@ public class StudentService {
         }
         Map<UUID, Student> students = studentRepository.findAllById(studentIds).stream()
                 .collect(Collectors.toMap(Student::getId, Function.identity()));
-        Map<UUID, UserResponse> users = usersById(students.values().stream().toList());
         return studentIds.stream()
                 .map(students::get)
                 .filter(Objects::nonNull)
-                .map(s -> StudentDtos.from(s, users.get(s.getUserId())))
                 .toList();
     }
 

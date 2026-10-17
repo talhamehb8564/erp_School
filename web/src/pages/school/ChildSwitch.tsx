@@ -16,7 +16,7 @@ export default function ChildSwitch({ childrenList }: { childrenList: StudentUse
     <div className="children">
       {childrenList.map((c) => (
         <button type="button" key={c.id} className={`chip ${childId === c.id ? "on" : ""}`} onClick={() => setChildId(c.id)}>
-          {c.user?.fullName || c.admissionNumber || c.id.slice(0, 8)}
+          {c.user?.fullName || c.fullName || c.admissionNumber || c.id.slice(0, 8)}
         </button>
       ))}
     </div>

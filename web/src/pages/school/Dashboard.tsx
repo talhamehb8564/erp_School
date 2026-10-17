@@ -15,6 +15,18 @@ export default function Dashboard() {
   return <StaffDash />;
 }
 
+function asTime(value: unknown) {
+  if (value == null) return "—";
+  if (typeof value === "string") return value.length >= 5 ? value.slice(0, 5) : value;
+  if (typeof value === "object") {
+    const t = value as { hour?: number; minute?: number };
+    if (typeof t.hour === "number") {
+      return `${String(t.hour).padStart(2, "0")}:${String(t.minute ?? 0).padStart(2, "0")}`;
+    }
+  }
+  return String(value);
+}
+
 function StaffDash() {
   const d = useAsync(() => reportApi.schoolDashboard());
   const m = d.data || {};
@@ -52,7 +64,7 @@ function StaffDash() {
           </div>
           <div className="card">
             <h3>Operations</h3>
-            <p>Pending fee proofs {m.pendingFeeProofs ?? 0} · Active users {m.activeUsers ?? 0}</p>
+            <p>Classes {m.classes ?? 0} · Pending fee proofs {m.pendingFeeProofs ?? 0} · Active users {m.activeUsers ?? 0}</p>
             <p className="hint">Mark attendance, search results by roll number, or generate monthly challans.</p>
           </div>
         </div>
@@ -75,7 +87,7 @@ function TeacherDash() {
   const progress = (d.data?.progress as { attendancePercent?: number; present?: number; absent?: number; late?: number; totalDays?: number }) || {};
   const att = Number(progress.attendancePercent || 0);
   return (
-    <QueryState status={d} label="teacher desk">
+    <>
       <div className="hero-strip card">
         <div>
           <p className="kicker">Your month</p>
@@ -84,6 +96,7 @@ function TeacherDash() {
         </div>
         <Donut value={att} max={100} label="Attendance %" />
       </div>
+      <QueryState status={d} label="teacher desk">
         <div className="grid two">
           <div className="card">
             <h3>Today’s lectures</h3>
@@ -93,8 +106,8 @@ function TeacherDash() {
                 rows={lectures.map((l) => [
                   [l.className, l.sectionName].filter(Boolean).join(" · ") || "—",
                   l.subjectName || "—",
-                  l.startTime,
-                  l.endTime,
+                  asTime(l.startTime),
+                  asTime(l.endTime),
                 ])}
               />
             )}
@@ -106,7 +119,8 @@ function TeacherDash() {
             )}
           </div>
         </div>
-    </QueryState>
+      </QueryState>
+    </>
   );
 }
 
@@ -153,7 +167,7 @@ function ParentDash() {
   const att = Number(progress.attendancePercent || 0);
   const aca = Number(progress.academicPercent || 0);
   return (
-    <QueryState status={d} label="family dashboard">
+    <>
       <div className="hero-strip card">
         <div>
           <p className="kicker">Selected child</p>
@@ -165,6 +179,7 @@ function ParentDash() {
           <Donut value={aca} max={100} label="Academics %" />
         </div>
       </div>
+      <QueryState status={d} label="family dashboard">
         <ChildSwitch childrenList={kids} />
         <div className="card">
           <h3>Fee challans</h3>
@@ -172,7 +187,8 @@ function ParentDash() {
             <Table headers={["Challan", "Amount", "Status"]} rows={fees.map((f) => [f.challanNumber, money(f.totalPayable), pretty(f.status)])} />
           )}
         </div>
-    </QueryState>
+      </QueryState>
+    </>
   );
 }
 
@@ -187,7 +203,7 @@ function StudentDash() {
   const att = Number(progress.attendancePercent || 0);
   const aca = Number(progress.academicPercent || 0);
   return (
-    <QueryState status={d} label="student dashboard">
+    <>
       <div className="hero-strip card">
         <div>
           <p className="kicker">This month</p>
@@ -199,6 +215,7 @@ function StudentDash() {
           <Donut value={aca} max={100} label="Academics %" />
         </div>
       </div>
+      <QueryState status={d} label="student dashboard">
         <div className="grid two">
           <div className="card">
             <h3>Homework</h3>
@@ -209,6 +226,7 @@ function StudentDash() {
             {!fees.length ? <Empty title="No challans" /> : <Table headers={["Challan", "Amount", "Status"]} rows={fees.map((f) => [f.challanNumber, money(f.totalPayable), pretty(f.status)])} />}
           </div>
         </div>
-    </QueryState>
+      </QueryState>
+    </>
   );
 }

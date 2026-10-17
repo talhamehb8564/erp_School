@@ -115,12 +115,16 @@ public class HomeworkService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> forClass(UUID classId, UUID sectionId) {
         UUID tenantId = TenantGuard.requireTenantId(null);
+        if (classId == null || sectionId == null) {
+            throw new BusinessException("CLASS_REQUIRED", "Class and section are required");
+        }
         UserRole role = TenantContext.getRole();
         if (role == UserRole.STUDENT) {
             Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
-            if (!classId.equals(me.getClassId()) || !sectionId.equals(me.getSectionId())) {
-                throw new com.erpschool.common.exception.ForbiddenException("Cannot view another class homework");
+            if (me.getClassId() == null || me.getSectionId() == null
+                    || !classId.equals(me.getClassId()) || !sectionId.equals(me.getSectionId())) {
+                throw new ForbiddenException("Cannot view another class homework");
             }
         }
         if (role == UserRole.PARENT) {
@@ -155,7 +159,12 @@ public class HomeworkService {
         if (role == UserRole.STUDENT) {
             Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
-            return cap(forClass(me.getClassId(), me.getSectionId()), limit);
+            if (me.getClassId() == null || me.getSectionId() == null) {
+                return List.of();
+            }
+            PageRequest studentPage = page == null ? PageRequest.of(0, 80) : page;
+            return toMaps(homeworkRepository.findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(
+                    tenantId, me.getClassId(), me.getSectionId(), studentPage));
         }
         if (role == UserRole.SCHOOL_ADMIN || role == UserRole.PRINCIPAL || role == UserRole.ERP_OWNER) {
             return toMaps(page == null
@@ -170,28 +179,23 @@ public class HomeworkService {
             if (linkedIds.isEmpty()) {
                 return List.of();
             }
-            java.util.Set<String> classSections = new java.util.HashSet<>();
-            java.util.Set<UUID> classIds = new java.util.HashSet<>();
+            java.util.Set<String> seenSections = new java.util.HashSet<>();
+            java.util.LinkedHashMap<UUID, Homework> unique = new java.util.LinkedHashMap<>();
+            PageRequest parentPage = page == null ? PageRequest.of(0, 80) : page;
             for (Student st : studentRepository.findAllById(linkedIds)) {
                 if (st.getClassId() == null || st.getSectionId() == null) {
                     continue;
                 }
-                classIds.add(st.getClassId());
-                classSections.add(st.getClassId() + ":" + st.getSectionId());
+                String key = st.getClassId() + ":" + st.getSectionId();
+                if (!seenSections.add(key)) {
+                    continue;
+                }
+                for (Homework h : homeworkRepository.findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(
+                        tenantId, st.getClassId(), st.getSectionId(), parentPage)) {
+                    unique.putIfAbsent(h.getId(), h);
+                }
             }
-            if (classIds.isEmpty()) {
-                return List.of();
-            }
-            List<Homework> parentRows = homeworkRepository
-                    .findByTenantIdAndClassIdInOrderByDueDateDesc(tenantId, classIds)
-                    .stream()
-                    .filter(h -> classSections.contains(h.getClassId() + ":" + h.getSectionId()))
-                    .collect(java.util.stream.Collectors.toMap(
-                            Homework::getId, h -> h, (a, b) -> a, java.util.LinkedHashMap::new))
-                    .values()
-                    .stream()
-                    .toList();
-            return cap(toMaps(parentRows), limit);
+            return cap(toMaps(List.copyOf(unique.values())), limit);
         }
         throw new ResourceNotFoundException("Use classId and sectionId filters");
     }

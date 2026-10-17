@@ -78,22 +78,35 @@ public class ReportService {
     @Transactional(readOnly = true)
     public Map<String, Object> schoolDashboard() {
         UUID tenantId = TenantGuard.requireTenantId(null);
-        boolean scoped = CampusScope.restricts() && CampusScope.current() != null;
-        String campus = scoped ? " and campus_id = :campus" : "";
+        UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
+        boolean scoped = campusId != null;
+        String campusPred = scoped ? " and campus_id = CAST(:campus AS uuid)" : "";
+        String feeCampusJoin = scoped
+                ? " inner join students st on st.id = f.student_id and st.campus_id = CAST(:campus AS uuid)"
+                : "";
+        String proofCampusJoin = scoped
+                ? """
+                   inner join fee_challans f on f.id = p.challan_id
+                   inner join students st on st.id = f.student_id and st.campus_id = CAST(:campus AS uuid)
+                  """
+                : "";
         String sql = """
                 select
-                  (select count(*) from students where tenant_id = :tid%s),
-                  (select count(*) from students where tenant_id = :tid and status = 'ACTIVE'%s),
-                  (select count(*) from users where tenant_id = :tid and role = 'TEACHER'%s),
-                  (select count(*) from users where tenant_id = :tid and role = 'PARENT'%s),
-                  (select count(*) from users where tenant_id = :tid and status = 'ACTIVE'%s),
-                  (select count(*) from fee_challans where tenant_id = :tid and status = 'UNPAID'),
-                  (select count(*) from fee_challans where tenant_id = :tid and status = 'PAYMENT_UNDER_VERIFICATION')
-                """.formatted(campus, campus, campus, campus, campus);
+                  (select count(*) from students where tenant_id = CAST(:tid AS uuid)%s),
+                  (select count(*) from students where tenant_id = CAST(:tid AS uuid) and status = 'ACTIVE'%s),
+                  (select count(*) from users where tenant_id = CAST(:tid AS uuid) and role = 'TEACHER'%s),
+                  (select count(*) from users where tenant_id = CAST(:tid AS uuid) and role = 'PARENT'%s),
+                  (select count(*) from users where tenant_id = CAST(:tid AS uuid) and status = 'ACTIVE'%s),
+                  (select count(*) from fee_challans f %s where f.tenant_id = CAST(:tid AS uuid) and f.status = 'UNPAID'),
+                  (select count(*) from fee_payment_proofs p %s where p.tenant_id = CAST(:tid AS uuid) and p.status = 'PAYMENT_UNDER_VERIFICATION'),
+                  (select count(*) from school_classes where tenant_id = CAST(:tid AS uuid)%s)
+                """.formatted(
+                campusPred, campusPred, campusPred, campusPred, campusPred,
+                feeCampusJoin, proofCampusJoin, campusPred);
         Query q = entityManager.createNativeQuery(sql);
-        q.setParameter("tid", tenantId);
+        q.setParameter("tid", tenantId.toString());
         if (scoped) {
-            q.setParameter("campus", CampusScope.current());
+            q.setParameter("campus", campusId.toString());
         }
         Object[] cols = (Object[]) q.getSingleResult();
         Map<String, Object> m = new HashMap<>();
@@ -104,6 +117,7 @@ public class ReportService {
         m.put("activeUsers", num(cols[4]));
         m.put("unpaidChallans", num(cols[5]));
         m.put("pendingFeeProofs", num(cols[6]));
+        m.put("classes", num(cols[7]));
         return m;
     }
 

@@ -30,6 +30,7 @@ import com.erpschool.student.entity.StudentStatus;
 import com.erpschool.student.repository.ParentStudentRepository;
 import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.student.service.StudentAccessService;
+import com.erpschool.tenant.context.CampusScope;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.repository.TenantRepository;
@@ -261,6 +262,25 @@ public class FeeService {
         return overlayOverdue(rows, toMaps(rows));
     }
 
+    /** Dashboard-sized challan rows: number, amount, status. No charges/proofs. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> challanSummariesForStudents(List<UUID> studentIds, int limit) {
+        if (studentIds == null || studentIds.isEmpty()) {
+            return List.of();
+        }
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        List<FeeChallan> rows = new ArrayList<>(
+                challanRepository.findByTenantIdAndStudentIdInOrderByMonthDesc(tenantId, studentIds));
+        if (limit > 0 && rows.size() > limit) {
+            rows = new ArrayList<>(rows.subList(0, limit));
+        }
+        List<Map<String, Object>> maps = new ArrayList<>(rows.size());
+        for (FeeChallan row : rows) {
+            maps.add(toSummary(row));
+        }
+        return overlayOverdue(rows, maps);
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Object> getChallan(UUID id) {
         FeeChallan challan = requireChallan(id);
@@ -356,6 +376,19 @@ public class FeeService {
                 attachStudent(m, students.get(challan.getStudentId()));
             }
             rows.add(m);
+        }
+        return rows;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> pendingProofs(int limit) {
+        List<Map<String, Object>> rows = pendingProofs();
+        UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
+        if (campusId != null) {
+            rows = rows.stream().filter(m -> campusId.equals(m.get("campusId"))).toList();
+        }
+        if (limit > 0 && rows.size() > limit) {
+            return List.copyOf(rows.subList(0, limit));
         }
         return rows;
     }

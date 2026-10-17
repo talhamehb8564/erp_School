@@ -18,6 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * When a school's tenant is suspended, expired or disabled, only billing /
@@ -31,12 +32,18 @@ public class SubscriptionGuardFilter extends OncePerRequestFilter {
     public static final String MESSAGE =
             "Your school's ERP subscription is currently inactive. Please complete the payment and submit the payment proof to reactivate your account.";
 
+    private static final long STATUS_TTL_MS = 10_000;
+
     private final TenantRepository tenantRepository;
     private final ObjectMapper objectMapper;
+    private final ConcurrentHashMap<UUID, CachedTenant> tenantCache = new ConcurrentHashMap<>();
 
     public SubscriptionGuardFilter(TenantRepository tenantRepository, ObjectMapper objectMapper) {
         this.tenantRepository = tenantRepository;
         this.objectMapper = objectMapper;
+    }
+
+    private record CachedTenant(Tenant tenant, long expiresAt) {
     }
 
     @Override
@@ -53,7 +60,7 @@ public class SubscriptionGuardFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        Tenant tenant = cachedTenant(tenantId);
         if (tenant == null || tenant.allowsSchoolLogin()) {
             filterChain.doFilter(request, response);
             return;
@@ -65,6 +72,17 @@ public class SubscriptionGuardFilter extends OncePerRequestFilter {
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(), ApiResponse.fail(ERROR_CODE, MESSAGE));
+    }
+
+    private Tenant cachedTenant(UUID tenantId) {
+        long now = System.currentTimeMillis();
+        CachedTenant hit = tenantCache.get(tenantId);
+        if (hit != null && hit.expiresAt() > now) {
+            return hit.tenant();
+        }
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        tenantCache.put(tenantId, new CachedTenant(tenant, now + STATUS_TTL_MS));
+        return tenant;
     }
 
     private boolean isBillingPath(HttpServletRequest request) {
