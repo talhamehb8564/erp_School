@@ -654,7 +654,7 @@ th { color: var(--muted); font-weight: 560; background: color-mix(in srgb, var(-
 }
 @keyframes skel { 50% { background-position: 100% 0; } }
 .query-skel .grid.stats { grid-template-columns: repeat(3, 1fr); }
-.site-boot-card { width: min(420px, 100%); }
+.site-boot-card { width: min(420px, 100%); animation: rise .42s ease both; }
 .site-form h3 { margin-top: 0; }
 
 @media (max-width: 1100px) {

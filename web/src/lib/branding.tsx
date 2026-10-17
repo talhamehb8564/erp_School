@@ -4,19 +4,6 @@ import { publicApi } from "../api/services";
 import { applyBrand } from "./theme";
 
 const CAMPUS_KEY = "atrium.publicCampus";
-const BRAND_KEY = "atrium.publicBrand";
-
-function readBrandCache(): { school: PublicSchool; campuses: PublicCampus[] } | null {
-  try {
-    const raw = sessionStorage.getItem(BRAND_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { school?: PublicSchool; campuses?: PublicCampus[] };
-    if (parsed?.school?.id) return { school: parsed.school, campuses: parsed.campuses || [] };
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
 
 export interface PublicMedia {
   imageUrl: string;
@@ -117,20 +104,13 @@ function isPublicPath(pathname: string) {
 export function BrandingProvider({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const publicSite = isPublicPath(loc.pathname);
-  const cached = useMemo(() => readBrandCache(), []);
-  const [school, setSchool] = useState<PublicSchool | null>(cached?.school || null);
-  const [campuses, setCampuses] = useState<PublicCampus[]>(cached?.campuses || []);
+  const [school, setSchool] = useState<PublicSchool | null>(null);
+  const [campuses, setCampuses] = useState<PublicCampus[]>([]);
   const [campusId, setCampusIdState] = useState<string | null>(() => sessionStorage.getItem(CAMPUS_KEY));
-  const [loading, setLoading] = useState(publicSite && !cached?.school);
+  const [loading, setLoading] = useState(publicSite);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState("");
-  const hasSchool = useRef(Boolean(cached?.school));
-
-  useEffect(() => {
-    if (!cached?.school) return;
-    applyBrand(cached.school.primaryColor, cached.school.accentColor, cached.school.secondaryColor);
-    if (cached.school.name) document.title = cached.school.name;
-  }, [cached]);
+  const hasSchool = useRef(false);
 
   const reload = useCallback(async () => {
     setLoading(!hasSchool.current);
@@ -143,12 +123,6 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       hasSchool.current = Boolean(next);
       setCampuses(list);
       setMissing(!next);
-      try {
-        if (next) sessionStorage.setItem(BRAND_KEY, JSON.stringify({ school: next, campuses: list }));
-        else sessionStorage.removeItem(BRAND_KEY);
-      } catch {
-        /* quota */
-      }
       applyBrand(next?.primaryColor, next?.accentColor, next?.secondaryColor);
       if (next?.name) document.title = next.name;
       setCampusIdState((cur) => {
@@ -158,7 +132,6 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
         return valid;
       });
     } catch (e) {
-      if (hasSchool.current) return;
       const msg = e instanceof Error ? e.message : "Unable to load school";
       setError(msg);
       setMissing(/not found|no school/i.test(msg));

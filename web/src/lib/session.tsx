@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { authApi, tenantApi } from "../api/services";
 import { ApiError, LOCKED_EVENT, clearTokens, getAccessToken, getAuthEpoch, getRefreshToken, setTokens } from "../api/client";
 import type { Role, Tenant, User } from "./types";
@@ -34,6 +34,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(() => Boolean(getAccessToken()) && !user);
   const [forcedLocked, setForcedLocked] = useState(false);
   const [childId, setChildIdState] = useState<string | null>(() => localStorage.getItem(CHILD_KEY));
+  const leaving = useRef(false);
 
   const persist = (next: User | null) => {
     setUser(next);
@@ -172,14 +173,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async (opts?: { remote?: boolean }) => {
+    if (leaving.current) return;
+    leaving.current = true;
     const rt = opts?.remote !== false ? getRefreshToken() : null;
-    clearTokens();
-    persist(null);
-    setTenant(null);
-    setForcedLocked(false);
-    localStorage.removeItem(CHILD_KEY);
-    setChildIdState(null);
-    if (rt) void authApi.logout(rt).catch(() => undefined);
+    try {
+      if (rt) {
+        await Promise.race([
+          authApi.logout(rt).then(() => undefined, () => undefined),
+          new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 2500);
+          }),
+        ]);
+      }
+    } finally {
+      clearTokens();
+      persist(null);
+      setTenant(null);
+      setForcedLocked(false);
+      localStorage.removeItem(CHILD_KEY);
+      setChildIdState(null);
+      leaving.current = false;
+    }
   }, []);
 
   const setChildId = useCallback((id: string | null) => {
