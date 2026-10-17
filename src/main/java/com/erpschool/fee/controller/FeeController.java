@@ -106,9 +106,24 @@ public class FeeController {
         return ResponseEntity.ok(ApiResponse.ok(feeService.getChallan(id)));
     }
 
+    @GetMapping("/me/challans")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> myChallans(
+            @RequestParam(required = false) Integer limit) {
+        int cap = limit != null && limit > 0 ? limit : 20;
+        return ResponseEntity.ok(ApiResponse.ok(feeService.myChallanSummaries(cap)));
+    }
+
     @GetMapping("/students/{studentId}/challans")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> student(@PathVariable UUID studentId) {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> student(
+            @PathVariable UUID studentId,
+            @RequestParam(required = false) Boolean summary,
+            @RequestParam(required = false) Integer limit) {
+        if (Boolean.TRUE.equals(summary)) {
+            int cap = limit != null && limit > 0 ? limit : 20;
+            return ResponseEntity.ok(ApiResponse.ok(feeService.challanSummariesForStudents(List.of(studentId), cap)));
+        }
         return ResponseEntity.ok(ApiResponse.ok(feeService.studentChallans(studentId)));
     }
 

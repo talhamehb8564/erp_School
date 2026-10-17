@@ -7,7 +7,6 @@ import com.erpschool.report.service.ReportService;
 import com.erpschool.student.dto.StudentDtos;
 import com.erpschool.student.service.StudentService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -41,7 +40,6 @@ public class PortalService {
         this.reportService = reportService;
     }
 
-    @Transactional(readOnly = true)
     public Map<String, Object> teacher() {
         int day = LocalDate.now().getDayOfWeek() == DayOfWeek.SUNDAY ? 7 : LocalDate.now().getDayOfWeek().getValue();
         Map<String, Object> m = new HashMap<>();
@@ -51,19 +49,16 @@ public class PortalService {
         return m;
     }
 
-    @Transactional(readOnly = true)
     public Map<String, Object> principal() {
         return new HashMap<>(reportService.schoolDashboard());
     }
 
-    @Transactional(readOnly = true)
     public Map<String, Object> account() {
         Map<String, Object> m = new HashMap<>(reportService.schoolDashboard());
         m.put("pendingProofs", feeService.pendingProofs(DASH_PROOFS));
         return m;
     }
 
-    @Transactional(readOnly = true)
     public Map<String, Object> parent() {
         List<StudentDtos.ListRow> children = studentService.myChildrenRows();
         List<UUID> childIds = children.stream().map(StudentDtos.ListRow::getId).toList();
@@ -74,7 +69,6 @@ public class PortalService {
         return m;
     }
 
-    @Transactional(readOnly = true)
     public Map<String, Object> student() {
         StudentDtos.ListRow profile = studentService.meAsStudentRow();
         Map<String, Object> m = new HashMap<>();

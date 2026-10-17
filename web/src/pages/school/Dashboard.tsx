@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useSession } from "../../lib/session";
-import { portalApi, reportApi } from "../../api/services";
-import { Badge, Bars, Donut, Empty, QueryState, Stat, Table, useAsync } from "../../ui/kit";
+import { academicApi, feeApi, homeworkApi, portalApi, reportApi, studentApi } from "../../api/services";
+import { Badge, Bars, Donut, Empty, ErrorBox, QueryState, Stat, Table, useAsync } from "../../ui/kit";
 import { money, pretty } from "../../lib/format";
 import type { StudentUser } from "../../lib/types";
 import ChildSwitch from "./ChildSwitch";
@@ -74,17 +74,19 @@ function StaffDash() {
 }
 
 function TeacherDash() {
-  const d = useAsync(() => portalApi.teacher());
-  const lectures = (d.data?.todayLectures as {
+  const lecturesQ = useAsync(() => academicApi.teacherToday());
+  const homeworkQ = useAsync(() => homeworkApi.list(undefined, undefined, 8));
+  const progressQ = useAsync(() => reportApi.teacherProgress());
+  const lectures = (lecturesQ.data || []) as {
     id: string;
     startTime: string;
     endTime: string;
     className?: string;
     sectionName?: string;
     subjectName?: string;
-  }[]) || [];
-  const homework = (d.data?.homework as { id: string; title: string; dueDate: string }[]) || [];
-  const progress = (d.data?.progress as { attendancePercent?: number; present?: number; absent?: number; late?: number; totalDays?: number }) || {};
+  }[];
+  const homework = homeworkQ.data || [];
+  const progress = (progressQ.data || {}) as { attendancePercent?: number; present?: number; absent?: number; late?: number; totalDays?: number };
   const att = Number(progress.attendancePercent || 0);
   return (
     <>
@@ -96,10 +98,11 @@ function TeacherDash() {
         </div>
         <Donut value={att} max={100} label="Attendance %" />
       </div>
-      <QueryState status={d} label="teacher desk">
-        <div className="grid two">
-          <div className="card">
-            <h3>Today’s lectures</h3>
+      {progressQ.error && !progressQ.data ? <ErrorBox error={progressQ.error} onRetry={() => void progressQ.reload()} title="Unable to load teacher attendance" /> : null}
+      <div className="grid two">
+        <div className="card">
+          <h3>Today’s lectures</h3>
+          <QueryState status={lecturesQ} label="today’s lectures">
             {!lectures.length ? <Empty title="No lectures today" /> : (
               <Table
                 headers={["Class", "Subject", "Start", "End"]}
@@ -111,15 +114,17 @@ function TeacherDash() {
                 ])}
               />
             )}
-          </div>
-          <div className="card">
-            <h3>Homework</h3>
+          </QueryState>
+        </div>
+        <div className="card">
+          <h3>Homework</h3>
+          <QueryState status={homeworkQ} label="homework">
             {!homework.length ? <Empty title="No homework assigned" /> : (
               <Table headers={["Title", "Due"]} rows={homework.map((h) => [h.title, h.dueDate])} />
             )}
-          </div>
+          </QueryState>
         </div>
-      </QueryState>
+      </div>
     </>
   );
 }
@@ -193,13 +198,16 @@ function ParentDash() {
 }
 
 function StudentDash() {
-  const d = useAsync(() => portalApi.student());
-  const hw = (d.data?.homework as { title: string; dueDate: string }[]) || [];
-  const fees = (d.data?.fees as { challanNumber: string; totalPayable: number; status: string }[]) || [];
-  const progress = (d.data?.progress as {
+  const me = useAsync(() => studentApi.me());
+  const homeworkQ = useAsync(() => homeworkApi.list(undefined, undefined, 8));
+  const feesQ = useAsync(() => feeApi.myChallanSummaries(20));
+  const progressQ = useAsync(() => reportApi.myProgress());
+  const hw = homeworkQ.data || [];
+  const fees = feesQ.data || [];
+  const progress = (progressQ.data || {}) as {
     attendancePercent?: number; academicPercent?: number; present?: number; absent?: number; late?: number;
     totalLectures?: number; grade?: string; passStatus?: string; obtainedMarks?: number; totalMarks?: number;
-  }) || {};
+  };
   const att = Number(progress.attendancePercent || 0);
   const aca = Number(progress.academicPercent || 0);
   return (
@@ -207,7 +215,7 @@ function StudentDash() {
       <div className="hero-strip card">
         <div>
           <p className="kicker">This month</p>
-          <h1>My school</h1>
+          <h1>{me.data?.user?.fullName || me.data?.fullName || "My school"}</h1>
           <p>Attendance {att}% ({progress.present ?? 0} present, {progress.absent ?? 0} absent, {progress.late ?? 0} late of {progress.totalLectures ?? 0} lectures). Academic {aca}% · Grade {progress.grade || "—"} · {pretty(progress.passStatus)} · {progress.obtainedMarks ?? 0}/{progress.totalMarks ?? 0}.</p>
         </div>
         <div className="row">
@@ -215,18 +223,22 @@ function StudentDash() {
           <Donut value={aca} max={100} label="Academics %" />
         </div>
       </div>
-      <QueryState status={d} label="student dashboard">
-        <div className="grid two">
-          <div className="card">
-            <h3>Homework</h3>
+      {me.error && !me.data ? <ErrorBox error={me.error} onRetry={() => void me.reload()} title="Unable to load student profile" /> : null}
+      {progressQ.error && !progressQ.data ? <ErrorBox error={progressQ.error} onRetry={() => void progressQ.reload()} title="Unable to load attendance and results" /> : null}
+      <div className="grid two">
+        <div className="card">
+          <h3>Homework</h3>
+          <QueryState status={homeworkQ} label="homework">
             {!hw.length ? <Empty title="Nothing assigned" /> : <Table headers={["Title", "Due"]} rows={hw.map((h) => [h.title, h.dueDate])} />}
-          </div>
-          <div className="card">
-            <h3>Fees</h3>
-            {!fees.length ? <Empty title="No challans" /> : <Table headers={["Challan", "Amount", "Status"]} rows={fees.map((f) => [f.challanNumber, money(f.totalPayable), pretty(f.status)])} />}
-          </div>
+          </QueryState>
         </div>
-      </QueryState>
+        <div className="card">
+          <h3>Fees</h3>
+          <QueryState status={feesQ} label="fees">
+            {!fees.length ? <Empty title="No challans" /> : <Table headers={["Challan", "Amount", "Status"]} rows={fees.map((f) => [f.challanNumber, money(f.totalPayable), pretty(f.status)])} />}
+          </QueryState>
+        </div>
+      </div>
     </>
   );
 }

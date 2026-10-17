@@ -60,11 +60,13 @@ public class HomeworkController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> list(
             @RequestParam(required = false) UUID classId,
-            @RequestParam(required = false) UUID sectionId) {
+            @RequestParam(required = false) UUID sectionId,
+            @RequestParam(required = false) Integer limit) {
         if (classId != null && sectionId != null) {
             return ResponseEntity.ok(ApiResponse.ok(homeworkService.forClass(classId, sectionId)));
         }
-        return ResponseEntity.ok(ApiResponse.ok(homeworkService.mine(80)));
+        int cap = limit != null && limit > 0 ? Math.min(limit, 80) : 80;
+        return ResponseEntity.ok(ApiResponse.ok(homeworkService.mine(cap)));
     }
 
     @GetMapping("/{id}")

@@ -40,6 +40,24 @@ public class ReportController {
         return ResponseEntity.ok(ApiResponse.ok(reportService.platformDashboard()));
     }
 
+    @GetMapping("/reports/progress/me")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> myProgress() {
+        return ResponseEntity.ok(ApiResponse.ok(reportService.myStudentProgress()));
+    }
+
+    @GetMapping("/reports/progress/teacher")
+    @PreAuthorize("hasRole('TEACHER')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> teacherProgress() {
+        return ResponseEntity.ok(ApiResponse.ok(reportService.teacherProgress()));
+    }
+
+    @GetMapping("/reports/progress/students/{studentId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> studentProgress(@PathVariable UUID studentId) {
+        return ResponseEntity.ok(ApiResponse.ok(reportService.studentProgress(studentId)));
+    }
+
     @GetMapping("/reports/attendance/students/{studentId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Map<String, Object>>> attendance(

@@ -35,7 +35,7 @@ export default function SchoolApp() {
     if (!user || locked) return;
     const t = window.setTimeout(() => {
       void notificationApi.unread().then((r) => setUnread(r.unread)).catch(() => undefined);
-    }, 1200);
+    }, 2500);
     return () => window.clearTimeout(t);
   }, [user, locked]);
 
@@ -106,7 +106,7 @@ export default function SchoolApp() {
           </header>
           <div className="content">
             <LookupsAlert />
-            <ActivityBar enabled={loc.pathname === "/app"} />
+            <ActivityBar enabled={loc.pathname === "/app" && (role === "SCHOOL_ADMIN" || role === "PRINCIPAL")} />
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>

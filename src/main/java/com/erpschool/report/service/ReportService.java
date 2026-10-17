@@ -3,6 +3,7 @@ package com.erpschool.report.service;
 import com.erpschool.attendance.entity.AttendanceStatus;
 import com.erpschool.attendance.repository.StudentAttendanceRepository;
 import com.erpschool.attendance.repository.TeacherAttendanceRepository;
+import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.util.GradeCalculator;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.exam.entity.ExamResult;
@@ -129,6 +130,14 @@ public class ReportService {
         return one != null ? one : emptyProgress();
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> myStudentProgress() {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
+                .orElseThrow(() -> new BusinessException("No student profile is linked to this account"));
+        return studentProgress(me.getId());
+    }
+
     /**
      * One attendance group-query + one exam sum-query for every linked child.
      * Used by the parent portal so N children are not N+1 round-trips.
@@ -176,12 +185,8 @@ public class ReportService {
                 bucket[3] += row.getTotal();
             }
         }
-        Map<UUID, ExamResultRepository.MarkSum> marks = Map.of();
-        List<UUID> published = examSessionRepository.findPublishedIds(tenantId);
-        if (!published.isEmpty()) {
-            marks = examResultRepository.sumPublishedMarks(tenantId, ids, published).stream()
-                    .collect(Collectors.toMap(ExamResultRepository.MarkSum::getStudentId, r -> r, (a, b) -> a));
-        }
+        Map<UUID, ExamResultRepository.MarkSum> marks = examResultRepository.sumPublishedMarks(tenantId, ids).stream()
+                .collect(Collectors.toMap(ExamResultRepository.MarkSum::getStudentId, r -> r, (a, b) -> a));
         for (Student student : students) {
             long[] bucket = att.getOrDefault(student.getId(), new long[4]);
             long totalLectures = bucket[0];

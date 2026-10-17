@@ -29,11 +29,15 @@ public interface ExamResultRepository extends JpaRepository<ExamResult, UUID> {
             from ExamResult r
             where r.tenantId = :tenantId
               and r.studentId in :studentIds
-              and r.examSessionId in :sessionIds
+              and exists (
+                    select 1 from ExamSession s
+                    where s.id = r.examSessionId
+                      and s.tenantId = :tenantId
+                      and s.published = true
+              )
             group by r.studentId
             """)
     List<MarkSum> sumPublishedMarks(
             @Param("tenantId") UUID tenantId,
-            @Param("studentIds") Collection<UUID> studentIds,
-            @Param("sessionIds") Collection<UUID> sessionIds);
+            @Param("studentIds") Collection<UUID> studentIds);
 }

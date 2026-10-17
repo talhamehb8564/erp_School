@@ -268,17 +268,27 @@ public class FeeService {
         if (studentIds == null || studentIds.isEmpty()) {
             return List.of();
         }
-        UUID tenantId = TenantGuard.requireTenantId(null);
-        List<FeeChallan> rows = new ArrayList<>(
-                challanRepository.findByTenantIdAndStudentIdInOrderByMonthDesc(tenantId, studentIds));
-        if (limit > 0 && rows.size() > limit) {
-            rows = new ArrayList<>(rows.subList(0, limit));
+        for (UUID id : studentIds) {
+            studentAccessService.requireStudent(id);
         }
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        int cap = limit > 0 ? Math.min(limit, 50) : 20;
+        List<FeeChallan> rows = new ArrayList<>(
+                challanRepository.findByTenantIdAndStudentIdInOrderByMonthDesc(
+                        tenantId, studentIds, org.springframework.data.domain.PageRequest.of(0, cap)));
         List<Map<String, Object>> maps = new ArrayList<>(rows.size());
         for (FeeChallan row : rows) {
             maps.add(toSummary(row));
         }
         return overlayOverdue(rows, maps);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> myChallanSummaries(int limit) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
+                .orElseThrow(() -> new BusinessException("No student profile is linked to this account"));
+        return challanSummariesForStudents(List.of(me.getId()), limit);
     }
 
     @Transactional(readOnly = true)

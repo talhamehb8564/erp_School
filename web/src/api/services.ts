@@ -213,12 +213,13 @@ export const attendanceApi = {
 };
 
 export const homeworkApi = {
-  list: (classId?: string, sectionId?: string) => {
+  list: (classId?: string, sectionId?: string, limit?: number) => {
     const p = new URLSearchParams();
     if (classId && sectionId) {
       p.set("classId", classId);
       p.set("sectionId", sectionId);
     }
+    if (limit) p.set("limit", String(limit));
     const q = p.toString();
     return api.get<Homework[]>(`${v1}/homework${q ? `?${q}` : ""}`);
   },
@@ -291,6 +292,12 @@ export const feeApi = {
   saveStructure: (body: Record<string, unknown>) => api.post<FeeStructure>(`${v1}/fees/structures`, body),
   generate: (body: Record<string, unknown>) => api.post<FeeChallan[]>(`${v1}/fees/challans/generate`, body),
   studentChallans: (studentId: string) => api.get<FeeChallan[]>(`${v1}/fees/students/${studentId}/challans`),
+  myChallanSummaries: (limit = 20) =>
+    api.get<{ challanNumber: string; totalPayable: number; status: string }[]>(`${v1}/fees/me/challans?limit=${limit}`),
+  childChallanSummaries: (studentId: string, limit = 20) =>
+    api.get<{ studentId?: string; challanNumber: string; totalPayable: number; status: string }[]>(
+      `${v1}/fees/students/${studentId}/challans?summary=true&limit=${limit}`,
+    ),
   submitProof: (id: string, body: { slipUrl: string; transactionRef?: string }) =>
     api.post<FeeChallan>(`${v1}/fees/challans/${id}/proofs`, body),
   reviewProof: (id: string, approve: boolean, remarks?: string) =>
@@ -363,6 +370,9 @@ export const notificationApi = {
 export const reportApi = {
   schoolDashboard: () => api.get<Record<string, number>>(`${v1}/dashboard/school`),
   platformDashboard: () => api.get<Record<string, number>>(`${v1}/dashboard/platform`),
+  myProgress: () => api.get<Record<string, unknown>>(`${v1}/reports/progress/me`),
+  teacherProgress: () => api.get<Record<string, unknown>>(`${v1}/reports/progress/teacher`),
+  studentProgress: (studentId: string) => api.get<Record<string, unknown>>(`${v1}/reports/progress/students/${studentId}`),
   attendance: (studentId: string, from: string, to: string) =>
     api.get<Record<string, unknown>>(`${v1}/reports/attendance/students/${studentId}?from=${from}&to=${to}`),
   feeCollection: (month: string) =>
