@@ -108,9 +108,7 @@ public class PublicSchoolService {
                     campus.getPrincipalPhotosJson(),
                     campus.getPrincipalMessage(),
                     campus.isPrincipalPublished());
-            if (!Boolean.TRUE.equals(campusPrincipal.get("isDefault"))) {
-                row.put("principal", campusPrincipal);
-            }
+            row.put("principal", campusPrincipal);
             Map<String, Object> campusMap = new LinkedHashMap<>();
             campusMap.put("lat", campus.getMapLat());
             campusMap.put("lng", campus.getMapLng());

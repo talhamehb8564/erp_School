@@ -7,17 +7,20 @@ import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
 import { Badge, Button, Empty, Field, FileLink, Form, Modal, QueryState, Table, studentLabel, useAsync } from "../../ui/kit";
 import ChildSwitch, { useActiveStudentId } from "./ChildSwitch";
-import type { AttendanceStatus, StudentUser } from "../../lib/types";
+import type { AttendanceStatus, StudentRosterRow } from "../../lib/types";
 
-function useStudentDirectory(enabled: boolean) {
-  const list = useAsync(() => (enabled ? studentApi.list() : Promise.resolve(null)), [enabled]);
-  const map = new Map<string, StudentUser>();
-  for (const s of list.data?.content || []) map.set(s.id, s);
+function useStudentDirectory(classId?: string, sectionId?: string) {
+  const list = useAsync(
+    () => (classId ? studentApi.roster(classId, sectionId) : Promise.resolve([])),
+    [classId, sectionId],
+  );
+  const map = new Map<string, StudentRosterRow>();
+  for (const s of list.data || []) map.set(s.id, s);
   const nameOf = (id: string) => {
     const s = map.get(id);
     return s ? studentLabel(s) : id.slice(0, 8);
   };
-  return { students: list.data?.content || [], nameOf };
+  return { students: list.data || [], nameOf };
 }
 
 export function AttendancePage() {
@@ -176,7 +179,6 @@ export function HomeworkPage() {
   const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
   const sid = useActiveStudentId(me.data?.id);
   const child = (kids.data || []).find((k) => k.id === sid);
-  const dir = useStudentDirectory(user?.role !== "STUDENT" && user?.role !== "PARENT");
   const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const homeworkRows = (list.data || []).filter((h) => {
@@ -185,6 +187,10 @@ export function HomeworkPage() {
     return h.classId === child.classId && h.sectionId === child.sectionId;
   });
   const current = (list.data || []).find((h) => h.id === active);
+  const dir = useStudentDirectory(
+    user?.role !== "STUDENT" && user?.role !== "PARENT" ? current?.classId : undefined,
+    current?.sectionId,
+  );
 
   return (
     <>
@@ -287,9 +293,12 @@ export function ExamsPage() {
   const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
   const sid = useActiveStudentId(me.data?.id);
   const mine = useAsync(() => (sessionId && sid ? examApi.studentResult(sessionId, sid) : Promise.resolve(null)), [sessionId, sid]);
-  const dir = useStudentDirectory(user?.role !== "STUDENT" && user?.role !== "PARENT");
   const [mark, setMark] = useState({ classId: "", sectionId: "", studentId: "", subjectId: "", totalMarks: "100", obtainedMarks: "0", absent: false });
-  const roster = useAsync(() => (mark.classId ? studentApi.list(mark.classId, mark.sectionId || undefined, 0) : Promise.resolve(null)), [mark.classId, mark.sectionId]);
+  const dir = useStudentDirectory(
+    user?.role !== "STUDENT" && user?.role !== "PARENT" ? mark.classId || undefined : undefined,
+    mark.sectionId || undefined,
+  );
+  const roster = useAsync(() => (mark.classId ? studentApi.roster(mark.classId, mark.sectionId || undefined) : Promise.resolve([])), [mark.classId, mark.sectionId]);
   const assigns = useAsync(() => (user?.role === "TEACHER" ? academicApi.assignments() : Promise.resolve([])), [user?.role]);
   const entry = useAsync(() => (sessionId && (user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? examApi.entryStatus(sessionId) : Promise.resolve([])), [sessionId, user?.role]);
   const [roll, setRoll] = useState("");
@@ -446,7 +455,7 @@ export function ExamsPage() {
                 <Field label="Student">
                   <select value={mark.studentId} onChange={(e) => setMark({ ...mark, studentId: e.target.value })} required>
                     <option value="">Select student</option>
-                    {(roster.data?.content || []).map((s) => <option key={s.id} value={s.id}>{studentLabel(s)}</option>)}
+                    {(roster.data || []).map((s) => <option key={s.id} value={s.id}>{studentLabel(s)}</option>)}
                   </select>
                 </Field>
                 <Field label="Subject">

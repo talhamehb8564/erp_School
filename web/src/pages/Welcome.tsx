@@ -141,7 +141,7 @@ export default function Welcome() {
   const letter = name.trim().charAt(0).toUpperCase() || "S";
   const gallery = galleryFor(school);
   const principal = principalFor(campus, school);
-  const photos = principalPhotos(principal, campus?.name);
+  const photos = principalPhotos(principal, campus);
   const principalName = principal?.name || "Principal";
   const principalTitle = principal?.title || `Principal · ${campus?.name || "Campus"}`;
   const principalMessage = principal?.message || DEFAULT_PRINCIPAL_MESSAGE;
@@ -438,13 +438,13 @@ function PrincipalGallery({ photos, name, sample, branch }: { photos: PublicMedi
     if (photos.length < 2) return;
     const id = window.setInterval(() => setI((n) => (n + 1) % photos.length), 5400);
     return () => window.clearInterval(id);
-  }, [photos.length]);
+  }, [sig, photos.length]);
   const current = photos[i] || photos[0];
   return (
     <div className="principal-photo">
       <div className="principal-slides">
         {photos.map((p, n) => (
-          <img key={p.imageUrl + n} className={n === i ? "on" : ""} src={p.imageUrl} alt={p.caption || name} />
+          <img key={`${branch || ""}-${p.imageUrl}-${n}`} className={n === i ? "on" : ""} src={p.imageUrl} alt={p.caption || name} />
         ))}
       </div>
       {photos.length > 1 ? (

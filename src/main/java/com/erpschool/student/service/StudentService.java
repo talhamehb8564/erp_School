@@ -1,10 +1,13 @@
 package com.erpschool.student.service;
 
+import com.erpschool.academic.entity.SchoolClass;
+import com.erpschool.academic.entity.Section;
 import com.erpschool.academic.service.AcademicService;
 import com.erpschool.audit.service.AuditService;
 import com.erpschool.common.dto.PageResponse;
 import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.DuplicateResourceException;
+import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.service.DocumentSequenceService;
 import com.erpschool.common.util.Cnic;
 import com.erpschool.common.util.TenantGuard;
@@ -31,8 +34,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -184,55 +190,34 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<StudentDtos.Response> list(UUID classId, UUID sectionId, String academicSession, String q, Pageable pageable) {
+    public PageResponse<StudentDtos.Response> list(UUID classId, UUID sectionId, String academicSession, String q,
+                                                   StudentStatus status, Pageable pageable) {
         UUID tenantId = TenantGuard.requireTenantId(null);
-        Page<Student> page;
         UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
         java.util.Set<UUID> sessionClassIds = null;
         if (academicSession != null && !academicSession.isBlank()) {
             sessionClassIds = academicService.classes().stream()
                     .filter(c -> academicSession.equalsIgnoreCase(c.getAcademicSession()))
-                    .map(com.erpschool.academic.entity.SchoolClass::getId)
+                    .map(SchoolClass::getId)
                     .collect(Collectors.toSet());
             if (sessionClassIds.isEmpty() || (classId != null && !sessionClassIds.contains(classId))) {
-                page = Page.empty(pageable);
-                return emptyStudents(page);
+                return emptyStudents(Page.empty(pageable));
             }
         }
-        String like = normalizeSearch(q);
-        if (like != null) {
-            boolean filterClasses = classId == null && sessionClassIds != null;
-            java.util.Collection<UUID> classIds = filterClasses
-                    ? sessionClassIds
-                    : java.util.List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-            page = studentRepository.search(
-                    tenantId,
-                    campusId,
-                    classId,
-                    sectionId,
-                    filterClasses,
-                    classIds,
-                    like,
-                    pageable);
-        } else if (classId == null && sessionClassIds != null) {
-            if (campusId != null) {
-                page = studentRepository.findByTenantIdAndCampusIdAndClassIdIn(tenantId, campusId, sessionClassIds, pageable);
-            } else {
-                page = studentRepository.findByTenantIdAndClassIdIn(tenantId, sessionClassIds, pageable);
-            }
-        } else if (campusId != null && classId != null) {
-            page = studentRepository.findByTenantIdAndCampusIdAndClassId(tenantId, campusId, classId, pageable);
-        } else if (campusId != null) {
-            page = studentRepository.findByTenantIdAndCampusId(tenantId, campusId, pageable);
-        } else if (classId != null && sectionId != null) {
-            page = studentRepository.findByTenantIdAndClassIdAndSectionId(tenantId, classId, sectionId, pageable);
-        } else if (classId != null) {
-            page = studentRepository.findByTenantIdAndClassId(tenantId, classId, pageable);
-        } else if (sectionId != null) {
-            page = studentRepository.findByTenantIdAndSectionId(tenantId, sectionId, pageable);
-        } else {
-            page = studentRepository.findByTenantId(tenantId, pageable);
-        }
+        boolean filterClasses = classId == null && sessionClassIds != null;
+        Collection<UUID> classIds = filterClasses
+                ? sessionClassIds
+                : List.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        Page<Student> page = studentRepository.search(
+                tenantId,
+                campusId,
+                classId,
+                sectionId,
+                status,
+                filterClasses,
+                classIds,
+                normalizeSearch(q),
+                pageable);
         Map<UUID, UserResponse> users = usersById(page.getContent());
         List<StudentDtos.Response> content = page.getContent().stream()
                 .map(s -> StudentDtos.from(s, users.get(s.getUserId())))
@@ -246,6 +231,42 @@ public class StudentService {
                 .first(page.isFirst())
                 .last(page.isLast())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> roster(UUID classId, UUID sectionId, StudentStatus status) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        SchoolClass clazz = academicService.requireClass(classId);
+        assertClassOnCampus(clazz);
+        if (sectionId != null) {
+            Section section = academicService.requireSection(sectionId);
+            if (!classId.equals(section.getClassId())) {
+                throw new BusinessException("INVALID_SECTION", "Section does not belong to the selected class");
+            }
+        }
+        UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
+        StudentStatus st = status == null ? StudentStatus.ACTIVE : status;
+        List<Student> rows = studentRepository.findRoster(tenantId, campusId, classId, sectionId, st);
+        if (rows.size() > 2000) {
+            rows = rows.subList(0, 2000);
+        }
+        Map<UUID, UserResponse> users = usersById(rows);
+        List<Map<String, Object>> out = new ArrayList<>(rows.size());
+        for (Student s : rows) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", s.getId());
+            m.put("userId", s.getUserId());
+            m.put("campusId", s.getCampusId());
+            m.put("classId", s.getClassId());
+            m.put("sectionId", s.getSectionId());
+            m.put("admissionNumber", s.getAdmissionNumber());
+            m.put("rollNumber", s.getRollNumber());
+            m.put("status", s.getStatus());
+            UserResponse u = s.getUserId() == null ? null : users.get(s.getUserId());
+            m.put("fullName", u != null ? u.getFullName() : null);
+            out.add(m);
+        }
+        return out;
     }
 
     private static String normalizeSearch(String q) {
@@ -357,25 +378,33 @@ public class StudentService {
                                               List<UUID> studentIds) {
         academicService.requireClass(toClassId);
         academicService.requireSection(toSectionId);
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
         List<Student> targets;
         if (studentIds != null && !studentIds.isEmpty()) {
             targets = studentRepository.findAllById(studentIds);
         } else if (fromSectionId != null) {
             targets = studentRepository.findByTenantIdAndClassIdAndSectionIdAndStatus(
-                    TenantGuard.requireTenantId(null), fromClassId, fromSectionId, StudentStatus.ACTIVE);
+                    tenantId, fromClassId, fromSectionId, StudentStatus.ACTIVE);
         } else {
             targets = studentRepository.findByTenantIdAndClassIdAndStatus(
-                    TenantGuard.requireTenantId(null), fromClassId, StudentStatus.ACTIVE);
+                    tenantId, fromClassId, StudentStatus.ACTIVE);
         }
-        List<StudentDtos.Response> out = new ArrayList<>();
+        List<Student> saved = new ArrayList<>();
         for (Student s : targets) {
-            studentAccessService.requireStudent(s.getId());
+            TenantGuard.assertSameTenant(s.getTenantId());
+            if (campusId != null && s.getCampusId() != null && !campusId.equals(s.getCampusId())) {
+                throw new ForbiddenException("Student is not in your campus");
+            }
             s.setClassId(toClassId);
             s.setSectionId(toSectionId);
             s.setUpdatedBy(TenantContext.getUserId());
-            s = studentRepository.save(s);
-            out.add(StudentDtos.from(s, loadUser(s.getUserId())));
+            saved.add(studentRepository.save(s));
         }
+        Map<UUID, UserResponse> users = usersById(saved);
+        List<StudentDtos.Response> out = saved.stream()
+                .map(s -> StudentDtos.from(s, users.get(s.getUserId())))
+                .toList();
         auditService.record("STUDENTS_PROMOTED", "Student", null, Map.of("count", out.size()));
         return out;
     }
@@ -400,6 +429,77 @@ public class StudentService {
         }
         auditService.record("STUDENT_INACTIVATED", "Student", s.getId().toString(), Map.of("reason", code));
         return StudentDtos.from(s, loadUser(s.getUserId()));
+    }
+
+    @Transactional
+    public Map<String, Object> inactivateBulk(UUID classId, UUID sectionId, String reason) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        UUID actor = TenantContext.getUserId();
+        SchoolClass clazz = academicService.requireClass(classId);
+        assertClassOnCampus(clazz);
+        String sectionName = null;
+        if (sectionId != null) {
+            Section section = academicService.requireSection(sectionId);
+            if (!classId.equals(section.getClassId())) {
+                throw new BusinessException("INVALID_SECTION", "Section does not belong to the selected class");
+            }
+            sectionName = section.getName();
+        }
+        UUID campusId = CampusScope.restricts() ? CampusScope.current() : null;
+        String code = reason == null ? "OTHER" : reason.trim().toUpperCase();
+        StudentStatus toStatus;
+        if ("GRADUATED".equals(code) || "GRADE_10_COMPLETE".equals(code)) {
+            toStatus = StudentStatus.GRADUATED;
+        } else if ("TRANSFERRED".equals(code)) {
+            toStatus = StudentStatus.TRANSFERRED;
+        } else {
+            toStatus = StudentStatus.INACTIVE;
+        }
+        long expected = studentRepository.countInScope(tenantId, classId, sectionId, campusId, StudentStatus.ACTIVE);
+        if (expected <= 0) {
+            throw new BusinessException("NO_STUDENTS", "No active students in this class/section");
+        }
+        List<UUID> userIds = studentRepository.findUserIdsInScope(
+                tenantId, classId, sectionId, campusId, StudentStatus.ACTIVE);
+        Instant now = Instant.now();
+        int updated = studentRepository.bulkUpdateStatusInScope(
+                tenantId, classId, sectionId, campusId, StudentStatus.ACTIVE, toStatus, code, actor, now);
+        inactivateUserAccounts(tenantId, userIds, actor, now);
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("reason", code);
+        details.put("count", updated);
+        details.put("classId", classId.toString());
+        if (sectionId != null) {
+            details.put("sectionId", sectionId.toString());
+        }
+        auditService.record("STUDENT_BULK_INACTIVATED", "Student", classId.toString(), details);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("inactivated", updated);
+        out.put("classId", classId);
+        out.put("className", clazz.getName());
+        out.put("sectionId", sectionId);
+        out.put("sectionName", sectionName);
+        out.put("reason", code);
+        out.put("status", toStatus);
+        return out;
+    }
+
+    private void assertClassOnCampus(SchoolClass clazz) {
+        UUID campus = CampusScope.restricts() ? CampusScope.current() : null;
+        if (campus != null && clazz.getCampusId() != null && !campus.equals(clazz.getCampusId())) {
+            throw new ForbiddenException("Class is not in your campus");
+        }
+    }
+
+    private void inactivateUserAccounts(UUID tenantId, List<UUID> userIds, UUID actor, Instant now) {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+        List<UUID> ids = userIds.stream().filter(Objects::nonNull).distinct().toList();
+        for (int i = 0; i < ids.size(); i += 500) {
+            List<UUID> chunk = ids.subList(i, Math.min(i + 500, ids.size()));
+            userRepository.updateStatusForIds(tenantId, chunk, UserStatus.INACTIVE, now, actor);
+        }
     }
 
     private Map<UUID, UserResponse> usersById(List<Student> students) {

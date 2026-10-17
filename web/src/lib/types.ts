@@ -207,7 +207,20 @@ export interface StudentUser {
   address?: string;
   guardianName?: string;
   guardianPhone?: string;
+  fullName?: string;
   user?: User;
+}
+
+export interface StudentRosterRow {
+  id: string;
+  userId?: string;
+  campusId?: string;
+  classId?: string;
+  sectionId?: string;
+  admissionNumber?: string;
+  rollNumber?: string;
+  status?: StudentStatus;
+  fullName?: string;
 }
 
 export interface EnrollResponse {

@@ -81,36 +81,62 @@ export function programsFor(school: PublicSchool | null): { items: { title: stri
   return { items, isDefault: false };
 }
 
+function samplePrincipalPhoto(campus: PublicCampus | null): PublicMedia {
+  const branch = campus?.name || "this branch";
+  const key = campus?.id || campus?.code || branch;
+  let h = 0;
+  for (let i = 0; i < key.length; i += 1) h = (Math.imul(31, h) + key.charCodeAt(i)) | 0;
+  const pick = DEFAULT_PRINCIPAL_PHOTOS[Math.abs(h) % DEFAULT_PRINCIPAL_PHOTOS.length];
+  return {
+    imageUrl: pick.imageUrl,
+    caption: `Sample portrait for ${branch} — replace from the Principal portal.`,
+  };
+}
+
+function isStockPrincipalPhoto(url?: string) {
+  if (!url) return true;
+  return url === DEFAULT_PRINCIPAL_PHOTO || DEFAULT_PRINCIPAL_PHOTOS.some((p) => p.imageUrl === url);
+}
+
 export function principalFor(campus: PublicCampus | null, _school: PublicSchool | null): PublicPrincipal | null {
   const branch = campus?.name || "this campus";
   const campusP = campus?.principal;
+  const sample = samplePrincipalPhoto(campus);
   if (campusP && campusP.published === false && !campusP.isDefault) return null;
   if (campusP && !campusP.isDefault) {
+    const photos = (campusP.photos || []).filter((p) => p.imageUrl && !isStockPrincipalPhoto(p.imageUrl));
+    const photoUrl = campusP.photoUrl && !isStockPrincipalPhoto(campusP.photoUrl)
+      ? campusP.photoUrl
+      : photos[0]?.imageUrl || sample.imageUrl;
     return {
       ...campusP,
       title: campusP.title || `Principal, ${branch}`,
+      photoUrl,
+      photos: photos.length ? photos : [sample],
     };
   }
   return {
-    name: `Principal · ${branch}`,
-    title: `Principal, ${branch}`,
-    photoUrl: DEFAULT_PRINCIPAL_PHOTO,
-    photos: [{ imageUrl: DEFAULT_PRINCIPAL_PHOTO, caption: `Sample portrait for ${branch}. Replace from the Principal portal.` }],
+    name: campusP?.name || `Principal · ${branch}`,
+    title: campusP?.title || `Principal, ${branch}`,
+    photoUrl: sample.imageUrl,
+    photos: [sample],
     message: `This is a sample Principal’s message for ${branch} only.\n\nEach branch has its own Principal. Image, name and words on this page always follow the campus you selected. Publish ${branch}’s profile from the Principal portal — this placeholder is not an official statement.`,
     published: true,
     isDefault: true,
   };
 }
 
-export function principalPhotos(principal: PublicPrincipal | null, campusName?: string): { items: PublicMedia[]; isDefault: boolean } {
+export function principalPhotos(principal: PublicPrincipal | null, campus?: PublicCampus | null | string): { items: PublicMedia[]; isDefault: boolean } {
+  const campusObj = typeof campus === "object" && campus ? campus : null;
+  const branch = (typeof campus === "string" ? campus : campusObj?.name) || "this branch";
   const custom = [
     ...(principal?.photos || []),
     ...(principal?.photoUrl ? [{ imageUrl: principal.photoUrl, caption: principal.photos?.[0]?.caption }] : []),
-  ].filter((p, i, all) => p.imageUrl && all.findIndex((x) => x.imageUrl === p.imageUrl) === i);
+  ].filter((p, i, all) => p.imageUrl && !isStockPrincipalPhoto(p.imageUrl) && all.findIndex((x) => x.imageUrl === p.imageUrl) === i);
   if (custom.length) return { items: custom, isDefault: false };
-  const branch = campusName || "this branch";
+  const sample = samplePrincipalPhoto(campusObj || (typeof campus === "string" ? { name: campus } as PublicCampus : null));
   return {
-    items: [{ imageUrl: DEFAULT_PRINCIPAL_PHOTO, caption: `Sample portrait for ${branch} — not a carousel of other campuses.` }],
+    items: [{ imageUrl: sample.imageUrl, caption: sample.caption || `Sample portrait for ${branch} — not a carousel of other campuses.` }],
     isDefault: true,
   };
 }

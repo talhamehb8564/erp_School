@@ -37,7 +37,7 @@ export function FeesPage() {
   const [discReason, setDiscReason] = useState("");
   const chargeTypes = useAsync(() => (ops ? feeApi.chargeTypes() : Promise.resolve([])), [user?.role]);
   const classStudents = useAsync(
-    () => (ops && classId ? studentApi.list(classId, sectionId || undefined) : Promise.resolve(null)),
+    () => (ops && classId ? studentApi.roster(classId, sectionId || undefined) : Promise.resolve([])),
     [ops, classId, sectionId],
   );
   const [stForm, setStForm] = useState({ name: "", classId: "", academicYear: "2026-2027", tuitionAmount: "8000" });
@@ -175,15 +175,15 @@ export function FeesPage() {
               <Field label="Student (optional — blank = section/class)">
                 <select value={studentId} onChange={(e) => { setStudentId(e.target.value); setPicked(e.target.value ? [e.target.value] : []); }} disabled={!classId}>
                   <option value="">All students in selection</option>
-                  {(classStudents.data?.content || []).map((s) => (
-                    <option key={s.id} value={s.id}>{s.user?.fullName || s.admissionNumber} · roll {s.rollNumber || "—"}</option>
+                  {(classStudents.data || []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.fullName || s.admissionNumber} · roll {s.rollNumber || "—"}</option>
                   ))}
                 </select>
               </Field>
               <Field label="Or multi-select students">
                 <select
                   multiple
-                  size={Math.min(6, Math.max(3, (classStudents.data?.content || []).length || 3))}
+                  size={Math.min(6, Math.max(3, (classStudents.data || []).length || 3))}
                   value={picked}
                   disabled={!classId}
                   onChange={(e) => {
@@ -192,8 +192,8 @@ export function FeesPage() {
                     setStudentId(next.length === 1 ? next[0] : "");
                   }}
                 >
-                  {(classStudents.data?.content || []).map((s) => (
-                    <option key={s.id} value={s.id}>{s.user?.fullName || s.admissionNumber} · roll {s.rollNumber || "—"}</option>
+                  {(classStudents.data || []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.fullName || s.admissionNumber} · roll {s.rollNumber || "—"}</option>
                   ))}
                 </select>
               </Field>
@@ -235,8 +235,8 @@ export function FeesPage() {
               <Field label="Standing discount student">
                 <select value={discStudent} onChange={(e) => setDiscStudent(e.target.value)}>
                   <option value="">Use generate student</option>
-                  {(classStudents.data?.content || []).map((s) => (
-                    <option key={s.id} value={s.id}>{s.user?.fullName || s.admissionNumber}</option>
+                  {(classStudents.data || []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.fullName || s.admissionNumber}</option>
                   ))}
                 </select>
               </Field>

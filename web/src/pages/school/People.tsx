@@ -12,6 +12,8 @@ export function StudentsPage() {
   const canEnrol = user?.role === "SCHOOL_ADMIN";
   const { classes, sections, className } = useLookups();
   const [classId, setClassId] = useState("");
+  const [sectionId, setSectionId] = useState("");
+  const [status, setStatus] = useState("ACTIVE");
   const [session, setSession] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
@@ -19,8 +21,8 @@ export function StudentsPage() {
   const sessions = Array.from(new Set(classes.map((c) => c.academicSession).filter(Boolean))) as string[];
   const visibleClasses = session ? classes.filter((c) => c.academicSession === session) : classes;
   const list = useAsync(
-    () => studentApi.list(classId || undefined, undefined, page, session || undefined, dq || undefined),
-    [classId, page, session, dq],
+    () => studentApi.list(classId || undefined, sectionId || undefined, page, session || undefined, dq || undefined, status || undefined),
+    [classId, sectionId, page, session, dq, status],
   );
   const [open, setOpen] = useState(false);
   const toast = useToast();
@@ -29,27 +31,52 @@ export function StudentsPage() {
   });
   const [promo, setPromo] = useState({ fromClassId: "", fromSectionId: "", toClassId: "", toSectionId: "" });
   const [promoOpen, setPromoOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulk, setBulk] = useState({ classId: "", sectionId: "", reason: "UNPAID_FEES" });
+  const bulkPreview = useAsync(
+    () => (bulkOpen && bulk.classId
+      ? studentApi.list(bulk.classId, bulk.sectionId || undefined, 0, undefined, undefined, "ACTIVE")
+      : Promise.resolve(null)),
+    [bulkOpen, bulk.classId, bulk.sectionId],
+  );
   const rows = list.data?.content || [];
+  const bulkCount = bulkPreview.data?.totalElements ?? 0;
+  const bulkClassLabel = className(bulk.classId) || "the selected class";
+  const bulkSectionLabel = bulk.sectionId
+    ? (sections[bulk.classId] || []).find((s) => s.id === bulk.sectionId)?.name || "selected section"
+    : "all sections";
   return (
     <>
       <div className="page-title">
-        <div><h1>Students</h1><p>Enrol students, assign class and section, and promote a whole class.</p></div>
+        <div><h1>Students</h1><p>Search and filter without loading the whole school. Enrol, promote, or deactivate a class.</p></div>
         {canEnrol ? (
           <div className="row">
             <Button kind="ghost" onClick={() => setPromoOpen(true)}>Promote class</Button>
+            <Button kind="ghost" onClick={() => setBulkOpen(true)}>Deactivate class</Button>
             <Button kind="brass" onClick={() => setOpen(true)}>Enrol student</Button>
           </div>
         ) : null}
       </div>
       <div className="row" style={{ marginBottom: 12 }}>
         <Search value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Search name or admission no." />
-        <select className="search" value={session} onChange={(e) => { setSession(e.target.value); setClassId(""); setPage(0); }}>
+        <select className="search" value={session} onChange={(e) => { setSession(e.target.value); setClassId(""); setSectionId(""); setPage(0); }}>
           <option value="">All sessions</option>
           {sessions.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select className="search" value={classId} onChange={(e) => { setClassId(e.target.value); setPage(0); }}>
+        <select className="search" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); setPage(0); }}>
           <option value="">All classes</option>
           {visibleClasses.map((c) => <option key={c.id} value={c.id}>{c.name}{c.academicSession ? ` (${c.academicSession})` : ""}</option>)}
+        </select>
+        <select className="search" value={sectionId} onChange={(e) => { setSectionId(e.target.value); setPage(0); }} disabled={!classId}>
+          <option value="">All sections</option>
+          {(sections[classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <select className="search" value={status} onChange={(e) => { setStatus(e.target.value); setPage(0); }}>
+          <option value="ACTIVE">Active</option>
+          <option value="INACTIVE">Inactive</option>
+          <option value="GRADUATED">Graduated</option>
+          <option value="TRANSFERRED">Transferred</option>
+          <option value="">All statuses</option>
         </select>
       </div>
       <QueryState status={list} label="students">
@@ -59,11 +86,13 @@ export function StudentsPage() {
             const cells = [s.admissionNumber, studentLabel(s), s.cnic || "—", className(s.classId), s.rollNumber || "—", <Badge key={s.id} value={s.status} />];
             if (canEnrol) {
               cells.push(
-                <Button key={`in${s.id}`} kind="danger" loadingText="Inactivating…" onClick={async () => {
-                  await studentApi.inactivate(s.id, "UNPAID_FEES");
-                  toast("ok", "Student inactivated");
-                  void list.reload();
-                }}>Inactivate</Button>,
+                s.status === "ACTIVE"
+                  ? <Button key={`in${s.id}`} kind="danger" loadingText="Inactivating…" onClick={async () => {
+                    await studentApi.inactivate(s.id, "UNPAID_FEES");
+                    toast("ok", "Student inactivated. History is kept.");
+                    void list.reload();
+                  }}>Inactivate</Button>
+                  : "—",
               );
             }
             return cells;
@@ -135,6 +164,48 @@ export function StudentsPage() {
             </select>
           </Field>
           <Button type="submit" kind="brass" loadingText="Promoting…">Promote</Button>
+        </Form>
+      </Modal>
+      <Modal title="Deactivate class / section" open={bulkOpen} onClose={() => setBulkOpen(false)}>
+        <p className="hint">Students are marked inactive or graduated — they are not deleted. Attendance, marks and fee history stay in the database. Only the selected class (and section, if chosen) on your campus is affected.</p>
+        <Form busyLabel="Deactivating…" onSubmit={async () => {
+          if (!bulk.classId) throw new Error("Select a class.");
+          if (!bulkCount) throw new Error("No active students in this class/section.");
+          const result = await studentApi.inactivateBulk({
+            classId: bulk.classId,
+            sectionId: bulk.sectionId || undefined,
+            reason: bulk.reason,
+          });
+          toast("ok", `Deactivated ${result.inactivated} students in ${result.className || bulkClassLabel}. History is kept.`);
+          setBulkOpen(false);
+          void list.reload();
+        }}>
+          <Field label="Class">
+            <select value={bulk.classId} onChange={(e) => setBulk({ ...bulk, classId: e.target.value, sectionId: "" })} required>
+              <option value="">Select</option>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Section (optional — blank = all sections)">
+            <select value={bulk.sectionId} onChange={(e) => setBulk({ ...bulk, sectionId: e.target.value })} disabled={!bulk.classId}>
+              <option value="">All sections</option>
+              {(sections[bulk.classId] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Reason">
+            <select value={bulk.reason} onChange={(e) => setBulk({ ...bulk, reason: e.target.value })}>
+              <option value="UNPAID_FEES">Unpaid fees</option>
+              <option value="GRADUATED">Graduated</option>
+              <option value="TRANSFERRED">Transferred</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </Field>
+          {bulk.classId ? (
+            <p>
+              You are about to deactivate <strong>{bulkPreview.loading ? "…" : bulkCount}</strong> students from {bulkClassLabel}, {bulkSectionLabel}. Continue?
+            </p>
+          ) : null}
+          <Button type="submit" kind="danger" loadingText="Deactivating…" disabled={!bulk.classId || bulkPreview.loading || bulkCount === 0}>Deactivate students</Button>
         </Form>
       </Modal>
     </>

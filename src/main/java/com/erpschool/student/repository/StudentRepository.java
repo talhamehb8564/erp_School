@@ -5,9 +5,11 @@ import com.erpschool.student.entity.StudentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -63,14 +65,100 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
     long countByTenantIdAndClassId(UUID tenantId, UUID classId);
 
     @Query("""
+            select s.id from Student s
+            where s.tenantId = :tenantId
+              and s.classId = :classId
+              and s.sectionId = :sectionId
+              and s.status = :status
+            """)
+    List<UUID> findIdsByTenantIdAndClassIdAndSectionIdAndStatus(
+            @Param("tenantId") UUID tenantId,
+            @Param("classId") UUID classId,
+            @Param("sectionId") UUID sectionId,
+            @Param("status") StudentStatus status);
+
+    @Query("""
+            select s from Student s
+            where s.tenantId = :tenantId
+              and s.classId = :classId
+              and (:sectionId is null or s.sectionId = :sectionId)
+              and (:campusId is null or s.campusId = :campusId)
+              and (:status is null or s.status = :status)
+            order by s.rollNumber, s.admissionNumber
+            """)
+    List<Student> findRoster(
+            @Param("tenantId") UUID tenantId,
+            @Param("campusId") UUID campusId,
+            @Param("classId") UUID classId,
+            @Param("sectionId") UUID sectionId,
+            @Param("status") StudentStatus status);
+
+    @Query("""
+            select count(s) from Student s
+            where s.tenantId = :tenantId
+              and s.classId = :classId
+              and s.status = :status
+              and (:sectionId is null or s.sectionId = :sectionId)
+              and (:campusId is null or s.campusId = :campusId)
+            """)
+    long countInScope(
+            @Param("tenantId") UUID tenantId,
+            @Param("classId") UUID classId,
+            @Param("sectionId") UUID sectionId,
+            @Param("campusId") UUID campusId,
+            @Param("status") StudentStatus status);
+
+    @Query("""
+            select s.userId from Student s
+            where s.tenantId = :tenantId
+              and s.classId = :classId
+              and s.status = :status
+              and s.userId is not null
+              and (:sectionId is null or s.sectionId = :sectionId)
+              and (:campusId is null or s.campusId = :campusId)
+            """)
+    List<UUID> findUserIdsInScope(
+            @Param("tenantId") UUID tenantId,
+            @Param("classId") UUID classId,
+            @Param("sectionId") UUID sectionId,
+            @Param("campusId") UUID campusId,
+            @Param("status") StudentStatus status);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Student s
+            set s.status = :toStatus,
+                s.inactiveReason = :reason,
+                s.updatedBy = :actorId,
+                s.updatedAt = :now
+            where s.tenantId = :tenantId
+              and s.status = :fromStatus
+              and s.classId = :classId
+              and (:sectionId is null or s.sectionId = :sectionId)
+              and (:campusId is null or s.campusId = :campusId)
+            """)
+    int bulkUpdateStatusInScope(
+            @Param("tenantId") UUID tenantId,
+            @Param("classId") UUID classId,
+            @Param("sectionId") UUID sectionId,
+            @Param("campusId") UUID campusId,
+            @Param("fromStatus") StudentStatus fromStatus,
+            @Param("toStatus") StudentStatus toStatus,
+            @Param("reason") String reason,
+            @Param("actorId") UUID actorId,
+            @Param("now") Instant now);
+
+    @Query("""
             select s from Student s
             where s.tenantId = :tenantId
               and (:campusId is null or s.campusId = :campusId)
               and (:classId is null or s.classId = :classId)
               and (:sectionId is null or s.sectionId = :sectionId)
+              and (:status is null or s.status = :status)
               and (:filterClasses = false or s.classId in :classIds)
               and (
-                    lower(coalesce(s.admissionNumber, '')) like :like
+                    :like is null
+                 or lower(coalesce(s.admissionNumber, '')) like :like
                  or lower(coalesce(s.rollNumber, '')) like :like
                  or lower(coalesce(s.cnic, '')) like :like
                  or exists (
@@ -90,6 +178,7 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
             @Param("campusId") UUID campusId,
             @Param("classId") UUID classId,
             @Param("sectionId") UUID sectionId,
+            @Param("status") StudentStatus status,
             @Param("filterClasses") boolean filterClasses,
             @Param("classIds") Collection<UUID> classIds,
             @Param("like") String like,

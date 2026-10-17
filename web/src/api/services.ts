@@ -18,6 +18,7 @@ import type {
   Notification,
   Page,
   SchoolClass,
+  StudentRosterRow,
   SchoolEvent,
   SchoolSettings,
   Section,
@@ -162,13 +163,19 @@ export const academicApi = {
 };
 
 export const studentApi = {
-  list: (classId?: string, sectionId?: string, page = 0, academicSession?: string, q?: string) => {
+  list: (classId?: string, sectionId?: string, page = 0, academicSession?: string, q?: string, status?: string) => {
     const p = new URLSearchParams({ size: "20", page: String(page) });
     if (classId) p.set("classId", classId);
     if (sectionId) p.set("sectionId", sectionId);
     if (academicSession) p.set("academicSession", academicSession);
     if (q) p.set("q", q);
+    if (status) p.set("status", status);
     return api.get<Page<StudentUser>>(`${v1}/students?${p}`);
+  },
+  roster: (classId: string, sectionId?: string, status = "ACTIVE") => {
+    const p = new URLSearchParams({ classId, status });
+    if (sectionId) p.set("sectionId", sectionId);
+    return api.get<StudentRosterRow[]>(`${v1}/students/roster?${p}`);
   },
   get: (id: string) => api.get<StudentUser>(`${v1}/students/${id}`),
   me: () => api.get<StudentUser>(`${v1}/students/me`),
@@ -176,6 +183,8 @@ export const studentApi = {
   update: (id: string, body: Record<string, unknown>) => api.put<StudentUser>(`${v1}/students/${id}`, body),
   promote: (body: Record<string, unknown>) => api.post<StudentUser[]>(`${v1}/students/promote`, body),
   inactivate: (id: string, reason: string) => api.post<StudentUser>(`${v1}/students/${id}/inactivate`, { reason }),
+  inactivateBulk: (body: { classId: string; sectionId?: string; reason: string }) =>
+    api.post<{ inactivated: number; className?: string; sectionName?: string; reason: string; status?: string }>(`${v1}/students/inactivate-bulk`, body),
   linkParent: (id: string, parentUserId: string, relationship?: string) =>
     api.post<unknown>(`${v1}/students/${id}/parents`, { parentUserId, relationship }),
   children: () => api.get<StudentUser[]>(`${v1}/parents/me/children`),

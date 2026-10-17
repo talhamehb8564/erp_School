@@ -200,6 +200,7 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
 }
 .nav-link {
   display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; color: color-mix(in srgb, var(--sidebar-ink) 82%, transparent);
+  transition: background .15s ease, color .15s ease;
 }
 .brand-logo {
   width: 42px; height: 42px; border-radius: 14px; object-fit: cover; background: #fff;
@@ -237,6 +238,9 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
   background: var(--card);
 }
 .content { padding: 22px; min-width: 0; overflow-x: clip; }
+.shell .page-title { animation: rise .28s ease both; }
+.shell .table-wrap { animation: rise .22s ease both; }
+.shell .content > .card { animation: rise .2s ease both; }
 .is-refreshing { opacity: .78; transition: opacity .12s ease; }
 .crumbs { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
 .page-title { display: flex; justify-content: space-between; gap: 12px; align-items: flex-end; margin-bottom: 18px; flex-wrap: wrap; }
@@ -313,6 +317,7 @@ th { color: var(--muted); font-weight: 560; background: color-mix(in srgb, var(-
 .modal {
   width: min(560px, 100%); background: var(--bg-2); border-radius: 24px; padding: 22px;
   border: 1px solid var(--line); max-height: 90dvh; overflow: auto;
+  animation: rise .18s ease both;
 }
 .avatar {
   width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center;

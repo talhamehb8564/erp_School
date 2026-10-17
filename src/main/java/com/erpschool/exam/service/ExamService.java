@@ -480,14 +480,17 @@ public class ExamService {
         for (ExamResult r : results) {
             entered.add(r.getStudentId() + ":" + r.getSubjectId());
         }
+        Map<String, List<UUID>> rosterIds = new HashMap<>();
         List<Map<String, Object>> out = new java.util.ArrayList<>();
         for (TeacherAssignment a : assignments) {
-            List<Student> roster = studentRepository.findByTenantIdAndClassIdAndSectionIdAndStatus(
-                    tenantId, a.getClassId(), a.getSectionId(), StudentStatus.ACTIVE);
+            String key = a.getClassId() + ":" + a.getSectionId();
+            List<UUID> roster = rosterIds.computeIfAbsent(key, k ->
+                    studentRepository.findIdsByTenantIdAndClassIdAndSectionIdAndStatus(
+                            tenantId, a.getClassId(), a.getSectionId(), StudentStatus.ACTIVE));
             int expected = roster.size();
             int done = 0;
-            for (Student st : roster) {
-                if (entered.contains(st.getId() + ":" + a.getSubjectId())) {
+            for (UUID studentId : roster) {
+                if (entered.contains(studentId + ":" + a.getSubjectId())) {
                     done++;
                 }
             }

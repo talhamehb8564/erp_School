@@ -64,7 +64,7 @@ public class HomeworkController {
         if (classId != null && sectionId != null) {
             return ResponseEntity.ok(ApiResponse.ok(homeworkService.forClass(classId, sectionId)));
         }
-        return ResponseEntity.ok(ApiResponse.ok(homeworkService.mine()));
+        return ResponseEntity.ok(ApiResponse.ok(homeworkService.mine(80)));
     }
 
     @GetMapping("/{id}")

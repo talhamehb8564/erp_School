@@ -4,6 +4,7 @@ import com.erpschool.common.dto.ApiResponse;
 import com.erpschool.common.dto.PageResponse;
 import com.erpschool.student.dto.StudentDtos;
 import com.erpschool.student.entity.ParentStudent;
+import com.erpschool.student.entity.StudentStatus;
 import com.erpschool.student.service.StudentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -53,8 +55,27 @@ public class StudentController {
             @RequestParam(required = false) UUID sectionId,
             @RequestParam(required = false) String academicSession,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) StudentStatus status,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(studentService.list(classId, sectionId, academicSession, q, pageable)));
+        return ResponseEntity.ok(ApiResponse.ok(studentService.list(classId, sectionId, academicSession, q, status, pageable)));
+    }
+
+    @GetMapping("/students/roster")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER','ACCOUNT_OFFICER')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> roster(
+            @RequestParam UUID classId,
+            @RequestParam(required = false) UUID sectionId,
+            @RequestParam(required = false) StudentStatus status) {
+        return ResponseEntity.ok(ApiResponse.ok(studentService.roster(classId, sectionId, status)));
+    }
+
+    @PostMapping("/students/inactivate-bulk")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> inactivateBulk(
+            @Valid @RequestBody StudentDtos.InactivateBulkRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                "Students inactivated",
+                studentService.inactivateBulk(request.getClassId(), request.getSectionId(), request.getReason())));
     }
 
     @GetMapping("/students/me")

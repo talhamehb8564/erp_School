@@ -52,6 +52,16 @@ public final class StudentDtos {
 
     @Getter
     @Setter
+    public static class InactivateBulkRequest {
+        @NotNull
+        private UUID classId;
+        private UUID sectionId;
+        @NotBlank
+        private String reason;
+    }
+
+    @Getter
+    @Setter
     public static class UpdateRequest {
         private UUID campusId;
         private UUID classId;

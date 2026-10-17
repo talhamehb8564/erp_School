@@ -357,8 +357,8 @@ export function FileLink({ href, label }: { href?: string; label?: string }) {
   );
 }
 
-export function studentLabel(s: { id: string; admissionNumber?: string; rollNumber?: string; user?: { fullName?: string } }) {
-  return s.user?.fullName || s.admissionNumber || s.rollNumber || s.id.slice(0, 8);
+export function studentLabel(s: { id: string; admissionNumber?: string; rollNumber?: string; fullName?: string; user?: { fullName?: string } }) {
+  return s.user?.fullName || s.fullName || s.admissionNumber || s.rollNumber || s.id.slice(0, 8);
 }
 
 export function Pager({

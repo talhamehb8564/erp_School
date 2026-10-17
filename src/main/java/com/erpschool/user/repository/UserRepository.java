@@ -6,9 +6,12 @@ import com.erpschool.user.entity.UserStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -82,4 +85,16 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     java.util.List<User> findByTenantIdAndCampusIdAndRole(UUID tenantId, UUID campusId, UserRole role);
 
     long countByRole(UserRole role);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update User u
+            set u.status = :status, u.updatedAt = :now, u.updatedBy = :actorId
+            where u.tenantId = :tenantId and u.id in :ids
+            """)
+    int updateStatusForIds(@Param("tenantId") UUID tenantId,
+                           @Param("ids") Collection<UUID> ids,
+                           @Param("status") UserStatus status,
+                           @Param("now") Instant now,
+                           @Param("actorId") UUID actorId);
 }
