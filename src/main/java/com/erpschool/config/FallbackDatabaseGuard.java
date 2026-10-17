@@ -11,8 +11,9 @@ import java.util.Map;
 
 /**
  * Fail fast if the datasource is missing, unauthenticated, or an in-memory fallback.
- * Also normalizes Neon JDBC parameters: IPv4, sslmode=require, gssEncMode=disable
- * (pgjdbc GSSENCRequest is a common cause of SQLState 08001 / Connection reset).
+ * Normalizes Neon JDBC: IPv4, sslmode=require, gssEncMode=disable, sslNegotiation=direct
+ * (plaintext SSLRequest/GSSENCRequest is RST by Neon's SNI proxy — Flyway then retries
+ * until "Connection attempt timed out"), and options=endpoint= for clients without SNI.
  */
 public class FallbackDatabaseGuard implements EnvironmentPostProcessor {
 
@@ -62,10 +63,47 @@ public class FallbackDatabaseGuard implements EnvironmentPostProcessor {
         next = stripQueryParam(next, "channel_binding");
         next = ensureQueryParam(next, "sslmode", "require");
         next = ensureQueryParam(next, "gssEncMode", "disable");
+        next = ensureQueryParam(next, "sslNegotiation", "direct");
         next = ensureQueryParam(next, "prepareThreshold", "0");
         next = ensureQueryParam(next, "preferQueryMode", "simple");
         next = ensureQueryParam(next, "tcpKeepAlive", "true");
+        String endpoint = neonEndpointId(next);
+        if (endpoint != null && !next.matches("(?i).*[?&]options=.*")) {
+            next = next + (next.contains("?") ? "&" : "?") + "options=endpoint%3D" + endpoint;
+        }
         return next;
+    }
+
+    /** First DNS label of a Neon host, minus {@code -pooler}. */
+    static String neonEndpointId(String url) {
+        int scheme = url.indexOf("://");
+        if (scheme < 0) {
+            return null;
+        }
+        int hostStart = scheme + 3;
+        int slash = url.indexOf('/', hostStart);
+        int query = url.indexOf('?', hostStart);
+        int hostEnd = url.length();
+        if (slash >= 0) {
+            hostEnd = Math.min(hostEnd, slash);
+        }
+        if (query >= 0) {
+            hostEnd = Math.min(hostEnd, query);
+        }
+        String hostPort = url.substring(hostStart, hostEnd);
+        if (hostPort.startsWith("[")) {
+            return null;
+        }
+        int colon = hostPort.lastIndexOf(':');
+        String host = colon > 0 ? hostPort.substring(0, colon) : hostPort;
+        String label = host.split("\\.")[0];
+        if (!label.startsWith("ep-")) {
+            return null;
+        }
+        if (label.endsWith("-pooler")) {
+            label = label.substring(0, label.length() - "-pooler".length());
+        }
+        return label;
     }
 
     private static String stripQueryParam(String url, String key) {
