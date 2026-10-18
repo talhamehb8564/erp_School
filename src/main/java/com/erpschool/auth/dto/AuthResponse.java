@@ -5,8 +5,10 @@ import com.erpschool.user.dto.UserResponse;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.Map;
+
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class AuthResponse {
 
     private final String accessToken;
@@ -15,4 +17,5 @@ public class AuthResponse {
     private final long expiresIn;
     private final UserResponse user;
     private final TenantResponse tenant;
+    private final Map<String, Boolean> features;
 }

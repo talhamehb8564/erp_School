@@ -76,19 +76,21 @@ export default function ApplyAdmission() {
 
   return (
     <div className="site apply-page">
-      <header className="site-nav">
+      <header className="site-nav apply-nav">
         <Link to="/" className="site-brand">
           {school?.logoUrl ? <img src={school.logoUrl} alt="" /> : <div className="mark">{(school?.name || "S").charAt(0)}</div>}
-          <strong>{school?.name || "School"}</strong>
+          <div>
+            <strong>{school?.name || "School"}</strong>
+          </div>
         </Link>
-        <div className="site-nav-right">
+        <div className="site-nav-tools">
           {campusOptions.length ? (
             <select className="site-branch" value={campusId} onChange={(e) => pickCampus(e.target.value)} aria-label="Select campus">
               <option value="">Select campus</option>
               {campusOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           ) : null}
-          <Link to="/portals" className="btn ghost sm">School Portal</Link>
+          <Link to="/portals" className="btn ghost sm site-nav-portal">School Portal</Link>
           <Link to="/" className="btn ghost sm">Website</Link>
         </div>
       </header>

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { authApi, tenantApi } from "../api/services";
 import { ApiError, AUTH_LOST_EVENT, LOCKED_EVENT, clearTokens, getAccessToken, getAuthEpoch, getRefreshToken, setTokens } from "../api/client";
+import { clearFeatureCache, writeFeatureCache } from "./featureCache";
 import type { Role, Tenant, User } from "./types";
 import { LOCKED_STATUSES } from "./types";
 
@@ -119,7 +120,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (user) {
       const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
       if (typeof idle === "function") {
-        const id = idle(() => { void reload(); }, { timeout: 2500 });
+        const id = idle(() => { void reload(); }, { timeout: 800 });
         const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
         return () => cancel?.(id);
       }
@@ -177,6 +178,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       });
     }
     persist(payload.user);
+    writeFeatureCache(payload.user.tenantId, payload.features);
     if (!applyTenant(payload.user, payload.tenant)) {
       await loadTenant(payload.user);
     }
@@ -188,24 +190,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (leaving.current) return;
     leaving.current = true;
     const rt = opts?.remote !== false ? getRefreshToken() : null;
-    try {
-      if (rt) {
-        await Promise.race([
-          authApi.logout(rt).then(() => undefined, () => undefined),
-          new Promise<void>((resolve) => {
-            window.setTimeout(resolve, 400);
-          }),
-        ]);
-      }
-    } finally {
-      clearTokens();
-      persist(null);
-      setTenant(null);
-      setForcedLocked(false);
-      localStorage.removeItem(CHILD_KEY);
-      setChildIdState(null);
-      leaving.current = false;
-    }
+    clearTokens();
+    persist(null);
+    setTenant(null);
+    setForcedLocked(false);
+    localStorage.removeItem(CHILD_KEY);
+    setChildIdState(null);
+    clearFeatureCache();
+    leaving.current = false;
+    if (rt) void authApi.logout(rt).catch(() => undefined);
   }, []);
 
   const setChildId = useCallback((id: string | null) => {

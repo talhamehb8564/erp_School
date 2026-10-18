@@ -18,7 +18,7 @@ export default function PortalPage() {
   const letter = name.trim().charAt(0).toUpperCase() || "S";
   return (
     <div className="site portal-page">
-      <header className="site-nav">
+      <header className="site-nav portal-nav">
         <Link to="/" className="site-brand">
           {school?.logoUrl ? <img src={school.logoUrl} alt="" /> : <div className="mark">{letter}</div>}
           <div>

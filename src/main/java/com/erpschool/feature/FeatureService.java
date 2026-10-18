@@ -62,6 +62,10 @@ public class FeatureService {
         return toWire(flags(TenantContext.getTenantId()));
     }
 
+    public Map<String, Boolean> snapshot(UUID tenantId) {
+        return toWire(flags(tenantId));
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Boolean> forTenant(UUID tenantId) {
         requireTenant(tenantId);

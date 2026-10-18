@@ -175,7 +175,7 @@ export default function Welcome() {
             {school?.tagline ? <div className="hint">{school.tagline}</div> : null}
           </div>
         </a>
-        <div className="site-nav-right">
+        <div className="site-nav-tools">
           {school?.admissions?.enabled ? (
             <Link to="/apply" className="btn brass sm site-nav-apply">{school.admissions.ctaLabel || "Apply for Admission"}</Link>
           ) : null}
@@ -185,16 +185,16 @@ export default function Welcome() {
             </select>
           ) : null}
           <Link to="/portals" className="btn ghost sm site-nav-portal">School Portal</Link>
-          <button
-            type="button"
-            className={`burger-x ${menu ? "open" : ""}`}
-            aria-label={menu ? "Close menu" : "Open menu"}
-            aria-expanded={menu}
-            onClick={() => setMenu((v) => !v)}
-          >
-            <span /><span /><span />
-          </button>
         </div>
+        <button
+          type="button"
+          className={`burger-x ${menu ? "open" : ""}`}
+          aria-label={menu ? "Close menu" : "Open menu"}
+          aria-expanded={menu}
+          onClick={() => setMenu((v) => !v)}
+        >
+          <span /><span /><span />
+        </button>
       </header>
       <div className={`site-drawer ${menu ? "open" : ""}`} aria-hidden={!menu}>
         <button type="button" className="site-scrim" aria-label="Close menu" onClick={closeMenu} />

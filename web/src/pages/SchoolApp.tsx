@@ -37,9 +37,16 @@ export default function SchoolApp() {
 
   useEffect(() => {
     if (!user || locked) return;
-    const t = window.setTimeout(() => {
+    const run = () => {
       void notificationApi.unread().then((r) => setUnread(r.unread)).catch(() => undefined);
-    }, 2500);
+    };
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(run, { timeout: 400 });
+      const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      return () => cancel?.(id);
+    }
+    const t = window.setTimeout(run, 0);
     return () => window.clearTimeout(t);
   }, [user, locked]);
 
@@ -145,9 +152,16 @@ function ActivityBar({ enabled }: { enabled: boolean }) {
   const [items, setItems] = useState<{ id: string; action: string; createdAt?: string }[]>([]);
   useEffect(() => {
     if (!enabled || locked) return;
-    const t = window.setTimeout(() => {
+    const run = () => {
       void auditApi.mine().then((page) => setItems(page.content || [])).catch(() => undefined);
-    }, 1800);
+    };
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(run, { timeout: 400 });
+      const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      return () => cancel?.(id);
+    }
+    const t = window.setTimeout(run, 0);
     return () => window.clearTimeout(t);
   }, [enabled, locked]);
   if (!items.length) return null;

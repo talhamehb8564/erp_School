@@ -72,11 +72,11 @@ export function LookupsProvider({ children, enabled, prefetch }: { children: Rea
     if (!prefetch) return;
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
     if (typeof idle === "function") {
-      const id = idle(() => { void reload(); }, { timeout: 1200 });
+      const id = idle(() => { void reload(); }, { timeout: 400 });
       const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
       return () => cancel?.(id);
     }
-    const t = window.setTimeout(() => { void reload(); }, 400);
+    const t = window.setTimeout(() => { void reload(); }, 0);
     return () => window.clearTimeout(t);
   }, [enabled, prefetch, reload, classes.length, subjects.length]);
 

@@ -68,6 +68,7 @@ export interface AuthPayload {
   expiresIn: number;
   user: User;
   tenant?: Tenant | null;
+  features?: Record<string, boolean> | null;
 }
 
 export interface Tenant {

@@ -30,9 +30,9 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
   const [password, setPassword] = useState("");
 
   useEffect(() => {
-    void import("./SchoolApp");
-    void import("./OwnerApp");
-  }, []);
+    if (owner) void import("./OwnerApp");
+    else void import("./SchoolApp");
+  }, [owner]);
 
   if (user) return <Navigate to={homeFor(user)} replace />;
   if (!expected) return <Navigate to={LOGIN_PORTALS} replace />;

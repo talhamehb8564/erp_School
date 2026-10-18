@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { featureApi } from "../api/services";
+import { readFeatureCache, writeFeatureCache } from "./featureCache";
 import { useSession } from "./session";
 
 export const FEATURE_KEYS = [
@@ -68,8 +69,11 @@ const Ctx = createContext<Features | null>(null);
 
 export function FeatureProvider({ children }: { children: ReactNode }) {
   const { user } = useSession();
-  const [flags, setFlags] = useState<Record<string, boolean>>({});
-  const [loaded, setLoaded] = useState(false);
+  const [flags, setFlags] = useState<Record<string, boolean>>(() => readFeatureCache(user?.tenantId) || {});
+  const [loaded, setLoaded] = useState(() => {
+    if (!user || user.role === "ERP_OWNER") return true;
+    return Boolean(readFeatureCache(user.tenantId));
+  });
 
   const reload = async () => {
     if (!user || user.role === "ERP_OWNER") {
@@ -78,16 +82,35 @@ export function FeatureProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      setFlags(await featureApi.current());
+      const next = await featureApi.current();
+      setFlags(next);
+      writeFeatureCache(user.tenantId, next);
     } catch {
-      setFlags({});
+      if (!readFeatureCache(user.tenantId)) setFlags({});
     } finally {
       setLoaded(true);
     }
   };
 
   useEffect(() => {
-    setLoaded(false);
+    if (!user || user.role === "ERP_OWNER") {
+      setFlags({});
+      setLoaded(true);
+      return;
+    }
+    const cached = readFeatureCache(user.tenantId);
+    if (cached) {
+      setFlags(cached);
+      setLoaded(true);
+      const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+      if (typeof idle === "function") {
+        const id = idle(() => { void reload(); }, { timeout: 800 });
+        const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+        return () => cancel?.(id);
+      }
+      const t = window.setTimeout(() => { void reload(); }, 0);
+      return () => window.clearTimeout(t);
+    }
     void reload();
   }, [user?.id, user?.tenantId]);
 

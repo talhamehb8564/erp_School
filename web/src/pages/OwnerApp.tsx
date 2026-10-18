@@ -60,7 +60,7 @@ export default function OwnerApp() {
           <button type="button" className="icon-btn burger" aria-label="Open menu" onClick={() => setOpen((v) => !v)}>
             ☰
           </button>
-          <div>
+          <div className="topbar-copy">
             <div className="crumbs">ERP Owner</div>
             <strong>{user?.fullName}</strong>
           </div>
