@@ -1,5 +1,6 @@
 package com.erpschool.website;
 
+import com.erpschool.admission.AdmissionService;
 import com.erpschool.campus.entity.Campus;
 import com.erpschool.campus.repository.CampusRepository;
 import com.erpschool.common.cache.CatalogCache;
@@ -21,13 +22,16 @@ public class PublicSchoolService {
     private final TenantRepository tenantRepository;
     private final CampusRepository campusRepository;
     private final CatalogCache catalogCache;
+    private final AdmissionService admissionService;
 
     public PublicSchoolService(TenantRepository tenantRepository,
                                CampusRepository campusRepository,
-                               CatalogCache catalogCache) {
+                               CatalogCache catalogCache,
+                               AdmissionService admissionService) {
         this.tenantRepository = tenantRepository;
         this.campusRepository = campusRepository;
         this.catalogCache = catalogCache;
+        this.admissionService = admissionService;
     }
 
     @Transactional(readOnly = true)
@@ -61,6 +65,7 @@ public class PublicSchoolService {
         school.put("twitterUrl", tenant.getTwitterUrl());
         school.put("linkedinUrl", tenant.getLinkedinUrl());
         school.put("whatsappUrl", tenant.getWhatsappUrl());
+        school.put("admissions", admissionService.publicSummary(tenant.getId()));
         school.put("gallery", JsonLists.publicMedia(tenant.getGalleryJson(), false));
         school.put("principal", principalView(
                 tenant.getPrincipalName(),

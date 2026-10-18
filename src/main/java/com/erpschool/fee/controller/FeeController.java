@@ -114,6 +114,14 @@ public class FeeController {
         return ResponseEntity.ok(ApiResponse.ok(feeService.myChallanSummaries(cap)));
     }
 
+    @GetMapping("/children/challans")
+    @PreAuthorize("hasRole('PARENT')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> parentChallans(
+            @RequestParam(required = false) Integer limit) {
+        int cap = limit != null && limit > 0 ? limit : 20;
+        return ResponseEntity.ok(ApiResponse.ok(feeService.parentChallanSummaries(cap)));
+    }
+
     @GetMapping("/students/{studentId}/challans")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> student(

@@ -1,9 +1,7 @@
-import { useMemo } from "react";
 import { useSession } from "../../lib/session";
-import { academicApi, feeApi, homeworkApi, portalApi, reportApi, studentApi } from "../../api/services";
+import { academicApi, feeApi, homeworkApi, reportApi, studentApi } from "../../api/services";
 import { Badge, Bars, Donut, Empty, ErrorBox, QueryState, Stat, Table, useAsync } from "../../ui/kit";
 import { money, pretty } from "../../lib/format";
-import type { StudentUser } from "../../lib/types";
 import ChildSwitch from "./ChildSwitch";
 
 export default function Dashboard() {
@@ -43,7 +41,9 @@ function StaffDash() {
           <h1>School dashboard</h1>
           <p>Students, staff and unpaid challans for this school.</p>
         </div>
-        <Donut value={active} max={Math.max(students, 1)} label="Active students" />
+        <div className="hero-wheels">
+          <Donut value={active} max={Math.max(students, 1)} label="Active students" />
+        </div>
       </div>
       <QueryState status={d} label="school dashboard">
         <div className="grid stats">
@@ -86,8 +86,11 @@ function TeacherDash() {
     subjectName?: string;
   }[];
   const homework = homeworkQ.data || [];
-  const progress = (progressQ.data || {}) as { attendancePercent?: number; present?: number; absent?: number; late?: number; totalDays?: number };
+  const progress = (progressQ.data || {}) as {
+    attendancePercent?: number; present?: number; absent?: number; late?: number; totalDays?: number; markedPercent?: number;
+  };
   const att = Number(progress.attendancePercent || 0);
+  const marked = Number(progress.markedPercent || 0);
   return (
     <>
       <div className="hero-strip card">
@@ -96,7 +99,10 @@ function TeacherDash() {
           <h1>Teacher desk</h1>
           <p>Attendance {att}% · Present {progress.present ?? 0} · Absent {progress.absent ?? 0} · Late {progress.late ?? 0} of {progress.totalDays ?? 0} marked days.</p>
         </div>
-        <Donut value={att} max={100} label="Attendance %" />
+        <div className="hero-wheels">
+          <Donut value={att} max={100} label="Attendance %" />
+          <Donut value={marked} max={100} label="Days marked" />
+        </div>
       </div>
       {progressQ.error && !progressQ.data ? <ErrorBox error={progressQ.error} onRetry={() => void progressQ.reload()} title="Unable to load teacher attendance" /> : null}
       <div className="grid two">
@@ -158,17 +164,13 @@ function AccountDash() {
 
 function ParentDash() {
   const { childId } = useSession();
-  const d = useAsync(() => portalApi.parent());
-  const kids = useMemo(() => (d.data?.children as StudentUser[]) || [], [d.data]);
-  const all = useMemo(
-    () => (d.data?.fees as { studentId?: string; challanNumber: string; totalPayable: number; status: string }[]) || [],
-    [d.data],
-  );
+  const kidsQ = useAsync(() => studentApi.children());
+  const feesQ = useAsync(() => feeApi.parentChallanSummaries(20));
+  const progressQ = useAsync(() => reportApi.childrenProgress());
+  const kids = kidsQ.data || [];
+  const all = feesQ.data || [];
   const fees = childId ? all.filter((f) => f.studentId === childId) : all;
-  const progressMap = useMemo(() => (d.data?.progressByChild as Record<string, {
-    attendancePercent?: number; academicPercent?: number; present?: number; absent?: number; late?: number;
-    totalLectures?: number; grade?: string; passStatus?: string;
-  }>) || {}, [d.data]);
+  const progressMap = progressQ.data || {};
   const activeId = childId || kids[0]?.id;
   const progress = (activeId && progressMap[activeId]) || {};
   const att = Number(progress.attendancePercent || 0);
@@ -179,28 +181,31 @@ function ParentDash() {
         <div>
           <p className="kicker">Selected child</p>
           <h1>Family</h1>
-          <p>Attendance {att}% ({progress.present ?? 0} present, {progress.absent ?? 0} absent, {progress.late ?? 0} late). Academic {aca}% · Grade {progress.grade || "—"} · {pretty(progress.passStatus)}.</p>
+          <p>Attendance {att}% ({Number(progress.present || 0)} present, {Number(progress.absent || 0)} absent, {Number(progress.late || 0)} late). Academic {aca}% · Grade {String(progress.grade || "—")} · {pretty(String(progress.passStatus || ""))}.</p>
         </div>
-        <div className="row">
+        <div className="hero-wheels">
           <Donut value={att} max={100} label="Attendance %" />
           <Donut value={aca} max={100} label="Academics %" />
         </div>
       </div>
-      <QueryState status={d} label="family dashboard">
+      {progressQ.error && !progressQ.data ? <ErrorBox error={progressQ.error} onRetry={() => void progressQ.reload()} title="Unable to load children progress" /> : null}
+      <QueryState status={kidsQ} label="children">
         <ChildSwitch childrenList={kids} />
-        <div className="card">
-          <h3>Fee challans</h3>
+      </QueryState>
+      <div className="card">
+        <h3>Fee challans</h3>
+        <QueryState status={feesQ} label="family fees">
           {!fees.length ? <Empty title="No challans" /> : (
             <Table headers={["Challan", "Amount", "Status"]} rows={fees.map((f) => [f.challanNumber, money(f.totalPayable), pretty(f.status)])} />
           )}
-        </div>
-      </QueryState>
+        </QueryState>
+      </div>
     </>
   );
 }
 
 function StudentDash() {
-  const me = useAsync(() => studentApi.me());
+  const { user } = useSession();
   const homeworkQ = useAsync(() => homeworkApi.list(undefined, undefined, 8));
   const feesQ = useAsync(() => feeApi.myChallanSummaries(20));
   const progressQ = useAsync(() => reportApi.myProgress());
@@ -217,15 +222,14 @@ function StudentDash() {
       <div className="hero-strip card">
         <div>
           <p className="kicker">This month</p>
-          <h1>{me.data?.user?.fullName || me.data?.fullName || "My school"}</h1>
+          <h1>{user?.fullName || "My school"}</h1>
           <p>Attendance {att}% ({progress.present ?? 0} present, {progress.absent ?? 0} absent, {progress.late ?? 0} late of {progress.totalLectures ?? 0} lectures). Academic {aca}% · Grade {progress.grade || "—"} · {pretty(progress.passStatus)} · {progress.obtainedMarks ?? 0}/{progress.totalMarks ?? 0}.</p>
         </div>
-        <div className="row">
+        <div className="hero-wheels">
           <Donut value={att} max={100} label="Attendance %" />
           <Donut value={aca} max={100} label="Academics %" />
         </div>
       </div>
-      {me.error && !me.data ? <ErrorBox error={me.error} onRetry={() => void me.reload()} title="Unable to load student profile" /> : null}
       {progressQ.error && !progressQ.data ? <ErrorBox error={progressQ.error} onRetry={() => void progressQ.reload()} title="Unable to load attendance and results" /> : null}
       <div className="grid two">
         <div className="card">

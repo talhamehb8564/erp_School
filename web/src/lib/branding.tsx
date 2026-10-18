@@ -77,6 +77,12 @@ export interface PublicSchool {
   twitterUrl?: string;
   linkedinUrl?: string;
   whatsappUrl?: string;
+  admissions?: {
+    enabled?: boolean;
+    ctaLabel?: string;
+    appointmentEnabled?: boolean;
+    appointmentRequired?: boolean;
+  };
   gallery?: PublicMedia[];
   principal?: PublicPrincipal;
   notice?: PublicNotice;
@@ -98,7 +104,7 @@ interface Branding {
 const Ctx = createContext<Branding | null>(null);
 
 function isPublicPath(pathname: string) {
-  return pathname === "/" || pathname.startsWith("/portals") || pathname.startsWith("/login") || pathname === "/admin";
+  return pathname === "/" || pathname === "/apply" || pathname.startsWith("/portals") || pathname.startsWith("/login") || pathname === "/admin";
 }
 
 export function BrandingProvider({ children }: { children: ReactNode }) {

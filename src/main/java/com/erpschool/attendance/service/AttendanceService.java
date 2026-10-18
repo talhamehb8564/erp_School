@@ -19,8 +19,12 @@ import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.settings.entity.SchoolSettings;
 import com.erpschool.settings.repository.SchoolSettingsRepository;
 import com.erpschool.student.service.StudentAccessService;
+import com.erpschool.tenant.context.CampusScope;
 import com.erpschool.tenant.context.TenantContext;
+import com.erpschool.user.entity.User;
 import com.erpschool.user.entity.UserRole;
+import com.erpschool.user.entity.UserStatus;
+import com.erpschool.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +32,10 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -42,6 +49,7 @@ public class AttendanceService {
     private final StudentAccessService studentAccessService;
     private final NotificationService notificationService;
     private final SchoolSettingsRepository settingsRepository;
+    private final UserRepository userRepository;
 
     public AttendanceService(StudentAttendanceRepository studentAttendanceRepository,
                              TeacherAttendanceRepository teacherAttendanceRepository,
@@ -50,7 +58,8 @@ public class AttendanceService {
                              StudentRepository studentRepository,
                              StudentAccessService studentAccessService,
                              NotificationService notificationService,
-                             SchoolSettingsRepository settingsRepository) {
+                             SchoolSettingsRepository settingsRepository,
+                             UserRepository userRepository) {
         this.studentAttendanceRepository = studentAttendanceRepository;
         this.teacherAttendanceRepository = teacherAttendanceRepository;
         this.salaryDeductionRepository = salaryDeductionRepository;
@@ -59,6 +68,7 @@ public class AttendanceService {
         this.studentAccessService = studentAccessService;
         this.notificationService = notificationService;
         this.settingsRepository = settingsRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -179,8 +189,57 @@ public class AttendanceService {
         if (TenantContext.getRole() == UserRole.TEACHER) {
             id = TenantContext.getUserId();
         }
+        if (id == null) {
+            return teacherAttendanceRepository.findByTenantIdAndAttendanceDateBetween(tenantId, from, to);
+        }
         return teacherAttendanceRepository.findByTenantIdAndTeacherUserIdAndAttendanceDateBetween(
                 tenantId, id, from, to);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> teacherDay(LocalDate date) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        List<User> teachers;
+        if (CampusScope.restricts() && TenantContext.getCampusId() != null) {
+            teachers = userRepository.findByTenantIdAndCampusIdAndRole(
+                    tenantId, TenantContext.getCampusId(), UserRole.TEACHER);
+        } else {
+            teachers = userRepository.findByTenantIdAndRole(tenantId, UserRole.TEACHER);
+        }
+        Map<UUID, TeacherAttendance> today = new HashMap<>();
+        for (TeacherAttendance row : teacherAttendanceRepository.findByTenantIdAndAttendanceDate(tenantId, date)) {
+            today.put(row.getTeacherUserId(), row);
+        }
+        LocalDate from = date.minusDays(30);
+        Map<UUID, int[]> stats = new HashMap<>();
+        for (TeacherAttendance row : teacherAttendanceRepository.findByTenantIdAndAttendanceDateBetween(
+                tenantId, from, date)) {
+            int[] pair = stats.computeIfAbsent(row.getTeacherUserId(), k -> new int[2]);
+            pair[1]++;
+            if (row.getStatus() == AttendanceStatus.PRESENT) {
+                pair[0]++;
+            }
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (User teacher : teachers) {
+            if (teacher.getStatus() != UserStatus.ACTIVE) {
+                continue;
+            }
+            TeacherAttendance mark = today.get(teacher.getId());
+            int[] pair = stats.getOrDefault(teacher.getId(), new int[2]);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("teacherUserId", teacher.getId());
+            row.put("fullName", teacher.getFullName());
+            row.put("username", teacher.getUsername());
+            row.put("campusId", teacher.getCampusId());
+            row.put("status", mark == null ? null : mark.getStatus().name());
+            row.put("remarks", mark == null ? null : mark.getRemarks());
+            row.put("presentDays", pair[0]);
+            row.put("markedDays", pair[1]);
+            row.put("percent", pair[1] == 0 ? 0 : Math.round(pair[0] * 10000.0 / pair[1]) / 100.0);
+            out.add(row);
+        }
+        return out;
     }
 
     private static BigDecimal nvl(BigDecimal value) {

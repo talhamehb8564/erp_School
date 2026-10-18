@@ -77,6 +77,54 @@ export const setupApi = {
     api.post<{ tenant: { id: string; name: string; code: string }; admin: { username: string; temporaryPassword?: string }; message?: string }>(`${v1}/setup`, body),
 };
 
+export const featureApi = {
+  current: () => api.get<Record<string, boolean>>(`${v1}/features`),
+  forTenant: (id: string) => api.get<Record<string, boolean>>(`${v1}/tenants/${id}/features`),
+  save: (id: string, body: Record<string, boolean>) =>
+    api.put<Record<string, boolean>>(`${v1}/tenants/${id}/features`, body),
+};
+
+export const admissionApi = {
+  config: () => api.get<{
+    settings?: Record<string, unknown>;
+    featureEnabled?: boolean;
+    fields?: Record<string, unknown>[];
+    openPeriods?: Record<string, unknown>[];
+  }>(`${v1}/admissions/config`),
+  saveSettings: (body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/admissions/settings`, body),
+  addField: (body: Record<string, unknown>) => api.post<Record<string, unknown>>(`${v1}/admissions/fields`, body),
+  updateField: (id: string, body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/admissions/fields/${id}`, body),
+  deleteField: (id: string) => api.del<void>(`${v1}/admissions/fields/${id}`),
+  addPeriod: (body: Record<string, unknown>) => api.post<Record<string, unknown>>(`${v1}/admissions/open-periods`, body),
+  updatePeriod: (id: string, body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/admissions/open-periods/${id}`, body),
+  deletePeriod: (id: string) => api.del<void>(`${v1}/admissions/open-periods/${id}`),
+  applications: (page = 0) => api.get<Page<Record<string, unknown>>>(`${v1}/admissions/applications?page=${page}&size=20`),
+};
+
+export const publicAdmissionApi = {
+  form: (code?: string) =>
+    api.get<{
+      enabled?: boolean;
+      ctaLabel?: string;
+      appointmentEnabled?: boolean;
+      appointmentRequired?: boolean;
+      schoolName?: string;
+      fields?: Record<string, unknown>[];
+      campuses?: { id: string; name: string; code?: string }[];
+    }>(`${v1}/public/admission${code ? `?code=${encodeURIComponent(code)}` : ""}`),
+  slots: (code: string | undefined, date: string, campusId?: string) => {
+    const p = new URLSearchParams({ date });
+    if (code) p.set("code", code);
+    if (campusId) p.set("campusId", campusId);
+    return api.get<{ start: string; end: string; booked?: boolean }[]>(`${v1}/public/admission/slots?${p}`);
+  },
+  submit: (code: string | undefined, body: Record<string, unknown>) =>
+    api.post<Record<string, unknown>>(
+      `${v1}/public/admission${code ? `?code=${encodeURIComponent(code)}` : ""}`,
+      body,
+    ),
+};
+
 export const tenantApi = {
   list: (q?: string, status?: string, page = 0) => {
     const p = new URLSearchParams();
@@ -210,6 +258,18 @@ export const attendanceApi = {
     if (teacherUserId) p.set("teacherUserId", teacherUserId);
     return api.get<TeacherAttendance[]>(`${v1}/attendance/teachers?${p}`);
   },
+  teacherDay: (date: string) =>
+    api.get<{
+      teacherUserId: string;
+      fullName: string;
+      username: string;
+      campusId?: string;
+      status?: string;
+      remarks?: string;
+      presentDays?: number;
+      markedDays?: number;
+      percent?: number;
+    }[]>(`${v1}/attendance/teachers/day?date=${date}`),
 };
 
 export const homeworkApi = {
@@ -294,6 +354,10 @@ export const feeApi = {
   studentChallans: (studentId: string) => api.get<FeeChallan[]>(`${v1}/fees/students/${studentId}/challans`),
   myChallanSummaries: (limit = 20) =>
     api.get<{ challanNumber: string; totalPayable: number; status: string }[]>(`${v1}/fees/me/challans?limit=${limit}`),
+  parentChallanSummaries: (limit = 20) =>
+    api.get<{ studentId?: string; challanNumber: string; totalPayable: number; status: string }[]>(
+      `${v1}/fees/children/challans?limit=${limit}`,
+    ),
   childChallanSummaries: (studentId: string, limit = 20) =>
     api.get<{ studentId?: string; challanNumber: string; totalPayable: number; status: string }[]>(
       `${v1}/fees/students/${studentId}/challans?summary=true&limit=${limit}`,
@@ -373,6 +437,7 @@ export const reportApi = {
   platformDashboard: () => api.get<Record<string, number>>(`${v1}/dashboard/platform`),
   myProgress: () => api.get<Record<string, unknown>>(`${v1}/reports/progress/me`),
   teacherProgress: () => api.get<Record<string, unknown>>(`${v1}/reports/progress/teacher`),
+  childrenProgress: () => api.get<Record<string, Record<string, unknown>>>(`${v1}/reports/progress/children`),
   studentProgress: (studentId: string) => api.get<Record<string, unknown>>(`${v1}/reports/progress/students/${studentId}`),
   attendance: (studentId: string, from: string, to: string) =>
     api.get<Record<string, unknown>>(`${v1}/reports/attendance/students/${studentId}?from=${from}&to=${to}`),

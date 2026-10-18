@@ -240,7 +240,21 @@ public class ReportService {
         m.put("late", late);
         m.put("totalDays", total);
         m.put("academicPercent", 0);
+        m.put("markedPercent", total == 0 ? 0 : Math.min(100, Math.round(total * 10000.0 / 30) / 100.0));
         return m;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Map<String, Object>> childrenProgress() {
+        if (TenantContext.getRole() != UserRole.PARENT) {
+            throw new BusinessException("Only a parent can load children progress");
+        }
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        List<UUID> ids = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
+                .stream()
+                .map(com.erpschool.student.entity.ParentStudent::getStudentId)
+                .toList();
+        return studentProgressBatch(ids);
     }
 
     @Transactional(readOnly = true)

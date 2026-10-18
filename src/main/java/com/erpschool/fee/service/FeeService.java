@@ -294,6 +294,19 @@ public class FeeService {
     }
 
     @Transactional(readOnly = true)
+    public List<Map<String, Object>> parentChallanSummaries(int limit) {
+        if (TenantContext.getRole() != com.erpschool.user.entity.UserRole.PARENT) {
+            throw new BusinessException("Only a parent can load children challans");
+        }
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        List<UUID> ids = parentStudentRepository.findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
+                .stream()
+                .map(ParentStudent::getStudentId)
+                .toList();
+        return challanSummariesForStudents(ids, limit);
+    }
+
+    @Transactional(readOnly = true)
     public Map<String, Object> getChallan(UUID id) {
         FeeChallan challan = requireChallan(id);
         studentAccessService.requireStudent(challan.getStudentId());

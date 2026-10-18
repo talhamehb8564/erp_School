@@ -52,6 +52,12 @@ public class ReportController {
         return ResponseEntity.ok(ApiResponse.ok(reportService.teacherProgress()));
     }
 
+    @GetMapping("/reports/progress/children")
+    @PreAuthorize("hasRole('PARENT')")
+    public ResponseEntity<ApiResponse<Map<String, Map<String, Object>>>> childrenProgress() {
+        return ResponseEntity.ok(ApiResponse.ok(reportService.childrenProgress()));
+    }
+
     @GetMapping("/reports/progress/students/{studentId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Map<String, Object>>> studentProgress(@PathVariable UUID studentId) {

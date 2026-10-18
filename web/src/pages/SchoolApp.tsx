@@ -6,6 +6,8 @@ import { LOGIN_PORTALS } from "../lib/routes";
 import { useSession } from "../lib/session";
 import { applyBrand, applyTheme, readTheme, type Theme } from "../lib/theme";
 import { useBranding } from "../lib/branding";
+import { PATH_FEATURE, useFeatures } from "../lib/features";
+import { useSidebarWidth } from "../lib/sidebar";
 import { SCHOOL_NAV } from "../lib/nav";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
@@ -16,14 +18,16 @@ import ErrorBoundary from "../ui/ErrorBoundary";
 const NAV_GROUPS: { label: string; tos: string[] }[] = [
   { label: "Home", tos: ["/app", "/app/notifications", "/app/password"] },
   { label: "People", tos: ["/app/students", "/app/users", "/app/campuses"] },
-  { label: "Academics", tos: ["/app/academics", "/app/timetable", "/app/attendance", "/app/homework", "/app/exams", "/app/online-exams"] },
+  { label: "Academics", tos: ["/app/academics", "/app/timetable", "/app/attendance", "/app/teacher-attendance", "/app/homework", "/app/exams", "/app/online-exams"] },
   { label: "Finance", tos: ["/app/fees", "/app/salaries", "/app/reports", "/app/billing"] },
-  { label: "School", tos: ["/app/website", "/app/announcements", "/app/calendar", "/app/settings"] },
+  { label: "School", tos: ["/app/website", "/app/admissions", "/app/announcements", "/app/calendar", "/app/settings"] },
 ];
 
 export default function SchoolApp() {
   const { user, tenant, locked, logout } = useSession();
   const { school } = useBranding();
+  const { on } = useFeatures();
+  const { onResizePointerDown } = useSidebarWidth();
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme());
   const [unread, setUnread] = useState(0);
@@ -54,7 +58,7 @@ export default function SchoolApp() {
   if (locked && loc.pathname !== "/app/billing") return <Locked />;
 
   const role = user.role;
-  const items = SCHOOL_NAV.filter((i) => i.roles.includes(role));
+  const items = SCHOOL_NAV.filter((i) => i.roles.includes(role) && on(PATH_FEATURE[i.to]));
   const current = items.find((i) => i.to === loc.pathname)
     || items.filter((i) => i.to !== "/app" && loc.pathname.startsWith(i.to)).sort((a, b) => b.to.length - a.to.length)[0];
   const toggleTheme = () => {
@@ -68,6 +72,7 @@ export default function SchoolApp() {
       <div className="shell" data-role={role}>
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>
+          <button type="button" className="sidebar-resizer" aria-label="Resize sidebar" onPointerDown={onResizePointerDown} />
           <BrandMark name={tenant?.name || school?.name || "School"} code={tenant?.code || school?.code} logoUrl={tenant?.logoUrl || school?.logoUrl} />
           {NAV_GROUPS.map((g) => {
             const shown = items.filter((i) => g.tos.includes(i.to));

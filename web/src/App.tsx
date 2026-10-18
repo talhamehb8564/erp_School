@@ -1,12 +1,13 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useSession } from "./lib/session";
+import { useFeatures, type FeatureKey } from "./lib/features";
 import { homeFor, LOGIN_PORTALS } from "./lib/routes";
-import Welcome from "./pages/Welcome";
 import { Loading } from "./ui/kit";
 import ErrorBoundary from "./ui/ErrorBoundary";
 import type { Role } from "./lib/types";
 
+const Welcome = lazy(() => import("./pages/Welcome"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const PortalPage = lazy(() => import("./pages/PortalPage"));
 const OwnerApp = lazy(() => import("./pages/OwnerApp"));
@@ -24,6 +25,9 @@ const AcademicsPage = lazy(() => import("./pages/school/Academics").then((m) => 
 const CampusesPage = lazy(() => import("./pages/school/Academics").then((m) => ({ default: m.CampusesPage })));
 const TimetablePage = lazy(() => import("./pages/school/Academics").then((m) => ({ default: m.TimetablePage })));
 const AttendancePage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.AttendancePage })));
+const TeacherAttendancePage = lazy(() => import("./pages/school/TeacherAttendance"));
+const AdmissionsPage = lazy(() => import("./pages/school/Admissions"));
+const ApplyAdmission = lazy(() => import("./pages/ApplyAdmission"));
 const HomeworkPage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.HomeworkPage })));
 const ExamsPage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.ExamsPage })));
 const OnlineExamsPage = lazy(() => import("./pages/school/OnlineExams"));
@@ -59,6 +63,14 @@ function RoleGate({ roles, children }: { roles: Role[]; children: ReactNode }) {
   return <>{children}</>;
 }
 
+function FeatureGate({ feature, children }: { feature: FeatureKey; children: ReactNode }) {
+  const { user } = useSession();
+  const { on, loaded } = useFeatures();
+  if (!loaded) return <>{children}</>;
+  if (!on(feature)) return <Navigate to={user ? homeFor(user) : LOGIN_PORTALS} replace />;
+  return <>{children}</>;
+}
+
 function HomeRedirect() {
   const { user, loading } = useSession();
   if (user) return <Navigate to={homeFor(user)} replace />;
@@ -72,6 +84,7 @@ export default function App() {
       <Suspense fallback={<Loading label="Loading…" />}>
         <Routes>
           <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
+          <Route path="/apply" element={<PublicOnly><ApplyAdmission /></PublicOnly>} />
           <Route path="/portals" element={<PublicOnly><PortalPage /></PublicOnly>} />
           <Route path="/login/:role" element={<PublicOnly><LoginPage /></PublicOnly>} />
           <Route path="/admin" element={<PublicOnly><LoginPage owner /></PublicOnly>} />
@@ -105,25 +118,27 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="password" element={<ChangePassword />} />
-            <Route path="students" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "ACCOUNT_OFFICER"]}><StudentsPage /></RoleGate>} />
+            <Route path="students" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "ACCOUNT_OFFICER"]}><FeatureGate feature="STUDENTS"><StudentsPage /></FeatureGate></RoleGate>} />
             <Route path="users" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><UsersPage /></RoleGate>} />
             <Route path="campuses" element={<RoleGate roles={["SCHOOL_ADMIN"]}><CampusesPage /></RoleGate>} />
             <Route path="academics" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><AcademicsPage /></RoleGate>} />
-            <Route path="timetable" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT", "PARENT"]}><TimetablePage /></RoleGate>} />
-            <Route path="attendance" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><AttendancePage /></RoleGate>} />
-            <Route path="homework" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><HomeworkPage /></RoleGate>} />
-            <Route path="exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><ExamsPage /></RoleGate>} />
-            <Route path="online-exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><OnlineExamsPage /></RoleGate>} />
-            <Route path="online-exams/:examId" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><OnlineExamsPage /></RoleGate>} />
-            <Route path="website" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><WebsitePage /></RoleGate>} />
-            <Route path="fees" element={<RoleGate roles={["ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"]}><FeesPage /></RoleGate>} />
-            <Route path="salaries" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "TEACHER"]}><SalariesPage /></RoleGate>} />
-            <Route path="announcements" element={<AnnouncementsPage />} />
-            <Route path="calendar" element={<CalendarPage />} />
+            <Route path="timetable" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT", "PARENT"]}><FeatureGate feature="TIMETABLE"><TimetablePage /></FeatureGate></RoleGate>} />
+            <Route path="attendance" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><FeatureGate feature="ATTENDANCE"><AttendancePage /></FeatureGate></RoleGate>} />
+            <Route path="teacher-attendance" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="TEACHER_ATTENDANCE"><TeacherAttendancePage /></FeatureGate></RoleGate>} />
+            <Route path="homework" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><FeatureGate feature="HOMEWORK"><HomeworkPage /></FeatureGate></RoleGate>} />
+            <Route path="exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><FeatureGate feature="RESULTS"><ExamsPage /></FeatureGate></RoleGate>} />
+            <Route path="online-exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><FeatureGate feature="ONLINE_EXAMS"><OnlineExamsPage /></FeatureGate></RoleGate>} />
+            <Route path="online-exams/:examId" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><FeatureGate feature="ONLINE_EXAMS"><OnlineExamsPage /></FeatureGate></RoleGate>} />
+            <Route path="website" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="WEBSITE"><WebsitePage /></FeatureGate></RoleGate>} />
+            <Route path="admissions" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="ADMISSIONS"><AdmissionsPage /></FeatureGate></RoleGate>} />
+            <Route path="fees" element={<RoleGate roles={["ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"]}><FeatureGate feature="FEES"><FeesPage /></FeatureGate></RoleGate>} />
+            <Route path="salaries" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER", "PRINCIPAL", "TEACHER"]}><FeatureGate feature="SALARIES"><SalariesPage /></FeatureGate></RoleGate>} />
+            <Route path="announcements" element={<FeatureGate feature="ANNOUNCEMENTS"><AnnouncementsPage /></FeatureGate>} />
+            <Route path="calendar" element={<FeatureGate feature="CALENDAR"><CalendarPage /></FeatureGate>} />
             <Route path="reports" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "ACCOUNT_OFFICER"]}><ReportsPage /></RoleGate>} />
             <Route path="settings" element={<RoleGate roles={["SCHOOL_ADMIN", "ACCOUNT_OFFICER"]}><SettingsPage /></RoleGate>} />
             <Route path="billing" element={<RoleGate roles={["SCHOOL_ADMIN"]}><BillingPage /></RoleGate>} />
-            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="notifications" element={<FeatureGate feature="NOTIFICATIONS"><NotificationsPage /></FeatureGate>} />
           </Route>
           <Route path="*" element={<HomeRedirect />} />
         </Routes>

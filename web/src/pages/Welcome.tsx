@@ -181,6 +181,9 @@ export default function Welcome() {
           <a href="#gallery" onClick={closeMenu}>Life at school</a>
           <a href="#campuses" onClick={closeMenu}>Campuses</a>
           <a href="#contact" onClick={closeMenu}>Contact</a>
+          {school?.admissions?.enabled ? (
+            <Link to="/apply" className="btn ghost" onClick={closeMenu}>{school.admissions.ctaLabel || "Apply"}</Link>
+          ) : null}
           <Link to="/portals" className="btn brass site-links-portal" onClick={closeMenu}>School Portal</Link>
         </nav>
         <div className="site-nav-right">
@@ -218,6 +221,11 @@ export default function Welcome() {
           <p className="kicker">{campus?.name || "Welcome"}</p>
           <h1>{heroes[slide]?.title || name}</h1>
           {heroes[slide]?.caption || school?.tagline ? <p>{heroes[slide]?.caption || school?.tagline}</p> : null}
+          {school?.admissions?.enabled ? (
+            <div className="row" style={{ marginTop: 16 }}>
+              <Link to="/apply" className="btn brass">{school.admissions.ctaLabel || "Apply for Admission"}</Link>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -271,13 +279,15 @@ export default function Welcome() {
           <p className="kicker">Position holders</p>
           <h2><span className="pulse-hl">Highlights</span></h2>
           {highlights.isDefault ? <p className="sample-copy">Sample honours until School Admin publishes real names from Website settings.</p> : null}
-          <div className="holder-grid">
-            {highlights.items.map((line, i) => (
-              <article key={line + i} className={`holder-card ${highlights.isDefault ? "sample" : ""}`}>
-                <span className="holder-index">{String(i + 1).padStart(2, "0")}</span>
-                <strong>{line}</strong>
-              </article>
-            ))}
+          <div className="hl-ticker" tabIndex={0} aria-label="Achievement ticker. Hover or focus to pause.">
+            <div className="hl-track">
+              {[...highlights.items, ...highlights.items].map((line, i) => (
+                <article key={line + i} className={`holder-card ticker-item ${highlights.isDefault ? "sample" : ""}`}>
+                  <span className="holder-index">{String((i % highlights.items.length) + 1).padStart(2, "0")}</span>
+                  <strong>{line}</strong>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
       </Reveal>
@@ -407,6 +417,9 @@ export default function Welcome() {
         </div>
         <div className="row">
           <Link to="/portals" className="btn brass">School Portal</Link>
+          {school?.admissions?.enabled ? (
+            <Link to="/apply" className="btn ghost">{school.admissions.ctaLabel || "Apply for Admission"}</Link>
+          ) : null}
           <a href="#contact" className="btn ghost">Contact the school</a>
         </div>
       </section>
@@ -426,6 +439,11 @@ export default function Welcome() {
           <Link to="/portals" className="btn brass sm">Login</Link>
         </nav>
       </footer>
+      {contact.whatsapp ? (
+        <a className="wa-float" href={contact.whatsapp} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp">
+          WhatsApp
+        </a>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import ChangePassword from "./ChangePassword";
-import { reportApi, subscriptionApi, tenantApi, userApi } from "../api/services";
+import { featureApi, reportApi, subscriptionApi, tenantApi, userApi } from "../api/services";
+import { FEATURE_KEYS, FEATURE_LABELS, type FeatureKey } from "../lib/features";
+import { useSidebarWidth } from "../lib/sidebar";
 import { fmtDate, money, pretty } from "../lib/format";
 import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
@@ -14,6 +16,7 @@ import type { Tenant, TenantStatus } from "../lib/types";
 export default function OwnerApp() {
   const { user, logout } = useSession();
   const loc = useLocation();
+  const { onResizePointerDown } = useSidebarWidth();
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(false); }, [loc.pathname]);
   const [theme, setTheme] = useState<Theme>(readTheme());
@@ -29,6 +32,7 @@ export default function OwnerApp() {
     <div className="shell">
       {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
       <aside className={`sidebar ${open ? "open" : ""}`}>
+        <button type="button" className="sidebar-resizer" aria-label="Resize sidebar" onPointerDown={onResizePointerDown} />
         <div className="brand-mark" style={{ marginBottom: 18 }}>
           <div className="mark">A</div>
           <div>
@@ -279,6 +283,7 @@ export function SchoolDetail() {
           </QueryState>
         </div>
       </div>
+      <SchoolFeatures tenantId={t.id} />
       <div className="card" style={{ marginTop: 16 }}>
         <h3>Users in this school</h3>
         <QueryState status={users} label="school users">
@@ -289,6 +294,45 @@ export function SchoolDetail() {
         </QueryState>
       </div>
     </>
+  );
+}
+
+function SchoolFeatures({ tenantId }: { tenantId: string }) {
+  const toast = useToast();
+  const flags = useAsync(() => featureApi.forTenant(tenantId), [tenantId]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const toggle = async (key: FeatureKey, enabled: boolean) => {
+    setBusy(key);
+    try {
+      await featureApi.save(tenantId, { [key]: enabled });
+      toast("ok", `${FEATURE_LABELS[key]} ${enabled ? "on" : "off"}`);
+      await flags.reload();
+    } catch (e) {
+      toast("err", e instanceof Error ? e.message : "Feature update failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3>Modules for this school</h3>
+      <p>Off means nav, URLs and APIs return 403 for this tenant only. School B is unchanged.</p>
+      <QueryState status={flags} label="school features">
+        <div className="feature-grid">
+          {FEATURE_KEYS.map((key) => (
+            <label key={key} className="row">
+              <input
+                type="checkbox"
+                checked={flags.data?.[key] !== false}
+                disabled={busy === key}
+                onChange={(e) => void toggle(key, e.target.checked)}
+              />
+              {FEATURE_LABELS[key]}
+            </label>
+          ))}
+        </div>
+      </QueryState>
+    </div>
   );
 }
 

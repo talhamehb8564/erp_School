@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public interface TeacherAttendanceRepository extends JpaRepository<TeacherAttendance, UUID> {
     Optional<TeacherAttendance> findByTenantIdAndTeacherUserIdAndAttendanceDate(UUID tenantId, UUID teacherUserId, LocalDate date);
+    List<TeacherAttendance> findByTenantIdAndAttendanceDate(UUID tenantId, LocalDate date);
     List<TeacherAttendance> findByTenantIdAndAttendanceDateBetween(UUID tenantId, LocalDate from, LocalDate to);
     List<TeacherAttendance> findByTenantIdAndTeacherUserIdAndAttendanceDateBetween(UUID tenantId, UUID teacherUserId, LocalDate from, LocalDate to);
 

@@ -1,5 +1,6 @@
 package com.erpschool.config;
 
+import com.erpschool.feature.FeatureGuardFilter;
 import com.erpschool.security.JwtAuthenticationFilter;
 import com.erpschool.security.RestAccessDeniedHandler;
 import com.erpschool.security.RestAuthenticationEntryPoint;
@@ -23,15 +24,18 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final SubscriptionGuardFilter subscriptionGuardFilter;
+    private final FeatureGuardFilter featureGuardFilter;
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                           SubscriptionGuardFilter subscriptionGuardFilter,
+                          FeatureGuardFilter featureGuardFilter,
                           RestAuthenticationEntryPoint authenticationEntryPoint,
                           RestAccessDeniedHandler accessDeniedHandler) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.subscriptionGuardFilter = subscriptionGuardFilter;
+        this.featureGuardFilter = featureGuardFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.accessDeniedHandler = accessDeniedHandler;
     }
@@ -63,7 +67,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(subscriptionGuardFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(subscriptionGuardFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(featureGuardFilter, SubscriptionGuardFilter.class);
         return http.build();
     }
 
