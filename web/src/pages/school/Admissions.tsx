@@ -67,6 +67,7 @@ export default function AdmissionsPage() {
           </div>
           <div className="card">
             <h3>Open periods</h3>
+            <p className="hint">Add morning and evening ranges on the same day if needed. Applicants see auto-generated times (for example 09:00, 09:30…) from the slot length. You do not create each appointment time by hand.</p>
             <Form busyLabel="Adding…" onSubmit={async () => {
               await admissionApi.addPeriod({ dayOfWeek: Number(day), startTime: start, endTime: end, slotMinutes: Number(minutes) });
               toast("ok", "Open period added");

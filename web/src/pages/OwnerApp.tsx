@@ -300,14 +300,22 @@ export function SchoolDetail() {
 function SchoolFeatures({ tenantId }: { tenantId: string }) {
   const toast = useToast();
   const flags = useAsync(() => featureApi.forTenant(tenantId), [tenantId]);
+  const [local, setLocal] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    if (flags.data) setLocal(flags.data);
+  }, [flags.data]);
   const toggle = async (key: FeatureKey, enabled: boolean) => {
+    if (busy) return;
+    const prev = local[key] !== false;
+    setLocal((m) => ({ ...m, [key]: enabled }));
     setBusy(key);
     try {
-      await featureApi.save(tenantId, { [key]: enabled });
+      const next = await featureApi.save(tenantId, { [key]: enabled });
+      setLocal(next);
       toast("ok", `${FEATURE_LABELS[key]} ${enabled ? "on" : "off"}`);
-      await flags.reload();
     } catch (e) {
+      setLocal((m) => ({ ...m, [key]: prev }));
       toast("err", e instanceof Error ? e.message : "Feature update failed");
     } finally {
       setBusy(null);
@@ -316,20 +324,27 @@ function SchoolFeatures({ tenantId }: { tenantId: string }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <h3>Modules for this school</h3>
-      <p>Off means nav, URLs and APIs return 403 for this tenant only. School B is unchanged.</p>
+      <p>Off hides the menu, blocks the page URL, and returns 403 on that school’s APIs. School B is unchanged.</p>
       <QueryState status={flags} label="school features">
         <div className="feature-grid">
-          {FEATURE_KEYS.map((key) => (
-            <label key={key} className="row">
-              <input
-                type="checkbox"
-                checked={flags.data?.[key] !== false}
-                disabled={busy === key}
-                onChange={(e) => void toggle(key, e.target.checked)}
-              />
-              {FEATURE_LABELS[key]}
-            </label>
-          ))}
+          {FEATURE_KEYS.map((key) => {
+            const on = local[key] !== false;
+            return (
+              <label key={key} className={`switch ${on ? "on" : ""} ${busy === key ? "busy" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={busy === key}
+                  onChange={(e) => void toggle(key, e.target.checked)}
+                />
+                <span className="switch-track" aria-hidden><span className="switch-knob" /></span>
+                <span className="switch-copy">
+                  <strong>{FEATURE_LABELS[key]}</strong>
+                  <small>{busy === key ? "Saving…" : on ? "On" : "Off"}</small>
+                </span>
+              </label>
+            );
+          })}
         </div>
       </QueryState>
     </div>

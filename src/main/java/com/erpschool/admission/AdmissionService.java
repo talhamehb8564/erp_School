@@ -286,7 +286,7 @@ public class AdmissionService {
         if (!Boolean.TRUE.equals(summary.get("enabled")) || !Boolean.TRUE.equals(summary.get("appointmentEnabled"))) {
             return List.of();
         }
-        return slots(tenant.getId(), date, campusId, true);
+        return slots(tenant.getId(), date, campusId, false);
     }
 
     @Transactional(readOnly = true)
@@ -387,8 +387,7 @@ public class AdmissionService {
             if (campusId != null && period.getCampusId() != null && !campusId.equals(period.getCampusId())) {
                 continue;
             }
-            LocalTime t = period.getStartTime();
-            while (!t.plusMinutes(period.getSlotMinutes()).isAfter(period.getEndTime())) {
+            for (LocalTime t : slotStarts(period.getStartTime(), period.getEndTime(), period.getSlotMinutes())) {
                 Instant start = date.atTime(t).atZone(ZONE).toInstant();
                 Instant end = date.atTime(t.plusMinutes(period.getSlotMinutes())).atZone(ZONE).toInstant();
                 boolean booked = taken.contains(start);
@@ -399,7 +398,6 @@ public class AdmissionService {
                     row.put("booked", booked);
                     out.add(row);
                 }
-                t = t.plusMinutes(period.getSlotMinutes());
             }
         }
         return out;
@@ -651,6 +649,19 @@ public class AdmissionService {
             }
         }
         return b.toString();
+    }
+
+    static List<LocalTime> slotStarts(LocalTime start, LocalTime end, int minutes) {
+        List<LocalTime> out = new ArrayList<>();
+        if (start == null || end == null || minutes <= 0 || !end.isAfter(start)) {
+            return out;
+        }
+        LocalTime t = start;
+        while (!t.plusMinutes(minutes).isAfter(end)) {
+            out.add(t);
+            t = t.plusMinutes(minutes);
+        }
+        return out;
     }
 
     static String normalizeCnic(String raw) {

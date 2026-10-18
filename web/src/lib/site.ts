@@ -157,6 +157,22 @@ export function highlightsFor(school: PublicSchool | null): { items: string[]; i
   return { items: items.length ? items : [raw], isDefault: false };
 }
 
+export function contactFor(campus: PublicCampus | null, school: PublicSchool | null) {
+  return {
+    campusName: campus?.name,
+    email: campus?.email || school?.email,
+    phone: campus?.phone || school?.phone,
+    address: campus?.address || school?.addressLine,
+    city: campus?.city || school?.city,
+    facebook: campus?.facebookUrl || school?.facebookUrl,
+    instagram: campus?.instagramUrl || school?.instagramUrl,
+    youtube: campus?.youtubeUrl || school?.youtubeUrl,
+    twitter: campus?.twitterUrl || school?.twitterUrl,
+    linkedin: school?.linkedinUrl,
+    whatsapp: campus?.whatsappUrl || school?.whatsappUrl,
+  };
+}
+
 export function mapOf(campus: PublicCampus | null, school: PublicSchool | null): PublicMap {
   const c = campus?.map;
   const s = school?.map;

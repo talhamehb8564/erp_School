@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { publicApi, setupApi } from "../api/services";
 import { useBranding } from "../lib/branding";
@@ -7,6 +7,7 @@ import {
   DEFAULT_NOTICE_BODY,
   DEFAULT_NOTICE_TITLE,
   DEFAULT_PRINCIPAL_MESSAGE,
+  contactFor,
   galleryFor,
   heroesFor,
   mapOf,
@@ -20,9 +21,20 @@ import {
   youtubeId,
 } from "../lib/site";
 import { Button, Field, Form } from "../ui/kit";
+import { SocialLink, WhatsAppFloat } from "../ui/CampusContact";
 import TypeLine from "../ui/TypeLine";
 import { useToast } from "../lib/toast";
 import type { PublicMedia } from "../lib/branding";
+
+const SITE_MENU: { href: string; label: string }[] = [
+  { href: "#about", label: "About" },
+  { href: "#principal", label: "Principal" },
+  { href: "#academics", label: "Academics" },
+  { href: "#highlights", label: "Highlights" },
+  { href: "#gallery", label: "Life at school" },
+  { href: "#campuses", label: "Campuses" },
+  { href: "#contact", label: "Contact" },
+];
 
 function Reveal({ children, className }: { children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -41,16 +53,6 @@ function Reveal({ children, className }: { children: ReactNode; className?: stri
     return () => io.disconnect();
   }, []);
   return <div ref={ref} className={`reveal ${on ? "on" : ""} ${className || ""}`}>{children}</div>;
-}
-
-function SocialLink({ href, label, network, children }: { href?: string; label: string; network: string; children: ReactNode }) {
-  if (!href) return null;
-  return (
-    <a className={`soc ${network}`} href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
-      {children}
-      <span>{label}</span>
-    </a>
-  );
 }
 
 export default function Welcome() {
@@ -74,23 +76,23 @@ export default function Welcome() {
   const heroes = useMemo(() => heroesFor(campus, school), [campus, school]);
   useEffect(() => {
     if (heroes.length < 2 || paused) return;
-    const id = window.setInterval(() => setSlide((n) => (n + 1) % heroes.length), 6200);
+    const id = window.setInterval(() => setSlide((n) => (n + 1) % heroes.length), 3800);
     return () => window.clearInterval(id);
   }, [heroes.length, paused]);
   useEffect(() => { setSlide(0); }, [campus?.id]);
 
-  const contact = useMemo(() => ({
-    email: campus?.email || school?.email,
-    phone: campus?.phone || school?.phone,
-    address: campus?.address || school?.addressLine,
-    city: campus?.city || school?.city,
-    facebook: campus?.facebookUrl || school?.facebookUrl,
-    instagram: campus?.instagramUrl || school?.instagramUrl,
-    youtube: campus?.youtubeUrl || school?.youtubeUrl,
-    twitter: campus?.twitterUrl || school?.twitterUrl,
-    linkedin: school?.linkedinUrl,
-    whatsapp: campus?.whatsappUrl || school?.whatsappUrl,
-  }), [campus, school]);
+  const contact = useMemo(() => contactFor(campus, school), [campus, school]);
+
+  useEffect(() => {
+    document.body.classList.toggle("menu-open", menu);
+    return () => document.body.classList.remove("menu-open");
+  }, [menu]);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menu]);
 
   if (loading && !school) {
     return (
@@ -173,30 +175,41 @@ export default function Welcome() {
             {school?.tagline ? <div className="hint">{school.tagline}</div> : null}
           </div>
         </a>
-        <nav className={`site-links ${menu ? "open" : ""}`} aria-label="Site">
-          <a href="#about" onClick={closeMenu}>About</a>
-          <a href="#principal" onClick={closeMenu}>Principal</a>
-          <a href="#academics" onClick={closeMenu}>Academics</a>
-          <a href="#highlights" onClick={closeMenu}>Highlights</a>
-          <a href="#gallery" onClick={closeMenu}>Life at school</a>
-          <a href="#campuses" onClick={closeMenu}>Campuses</a>
-          <a href="#contact" onClick={closeMenu}>Contact</a>
-          {school?.admissions?.enabled ? (
-            <Link to="/apply" className="btn ghost" onClick={closeMenu}>{school.admissions.ctaLabel || "Apply"}</Link>
-          ) : null}
-          <Link to="/portals" className="btn brass site-links-portal" onClick={closeMenu}>School Portal</Link>
-        </nav>
         <div className="site-nav-right">
+          {school?.admissions?.enabled ? (
+            <Link to="/apply" className="btn brass sm site-nav-apply">{school.admissions.ctaLabel || "Apply for Admission"}</Link>
+          ) : null}
           {campuses.length ? (
             <select className="site-branch" value={campus?.id || ""} onChange={(e) => setCampusId(e.target.value)} aria-label="Select campus">
               {campuses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           ) : null}
-          <Link to="/portals" className="btn brass site-nav-portal">School Portal</Link>
-          <button type="button" className="icon-btn site-burger" aria-label="Menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>☰</button>
+          <Link to="/portals" className="btn ghost sm site-nav-portal">School Portal</Link>
+          <button
+            type="button"
+            className={`burger-x ${menu ? "open" : ""}`}
+            aria-label={menu ? "Close menu" : "Open menu"}
+            aria-expanded={menu}
+            onClick={() => setMenu((v) => !v)}
+          >
+            <span /><span /><span />
+          </button>
         </div>
       </header>
-      {menu ? <button type="button" className="site-scrim" aria-label="Close menu" onClick={closeMenu} /> : null}
+      <div className={`site-drawer ${menu ? "open" : ""}`} aria-hidden={!menu}>
+        <button type="button" className="site-scrim" aria-label="Close menu" onClick={closeMenu} />
+        <nav className="site-drawer-panel" aria-label="Site">
+          {SITE_MENU.map((item, i) => (
+            <a key={item.href} href={item.href} style={{ "--i": i } as CSSProperties} onClick={closeMenu}>{item.label}</a>
+          ))}
+          {school?.admissions?.enabled ? (
+            <Link to="/apply" className="btn brass" style={{ "--i": SITE_MENU.length } as CSSProperties} onClick={closeMenu}>
+              {school.admissions.ctaLabel || "Apply for Admission"}
+            </Link>
+          ) : null}
+          <Link to="/portals" className="btn ghost" style={{ "--i": SITE_MENU.length + 1 } as CSSProperties} onClick={closeMenu}>School Portal</Link>
+        </nav>
+      </div>
 
       <section className="site-hero" id="top" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
         <div className="site-hero-media">
@@ -439,11 +452,7 @@ export default function Welcome() {
           <Link to="/portals" className="btn brass sm">Login</Link>
         </nav>
       </footer>
-      {contact.whatsapp ? (
-        <a className="wa-float" href={contact.whatsapp} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp">
-          WhatsApp
-        </a>
-      ) : null}
+      <WhatsAppFloat href={contact.whatsapp} />
     </div>
   );
 }
@@ -454,7 +463,7 @@ function PrincipalGallery({ photos, name, sample, branch }: { photos: PublicMedi
   useEffect(() => { setI(0); }, [sig]);
   useEffect(() => {
     if (photos.length < 2) return;
-    const id = window.setInterval(() => setI((n) => (n + 1) % photos.length), 5400);
+    const id = window.setInterval(() => setI((n) => (n + 1) % photos.length), 4000);
     return () => window.clearInterval(id);
   }, [sig, photos.length]);
   const current = photos[i] || photos[0];
@@ -484,7 +493,7 @@ function ProgramsBlock({ items, sample }: { items: { title: string; body: string
   const [i, setI] = useState(0);
   useEffect(() => {
     if (items.length < 2) return;
-    const id = window.setInterval(() => setI((n) => (n + 1) % items.length), 7000);
+    const id = window.setInterval(() => setI((n) => (n + 1) % items.length), 4200);
     return () => window.clearInterval(id);
   }, [items.length]);
   const cur = items[i] || items[0];
