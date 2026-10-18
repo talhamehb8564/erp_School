@@ -9,7 +9,6 @@ import com.erpschool.common.exception.UnauthorizedException;
 import com.erpschool.common.util.HttpRequestUtils;
 import com.erpschool.common.util.TokenHasher;
 import com.erpschool.config.AppProperties;
-import com.erpschool.feature.FeatureService;
 import com.erpschool.security.JwtService;
 import com.erpschool.tenant.dto.TenantResponse;
 import com.erpschool.tenant.entity.Tenant;
@@ -44,7 +43,6 @@ public class AuthService {
     private final JwtService jwtService;
     private final AppProperties appProperties;
     private final AuditService auditService;
-    private final FeatureService featureService;
     private final TransactionTemplate readTx;
     private final TransactionTemplate writeTx;
 
@@ -55,7 +53,6 @@ public class AuthService {
                        JwtService jwtService,
                        AppProperties appProperties,
                        AuditService auditService,
-                       FeatureService featureService,
                        PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
@@ -64,7 +61,6 @@ public class AuthService {
         this.jwtService = jwtService;
         this.appProperties = appProperties;
         this.auditService = auditService;
-        this.featureService = featureService;
         this.readTx = new TransactionTemplate(transactionManager);
         this.readTx.setReadOnly(true);
         this.writeTx = new TransactionTemplate(transactionManager);
@@ -141,7 +137,7 @@ public class AuthService {
         if (response == null) {
             throw new UnauthorizedException("Unable to complete login");
         }
-        return attachFeatures(user, response);
+        return response;
     }
 
     @Transactional
@@ -162,7 +158,7 @@ public class AuthService {
         assertTenantAllowsLogin(user, tenant);
         stored.revoke();
         refreshTokenRepository.save(stored);
-        return attachFeatures(user, issueTokens(user, request, tenant));
+        return issueTokens(user, request, tenant);
     }
 
     @Transactional
@@ -273,13 +269,6 @@ public class AuthService {
                 .user(UserResponse.from(user))
                 .tenant(tenant == null ? null : TenantResponse.from(tenant))
                 .build();
-    }
-
-    private AuthResponse attachFeatures(User user, AuthResponse issued) {
-        if (user.getRole() == UserRole.ERP_OWNER || user.getTenantId() == null) {
-            return issued;
-        }
-        return issued.toBuilder().features(featureService.snapshot(user.getTenantId())).build();
     }
 
     private void registerFailure(User user) {

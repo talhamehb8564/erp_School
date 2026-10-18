@@ -142,7 +142,9 @@ async function send<T>(
   }
   const startedEpoch = getAuthEpoch();
   const method = (init.method || "GET").toUpperCase();
-  const timeoutMs = method === "GET" || method === "HEAD" ? GET_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+  const timeoutMs = path.includes("/auth/login") || path.includes("/auth/refresh") || method === "GET" || method === "HEAD"
+    ? GET_TIMEOUT_MS
+    : REQUEST_TIMEOUT_MS;
   const res = await fetchWithTimeout(path, { ...init, headers }, timeoutMs);
   if (
     res.status === 401 &&

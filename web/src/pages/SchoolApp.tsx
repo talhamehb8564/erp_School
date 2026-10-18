@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import { auditApi, notificationApi } from "../api/services";
 import { LookupsProvider, lookupsNeeded, useLookups } from "../lib/lookups";
@@ -11,7 +11,7 @@ import { useSidebarWidth } from "../lib/sidebar";
 import { SCHOOL_NAV } from "../lib/nav";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
-import { Button, ErrorBox } from "../ui/kit";
+import { Button, ErrorBox, Loading } from "../ui/kit";
 import UserMenu from "../ui/UserMenu";
 import ErrorBoundary from "../ui/ErrorBoundary";
 
@@ -120,7 +120,9 @@ export default function SchoolApp() {
             <LookupsAlert />
             <ActivityBar enabled={loc.pathname === "/app" && (role === "SCHOOL_ADMIN" || role === "PRINCIPAL")} />
             <ErrorBoundary>
-              <Outlet />
+              <Suspense fallback={<Loading label="Loading…" />}>
+                <Outlet />
+              </Suspense>
             </ErrorBoundary>
           </div>
         </div>

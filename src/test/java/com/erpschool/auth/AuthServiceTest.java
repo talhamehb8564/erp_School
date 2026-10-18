@@ -7,7 +7,6 @@ import com.erpschool.auth.service.AuthService;
 import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.UnauthorizedException;
 import com.erpschool.config.AppProperties;
-import com.erpschool.feature.FeatureService;
 import com.erpschool.security.JwtService;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.entity.TenantStatus;
@@ -50,8 +49,6 @@ class AuthServiceTest {
     private RefreshTokenRepository refreshTokenRepository;
     @Mock
     private AuditService auditService;
-    @Mock
-    private FeatureService featureService;
 
     private PasswordEncoder passwordEncoder;
     private AuthService authService;
@@ -79,7 +76,7 @@ class AuthServiceTest {
             }
         };
         authService = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
-                passwordEncoder, jwtService, properties, auditService, featureService, txManager);
+                passwordEncoder, jwtService, properties, auditService, txManager);
 
         tenantId = UUID.randomUUID();
         teacher = new User();

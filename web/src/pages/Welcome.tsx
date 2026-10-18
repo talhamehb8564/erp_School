@@ -84,8 +84,12 @@ export default function Welcome() {
   const contact = useMemo(() => contactFor(campus, school), [campus, school]);
 
   useEffect(() => {
+    document.documentElement.classList.toggle("menu-open", menu);
     document.body.classList.toggle("menu-open", menu);
-    return () => document.body.classList.remove("menu-open");
+    return () => {
+      document.documentElement.classList.remove("menu-open");
+      document.body.classList.remove("menu-open");
+    };
   }, [menu]);
   useEffect(() => {
     if (!menu) return;
@@ -186,28 +190,33 @@ export default function Welcome() {
           ) : null}
           <Link to="/portals" className="btn ghost sm site-nav-portal">School Portal</Link>
         </div>
-        <button
-          type="button"
-          className={`burger-x ${menu ? "open" : ""}`}
-          aria-label={menu ? "Close menu" : "Open menu"}
-          aria-expanded={menu}
-          onClick={() => setMenu((v) => !v)}
-        >
-          <span /><span /><span />
-        </button>
+        <div className="burger-slot">
+          <button
+            type="button"
+            className={`burger-x ${menu ? "open" : ""}`}
+            aria-label={menu ? "Close menu" : "Open menu"}
+            aria-expanded={menu}
+            onClick={() => setMenu((v) => !v)}
+          >
+            <span /><span /><span />
+          </button>
+        </div>
       </header>
       <div className={`site-drawer ${menu ? "open" : ""}`} aria-hidden={!menu}>
         <button type="button" className="site-scrim" aria-label="Close menu" onClick={closeMenu} />
         <nav className="site-drawer-panel" aria-label="Site">
-          {SITE_MENU.map((item, i) => (
-            <a key={item.href} href={item.href} style={{ "--i": i } as CSSProperties} onClick={closeMenu}>{item.label}</a>
-          ))}
-          {school?.admissions?.enabled ? (
-            <Link to="/apply" className="btn brass" style={{ "--i": SITE_MENU.length } as CSSProperties} onClick={closeMenu}>
-              {school.admissions.ctaLabel || "Apply for Admission"}
-            </Link>
-          ) : null}
-          <Link to="/portals" className="btn ghost" style={{ "--i": SITE_MENU.length + 1 } as CSSProperties} onClick={closeMenu}>School Portal</Link>
+          <div className="site-drawer-top" aria-hidden="true" />
+          <div className="site-drawer-links">
+            {SITE_MENU.map((item, i) => (
+              <a key={item.href} href={item.href} style={{ "--i": i } as CSSProperties} onClick={closeMenu}>{item.label}</a>
+            ))}
+            {school?.admissions?.enabled ? (
+              <Link to="/apply" className="btn brass" style={{ "--i": SITE_MENU.length } as CSSProperties} onClick={closeMenu}>
+                {school.admissions.ctaLabel || "Apply for Admission"}
+              </Link>
+            ) : null}
+            <Link to="/portals" className="btn ghost" style={{ "--i": SITE_MENU.length + 1 } as CSSProperties} onClick={closeMenu}>School Portal</Link>
+          </div>
         </nav>
       </div>
 

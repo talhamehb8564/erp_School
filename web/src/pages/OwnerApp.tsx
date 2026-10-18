@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import ChangePassword from "./ChangePassword";
 import { featureApi, reportApi, subscriptionApi, tenantApi, userApi } from "../api/services";
@@ -9,7 +9,7 @@ import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
 import { applyTheme, readTheme, type Theme } from "../lib/theme";
 import { ApiError } from "../api/client";
-import { Badge, Bars, Button, Donut, Empty, Field, FileLink, Form, Modal, Pager, QueryState, Search, Stat, Table, useAsync, useDebounced } from "../ui/kit";
+import { Badge, Bars, Button, Donut, Empty, Field, FileLink, Form, Loading, Modal, Pager, QueryState, Search, Stat, Table, useAsync, useDebounced } from "../ui/kit";
 import UserMenu from "../ui/UserMenu";
 import type { Tenant, TenantStatus } from "../lib/types";
 
@@ -72,7 +72,9 @@ export default function OwnerApp() {
           </div>
         </header>
         <div className="content">
-          <Outlet />
+          <Suspense fallback={<Loading label="Loading…" />}>
+            <Outlet />
+          </Suspense>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
+import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useBranding } from "../lib/branding";
 import RotatingLine from "../ui/RotatingLine";
-import type { ReactNode } from "react";
 
 const roles: { to: string; title: string; hint: string; icon: ReactNode }[] = [
   { to: "/login/admin", title: "School Admin", hint: "Users, campuses, website and billing", icon: <IconAdmin /> },
@@ -14,6 +14,9 @@ const roles: { to: string; title: string; hint: string; icon: ReactNode }[] = [
 
 export default function PortalPage() {
   const { school, campus } = useBranding();
+  useEffect(() => {
+    void import("./LoginPage");
+  }, []);
   const name = school?.name || "School";
   const letter = name.trim().charAt(0).toUpperCase() || "S";
   return (
