@@ -267,20 +267,32 @@ public class FeeService {
     /** Dashboard-sized challan rows: number, amount, status. No charges/proofs. */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> challanSummariesForStudents(List<UUID> studentIds, int limit) {
+        return challanSummariesForStudents(studentIds, limit, true);
+    }
+
+    private List<Map<String, Object>> challanSummariesForStudents(List<UUID> studentIds, int limit, boolean verifyEach) {
         if (studentIds == null || studentIds.isEmpty()) {
             return List.of();
         }
-        for (UUID id : studentIds) {
-            studentAccessService.requireStudent(id);
+        if (verifyEach) {
+            for (UUID id : studentIds) {
+                studentAccessService.requireStudent(id);
+            }
         }
         UUID tenantId = TenantGuard.requireTenantId(null);
         int cap = limit > 0 ? Math.min(limit, 50) : 20;
         List<FeeChallan> rows = new ArrayList<>(
                 challanRepository.findByTenantIdAndStudentIdInOrderByMonthDesc(
                         tenantId, studentIds, org.springframework.data.domain.PageRequest.of(0, cap)));
+        Map<UUID, StudentContext> students = loadStudents(rows.stream()
+                .map(FeeChallan::getStudentId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
         List<Map<String, Object>> maps = new ArrayList<>(rows.size());
         for (FeeChallan row : rows) {
-            maps.add(toSummary(row));
+            Map<String, Object> m = toSummary(row);
+            attachStudent(m, students.get(row.getStudentId()));
+            maps.add(m);
         }
         return overlayOverdue(rows, maps);
     }
@@ -303,7 +315,7 @@ public class FeeService {
                 .stream()
                 .map(ParentStudent::getStudentId)
                 .toList();
-        return challanSummariesForStudents(ids, limit);
+        return challanSummariesForStudents(ids, limit, false);
     }
 
     @Transactional(readOnly = true)

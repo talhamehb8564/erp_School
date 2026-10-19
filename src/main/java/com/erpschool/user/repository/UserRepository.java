@@ -56,7 +56,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
               AND (LOWER(u.username) LIKE :q
                    OR LOWER(u.firstName) LIKE :q
                    OR LOWER(u.lastName) LIKE :q
-                   OR LOWER(COALESCE(u.email, '')) LIKE :q)
+                   OR LOWER(COALESCE(u.email, '')) LIKE :q
+                   OR LOWER(COALESCE(u.phone, '')) LIKE :q)
             """)
     Page<User> searchByTenantQuery(@Param("tenantId") UUID tenantId,
                                    @Param("rolePresent") boolean rolePresent,

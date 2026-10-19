@@ -46,13 +46,18 @@ function FamilyFees() {
       ) : null}
       <QueryState status={mine} label="fee challans">
         <Table
-          headers={["Challan", "Month", "Due", "Amount", "Status", ""]}
+          headers={["Name", "Roll", "Class", "Campus", "Challan", "Month", "Due", "Amount", "Status", "Slip", ""]}
           rows={(mine.data || []).map((c) => [
+            c.studentName || "—",
+            c.rollNumber || "—",
+            c.className || "—",
+            c.campusName || "—",
             c.challanNumber,
             fmtDate(c.month),
             fmtDate(c.dueDate),
             money(c.totalPayable),
             <Badge key={c.id} value={c.status} />,
+            c.proofs?.[0]?.slipUrl ? <FileLink key={`sl${c.id}`} href={c.proofs[0].slipUrl} label="View slip" /> : "—",
             <div key={`act${c.id}`} className="row">
               <Button kind="ghost" onClick={async () => { setSlip(await feeApi.getChallan(c.id)); }}>Fee slip</Button>
               {c.status === "PAID" ? "Paid" : <Button kind="ghost" onClick={() => { setProofFor(c.id); setFile(null); setRef(""); setUploadPct(null); }}>Upload proof</Button>}

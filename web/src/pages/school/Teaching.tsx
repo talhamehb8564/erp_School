@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { academicApi, attendanceApi, examApi, fileApi, homeworkApi, studentApi, userApi } from "../../api/services";
 import { ApiError } from "../../api/client";
 import { useLookups } from "../../lib/lookups";
@@ -6,6 +6,7 @@ import { dayName, fmtDate, pretty, today } from "../../lib/format";
 import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
 import { Badge, Button, Empty, Field, FileLink, Form, Modal, QueryState, Table, studentLabel, useAsync } from "../../ui/kit";
+import ResultCountdown, { isUpcomingExam, pickResultSession } from "../../ui/ResultCountdown";
 import ChildSwitch, { useActiveStudentId } from "./ChildSwitch";
 import type { AttendanceStatus, StudentRosterRow } from "../../lib/types";
 
@@ -194,9 +195,9 @@ function FamilyHomework() {
       {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
       <QueryState status={list} label="homework">
         <Table
-          headers={["Title", "Due", ""]}
+          headers={["Title", "Class", "Subject", "Due", ""]}
           rows={homeworkRows.map((h) => [
-            h.title, fmtDate(h.dueDate),
+            h.title, h.className || "—", h.subjectName || "—", fmtDate(h.dueDate),
             <Button key={h.id} kind="ghost" onClick={() => setActive(h.id)}>Open</Button>,
           ])}
         />
@@ -316,13 +317,12 @@ function uniqIds(ids: (string | undefined)[]) {
   return [...new Set(ids.filter((id): id is string => Boolean(id)))];
 }
 
-function isUpcomingExam(announceAt?: string, seconds?: number, published?: boolean) {
-  if (published) return false;
-  if (!announceAt) return false;
-  const at = new Date(announceAt).getTime();
-  if (Number.isNaN(at) || at <= Date.now()) return false;
-  if (seconds != null && seconds <= 0) return false;
-  return true;
+function toLocalInput(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export function ExamsPage() {
@@ -345,24 +345,37 @@ function FamilyExams() {
   }, [sessionId, user?.role, sid]);
   useEffect(() => {
     if (sessionId || !sessions.data?.length) return;
-    setSessionId(sessions.data[0].id);
+    setSessionId(pickResultSession(sessions.data));
   }, [sessions.data, sessionId]);
-  const subjectLabel = (id?: string) => (id ? id.slice(0, 8) : "—");
+  const selected = (sessions.data || []).find((s) => s.id === sessionId);
+  const subjectLabel = (r: { subjectName?: string; subjectId?: string }) => r.subjectName || (r.subjectId ? r.subjectId.slice(0, 8) : "—");
   return (
     <>
-      <div className="page-title"><div><h1>Marks & results</h1><p>Published exam marksheets</p></div></div>
+      <div className="page-title"><div><h1>Marks & results</h1><p>Final Term and other sessions — countdown until the scheduled release, then the marksheet</p></div></div>
       {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
       <QueryState status={sessions} label="exam sessions">
         <Field label="Exam session">
           <select value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
             <option value="">Select</option>
-            {(sessions.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {(sessions.data || []).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}{isUpcomingExam(s.announceAt, undefined, s.published) ? " (countdown)" : s.published ? " (published)" : ""}
+              </option>
+            ))}
           </select>
         </Field>
       </QueryState>
+      {selected && isUpcomingExam(selected.announceAt, mine.data?.countdownSeconds, selected.published) ? (
+        <ResultCountdown
+          announceAt={mine.data?.announceAt || selected.announceAt}
+          seconds={mine.data?.countdownSeconds}
+          sessionName={selected.name}
+          onDone={() => void mine.reload()}
+        />
+      ) : null}
       <QueryState status={mine} label="results">
         {mine.data && mine.data.announced === false && isUpcomingExam(mine.data.announceAt, mine.data.countdownSeconds, false) ? (
-          <ResultCountdown announceAt={mine.data.announceAt} seconds={mine.data.countdownSeconds} onDone={() => void mine.reload()} />
+          null
         ) : mine.data?.pending || mine.data?.announced === false ? (
           <div className="card">
             <p className="kicker">Results</p>
@@ -379,9 +392,9 @@ function FamilyExams() {
             total={mine.data.totalMarks}
             percentage={mine.data.percentage}
             passStatus={mine.data.passStatus}
-            rows={(mine.data.subjects || []).map((r) => [subjectLabel(r.subjectId), r.obtainedMarks, r.totalMarks, r.grade || "—"])}
+            rows={(mine.data.subjects || []).map((r) => [subjectLabel(r), r.obtainedMarks, r.totalMarks, r.grade || "—"])}
           />
-        ) : <Empty title="Select a published session" />}
+        ) : <Empty title="Select a session to view results or the release countdown" />}
       </QueryState>
     </>
   );
@@ -491,7 +504,7 @@ function StaffExams() {
             <div className="card" style={{ marginBottom: 12 }}>
               <h3>Enter marks</h3>
               {teacherUpcoming ? (
-                <ResultCountdown announceAt={selectedSession?.announceAt} onDone={() => void sessions.reload()} />
+                <ResultCountdown announceAt={selectedSession?.announceAt} sessionName={selectedSession?.name} onDone={() => void sessions.reload()} />
               ) : null}
               {user?.role === "TEACHER" && !assigns.loading && !(assigns.data || []).length ? (
                 <Empty title="No assigned subjects" hint="School Admin must assign your classes and subjects before you can enter marks." />
@@ -556,13 +569,26 @@ function StaffExams() {
                 />
               ) : null}
               {(user.role === "SCHOOL_ADMIN" || user.role === "PRINCIPAL") ? (
-                <div className="row" style={{ marginTop: 8 }}>
-                  <input type="datetime-local" onChange={(e) => {
-                    const v = e.target.value;
-                    if (!v) return;
-                    void examApi.setAnnounceAt(sessionId, new Date(v).toISOString()).then(() => toast("ok", "Announcement time saved"));
-                  }} />
-                  <Button kind="ok" loadingText="Publishing…" onClick={async () => { await examApi.publish(sessionId); toast("ok", "Published"); void sessions.reload(); }}>Publish results</Button>
+                <div style={{ marginTop: 12 }}>
+                  <Field label="Result release date/time">
+                    <input
+                      type="datetime-local"
+                      defaultValue={toLocalInput(selectedSession?.announceAt)}
+                      key={selectedSession?.id + (selectedSession?.announceAt || "")}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (!v) return;
+                        void examApi.setAnnounceAt(sessionId, new Date(v).toISOString()).then(() => {
+                          toast("ok", "Release time saved — students and parents see a live countdown until then");
+                          void sessions.reload();
+                        });
+                      }}
+                    />
+                  </Field>
+                  <p className="hint">Students and parents see this session (including Final Term) with a live countdown. Marks stay hidden until this time, then the marksheet unlocks.</p>
+                  <div className="row" style={{ marginTop: 8 }}>
+                    <Button kind="ok" loadingText="Publishing…" onClick={async () => { await examApi.publish(sessionId); toast("ok", "Published"); void sessions.reload(); }}>Publish results</Button>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -587,42 +613,6 @@ function StaffExams() {
           </QueryState>
           )}
     </>
-  );
-}
-
-function ResultCountdown({ announceAt, seconds, onDone }: { announceAt?: string; seconds?: number; onDone?: () => void }) {
-  const [left, setLeft] = useState(seconds ?? 0);
-  const done = useRef(false);
-  useEffect(() => {
-    const tick = () => {
-      if (!announceAt) return;
-      setLeft(Math.max(0, Math.floor((new Date(announceAt).getTime() - Date.now()) / 1000)));
-    };
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [announceAt]);
-  useEffect(() => {
-    if (left > 0 || done.current) return;
-    if (!announceAt || new Date(announceAt).getTime() > Date.now()) return;
-    done.current = true;
-    onDone?.();
-  }, [left, announceAt, onDone]);
-  if (left <= 0) return null;
-  const h = Math.floor(left / 3600);
-  const m = Math.floor((left % 3600) / 60);
-  const s = left % 60;
-  return (
-    <div className="card">
-      <p className="kicker">Results sealed</p>
-      <h3>Announcement countdown</h3>
-      <p className="hint">Marks will appear here at the scheduled announcement time.</p>
-      <div className="countdown" aria-live="polite">
-        <div className="countdown-cell"><b>{String(h).padStart(2, "0")}</b><span>Hours</span></div>
-        <div className="countdown-cell"><b>{String(m).padStart(2, "0")}</b><span>Minutes</span></div>
-        <div className="countdown-cell"><b>{String(s).padStart(2, "0")}</b><span>Seconds</span></div>
-      </div>
-    </div>
   );
 }
 

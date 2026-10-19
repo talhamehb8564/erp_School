@@ -51,12 +51,12 @@ export default function SchoolApp() {
   }, [user, locked]);
 
   useEffect(() => {
-    applyBrand(
-      tenant?.primaryColor || school?.primaryColor,
-      tenant?.accentColor || school?.accentColor,
-      tenant?.secondaryColor || school?.secondaryColor,
-    );
-    document.title = tenant?.name?.trim() || school?.name || "School";
+    const primary = tenant?.primaryColor || school?.primaryColor;
+    const accent = tenant?.accentColor || school?.accentColor;
+    const secondary = tenant?.secondaryColor || school?.secondaryColor;
+    if (primary || accent || secondary) applyBrand(primary, accent, secondary);
+    const title = tenant?.name?.trim() || school?.name;
+    if (title) document.title = title;
   }, [tenant?.primaryColor, tenant?.accentColor, tenant?.secondaryColor, tenant?.name, school?.primaryColor, school?.accentColor, school?.secondaryColor, school?.name]);
 
   if (!user) return <Navigate to={LOGIN_PORTALS} replace />;

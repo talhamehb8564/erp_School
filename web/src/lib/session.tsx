@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { authApi, tenantApi } from "../api/services";
 import { ApiError, AUTH_LOST_EVENT, LOCKED_EVENT, clearTokens, getAccessToken, getAuthEpoch, getRefreshToken, setTokens } from "../api/client";
 import { clearFeatureCache, writeFeatureCache } from "./featureCache";
+import { LOGIN_PORTALS } from "./routes";
 import type { Role, Tenant, User } from "./types";
 import { LOCKED_STATUSES } from "./types";
 
@@ -23,6 +25,7 @@ interface Session {
 const Ctx = createContext<Session | null>(null);
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(() => {
     try {
       const raw = localStorage.getItem(USER_KEY);
@@ -149,10 +152,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setForcedLocked(false);
       localStorage.removeItem(CHILD_KEY);
       setChildIdState(null);
+      navigate(LOGIN_PORTALS, { replace: true });
     };
     window.addEventListener(AUTH_LOST_EVENT, onLost);
     return () => window.removeEventListener(AUTH_LOST_EVENT, onLost);
-  }, []);
+  }, [navigate]);
 
   const applyTenant = (u: User, tenant?: Tenant | null) => {
     if (u.role === "ERP_OWNER") {
@@ -206,7 +210,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     clearFeatureCache();
     leaving.current = false;
     if (rt) void authApi.logout(rt).catch(() => undefined);
-  }, []);
+    navigate(LOGIN_PORTALS, { replace: true });
+  }, [navigate]);
 
   const setChildId = useCallback((id: string | null) => {
     setChildIdState(id);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { studentApi, userApi } from "../../api/services";
 import { useLookups } from "../../lib/lookups";
 import { pretty } from "../../lib/format";
@@ -315,24 +315,22 @@ export function UsersPage() {
   const [page, setPage] = useState(0);
   const dq = useDebounced(q);
   const list = useAsync(() => userApi.list({ q: dq || undefined, role: role || undefined, page }), [dq, role, page]);
-  useEffect(() => {
-    const refresh = () => void list.reload();
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
-  }, [list.reload]);
   const [open, setOpen] = useState(false);
   const toast = useToast();
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", role: "TEACHER" as Role });
+  const blank = { firstName: "", lastName: "", email: "", phone: "", role: "TEACHER" as Role };
+  const [form, setForm] = useState(blank);
+  const [editId, setEditId] = useState<string | null>(null);
   const [temp, setTemp] = useState<string | null>(null);
+  const editing = (list.data?.content || []).find((u) => u.id === editId);
   return (
     <>
       <div className="page-title">
-        <div><h1>Users</h1><p>Staff accounts, roles and credential resets</p></div>
-        {canManage ? <Button kind="brass" onClick={() => setOpen(true)}>Create user</Button> : null}
+        <div><h1>Users</h1><p>Staff accounts, contact numbers, roles and credential resets</p></div>
+        {canManage ? <Button kind="brass" onClick={() => { setForm(blank); setOpen(true); }}>Create user</Button> : null}
       </div>
       {temp ? <div className="notice">Share once: <span className="pwd">{temp}</span></div> : null}
       <div className="row" style={{ marginBottom: 12 }}>
-        <Search value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Search users" />
+        <Search value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Search name, username or phone" />
         <select className="search" value={role} onChange={(e) => { setRole(e.target.value as Role | ""); setPage(0); }}>
           <option value="">All roles</option>
           {["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "ACCOUNT_OFFICER", "PARENT", "STUDENT"].map((r) => <option key={r}>{r}</option>)}
@@ -340,15 +338,28 @@ export function UsersPage() {
       </div>
       <QueryState status={list} label="users">
         <Table
-          headers={["Name", "Username", "Role", "Status", ""]}
-          rows={(list.data?.content || []).map((u) => [
-            u.fullName, u.username, pretty(u.role), <Badge key={u.id} value={u.status} />,
-            canManage ? <Button key={`r${u.id}`} kind="ghost" loadingText="Resetting…" onClick={async () => {
-              const r = await userApi.resetPassword(u.id);
-              setTemp(`${r.user.username} / ${r.temporaryPassword}`);
-              toast("ok", "Password reset");
-            }}>Reset password</Button> : "—",
-          ])}
+          headers={canManage ? ["Name", "Username", "Phone", "Role", "Status", ""] : ["Name", "Username", "Phone", "Role", "Status"]}
+          rows={(list.data?.content || []).map((u) => {
+            const cells = [
+              u.fullName, u.username, u.phone || "—", pretty(u.role), <Badge key={u.id} value={u.status} />,
+            ];
+            if (canManage) {
+              cells.push(
+                <div key={`act${u.id}`} className="row">
+                  <Button kind="ghost" onClick={() => {
+                    setEditId(u.id);
+                    setForm({ firstName: u.firstName || "", lastName: u.lastName || "", email: u.email || "", phone: u.phone || "", role: u.role });
+                  }}>Edit</Button>
+                  <Button kind="ghost" loadingText="Resetting…" onClick={async () => {
+                    const r = await userApi.resetPassword(u.id);
+                    setTemp(`${r.user.username} / ${r.temporaryPassword}`);
+                    toast("ok", "Password reset");
+                  }}>Reset password</Button>
+                </div>,
+              );
+            }
+            return cells;
+          })}
         />
         <Pager page={list.data?.page ?? page} totalPages={list.data?.totalPages ?? 0} onChange={setPage} />
       </QueryState>
@@ -363,12 +374,48 @@ export function UsersPage() {
           <Field label="First name"><input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></Field>
           <Field label="Last name"><input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></Field>
           <Field label="Email"><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Phone / contact number">
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              maxLength={30}
+              placeholder="e.g. 0300 1234567"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </Field>
           <Field label="Role">
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
               {["TEACHER", "PRINCIPAL", "ACCOUNT_OFFICER", "SCHOOL_ADMIN", "PARENT"].map((r) => <option key={r}>{r}</option>)}
             </select>
           </Field>
           <Button type="submit" kind="brass" loadingText="Creating…">Create</Button>
+        </Form>
+      </Modal>
+      <Modal title={editing ? `Edit ${editing.fullName}` : "Edit user"} open={!!editId} onClose={() => setEditId(null)}>
+        <Form busyLabel="Saving…" onSubmit={async () => {
+          if (!editId) return;
+          await userApi.update(editId, { firstName: form.firstName, lastName: form.lastName, email: form.email, phone: form.phone });
+          toast("ok", "Contact saved");
+          setEditId(null);
+          void list.reload();
+        }}>
+          <Field label="First name"><input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></Field>
+          <Field label="Last name"><input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></Field>
+          <Field label="Email"><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Phone / contact number">
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              maxLength={30}
+              placeholder="e.g. 0300 1234567"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </Field>
+          <Button type="submit" kind="brass" loadingText="Saving…">Save</Button>
         </Form>
       </Modal>
     </>

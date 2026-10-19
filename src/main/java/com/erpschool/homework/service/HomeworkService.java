@@ -313,8 +313,29 @@ public class HomeworkService {
                 .findByHomeworkIdIn(list.stream().map(Homework::getId).toList())
                 .stream()
                 .collect(java.util.stream.Collectors.groupingBy(HomeworkAttachment::getHomeworkId));
+        Map<UUID, String> classNames = academicService.classes().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.erpschool.academic.entity.SchoolClass::getId,
+                        com.erpschool.academic.entity.SchoolClass::getName,
+                        (a, b) -> a));
+        Map<UUID, String> subjectNames = academicService.subjects().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.erpschool.academic.entity.Subject::getId,
+                        com.erpschool.academic.entity.Subject::getName,
+                        (a, b) -> a));
+        Map<UUID, String> sectionNames = academicService.allSections().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.erpschool.academic.entity.Section::getId,
+                        com.erpschool.academic.entity.Section::getName,
+                        (a, b) -> a));
         return list.stream()
-                .map(h -> toMap(h, byHomework.getOrDefault(h.getId(), List.of())))
+                .map(h -> {
+                    Map<String, Object> m = toMap(h, byHomework.getOrDefault(h.getId(), List.of()));
+                    m.put("className", classNames.get(h.getClassId()));
+                    m.put("sectionName", sectionNames.get(h.getSectionId()));
+                    m.put("subjectName", subjectNames.get(h.getSubjectId()));
+                    return m;
+                })
                 .toList();
     }
 

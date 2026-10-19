@@ -1,7 +1,8 @@
 import { useSession } from "../../lib/session";
 import { useFeatures } from "../../lib/features";
-import { academicApi, feeApi, homeworkApi, reportApi, studentApi } from "../../api/services";
+import { academicApi, examApi, feeApi, homeworkApi, reportApi, studentApi } from "../../api/services";
 import { Badge, Bars, Donut, Empty, ErrorBox, QueryState, Stat, Table, useAsync } from "../../ui/kit";
+import ResultCountdown, { isUpcomingExam, pickResultSession } from "../../ui/ResultCountdown";
 import { money, pretty } from "../../lib/format";
 import ChildSwitch from "./ChildSwitch";
 
@@ -12,6 +13,16 @@ export default function Dashboard() {
   if (user?.role === "PARENT") return <ParentDash />;
   if (user?.role === "STUDENT") return <StudentDash />;
   return <StaffDash />;
+}
+
+function UpcomingResultCard() {
+  const { on, flags } = useFeatures();
+  const sessions = useAsync(() => on("RESULTS") ? examApi.sessions() : Promise.resolve([]), [flags.RESULTS]);
+  const rows = sessions.data || [];
+  const id = pickResultSession(rows);
+  const selected = rows.find((s) => s.id === id);
+  if (!on("RESULTS") || !selected || !isUpcomingExam(selected.announceAt, undefined, selected.published)) return null;
+  return <ResultCountdown announceAt={selected.announceAt} sessionName={selected.name} onDone={() => void sessions.reload()} />;
 }
 
 function asTime(value: unknown) {
@@ -83,6 +94,15 @@ function StaffDash() {
 }
 
 function TeacherDash() {
+  return (
+    <>
+      <UpcomingResultCard />
+      <TeacherDashBody />
+    </>
+  );
+}
+
+function TeacherDashBody() {
   const { on, flags } = useFeatures();
   const lecturesQ = useAsync(() => on("TIMETABLE") ? academicApi.teacherToday() : Promise.resolve([]), [flags.TIMETABLE]);
   const homeworkQ = useAsync(() => on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([]), [flags.HOMEWORK]);
@@ -185,6 +205,15 @@ function AccountDash() {
 }
 
 function ParentDash() {
+  return (
+    <>
+      <UpcomingResultCard />
+      <ParentDashBody />
+    </>
+  );
+}
+
+function ParentDashBody() {
   const { on, flags } = useFeatures();
   const { childId } = useSession();
   const kidsQ = useAsync(() => studentApi.children());
@@ -233,6 +262,15 @@ function ParentDash() {
 }
 
 function StudentDash() {
+  return (
+    <>
+      <UpcomingResultCard />
+      <StudentDashBody />
+    </>
+  );
+}
+
+function StudentDashBody() {
   const { on, flags } = useFeatures();
   const { user } = useSession();
   const homeworkQ = useAsync(() => on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([]), [flags.HOMEWORK]);

@@ -270,6 +270,9 @@ export interface Homework {
   classId: string;
   sectionId: string;
   subjectId: string;
+  className?: string;
+  sectionName?: string;
+  subjectName?: string;
   title: string;
   description?: string;
   dueDate: string;
@@ -306,6 +309,7 @@ export interface ExamResult {
   examSessionId: string;
   studentId: string;
   subjectId: string;
+  subjectName?: string;
   totalMarks: number;
   obtainedMarks: number;
   percentage?: number;
@@ -342,6 +346,7 @@ export interface FeeChallan {
   rollNumber?: string;
   admissionNumber?: string;
   classId?: string;
+  className?: string;
   sectionId?: string;
   campusId?: string;
   campusName?: string;

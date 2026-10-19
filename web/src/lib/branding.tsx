@@ -118,8 +118,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const hasSchool = useRef(false);
 
-  const reload = useCallback(async () => {
-    setLoading(!hasSchool.current);
+  const reload = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(!hasSchool.current);
     setError("");
     try {
       const data = await publicApi.school();
@@ -147,15 +147,11 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!publicSite) {
-      setLoading(false);
-      return;
-    }
     if (hasSchool.current) {
       setLoading(false);
       return;
     }
-    void reload();
+    void reload({ silent: !publicSite });
   }, [publicSite, reload]);
 
   const setCampusId = useCallback((id: string) => {

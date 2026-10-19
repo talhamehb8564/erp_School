@@ -156,7 +156,11 @@ public class ExamService {
         }
         UserRole role = TenantContext.getRole();
         if (role == UserRole.STUDENT || role == UserRole.PARENT) {
-            rows = rows.stream().filter(ExamSession::isPublished).toList();
+            // Families need unpublished sessions that have a release time so the
+            // Final Term countdown is visible before marks unlock.
+            rows = rows.stream()
+                    .filter(s -> s.isPublished() || s.getAnnounceAt() != null)
+                    .toList();
         }
         return rows;
     }
@@ -415,7 +419,27 @@ public class ExamService {
         if (student.getUserId() != null) {
             userRepository.findById(student.getUserId()).map(User::getFullName).ifPresent(n -> m.put("studentName", n));
         }
-        m.put("subjects", rows);
+        Map<UUID, String> subjectNames = academicService.subjects().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.erpschool.academic.entity.Subject::getId,
+                        com.erpschool.academic.entity.Subject::getName,
+                        (a, b) -> a));
+        List<Map<String, Object>> subjectRows = new java.util.ArrayList<>(rows.size());
+        for (ExamResult r : rows) {
+            Map<String, Object> sm = new HashMap<>();
+            sm.put("id", r.getId());
+            sm.put("subjectId", r.getSubjectId());
+            sm.put("subjectName", subjectNames.get(r.getSubjectId()));
+            sm.put("obtainedMarks", r.getObtainedMarks());
+            sm.put("totalMarks", r.getTotalMarks());
+            sm.put("grade", r.getGrade());
+            sm.put("percentage", r.getPercentage());
+            sm.put("passStatus", r.getPassStatus());
+            sm.put("absent", r.isAbsent());
+            sm.put("remarks", r.getRemarks());
+            subjectRows.add(sm);
+        }
+        m.put("subjects", subjectRows);
         m.put("totalMarks", total);
         m.put("obtainedMarks", obtained);
         m.put("percentage", pct);
