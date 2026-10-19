@@ -75,7 +75,10 @@ export default function SchoolApp() {
   };
 
   return (
-    <LookupsProvider enabled={!locked && lookupsNeeded(loc.pathname)} prefetch={false}>
+    <LookupsProvider
+      enabled={!locked && lookupsNeeded(loc.pathname) && role !== "STUDENT" && role !== "PARENT"}
+      prefetch={false}
+    >
       <div className="shell" data-role={role}>
         {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <aside className={`sidebar ${open ? "open" : ""}`}>

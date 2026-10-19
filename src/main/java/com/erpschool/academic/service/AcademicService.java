@@ -20,6 +20,8 @@ import com.erpschool.common.exception.DuplicateResourceException;
 import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.util.TenantGuard;
+import com.erpschool.student.entity.Student;
+import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.user.entity.User;
 import com.erpschool.user.entity.UserRole;
@@ -48,6 +50,7 @@ public class AcademicService {
     private final TimetableSlotRepository timetableRepository;
     private final TimetableSettingsRepository timetableSettingsRepository;
     private final UserRepository userRepository;
+    private final StudentRepository studentRepository;
     private final CatalogCache catalogCache;
 
     public AcademicService(SchoolClassRepository classRepository,
@@ -58,6 +61,7 @@ public class AcademicService {
                            TimetableSlotRepository timetableRepository,
                            TimetableSettingsRepository timetableSettingsRepository,
                            UserRepository userRepository,
+                           StudentRepository studentRepository,
                            CatalogCache catalogCache) {
         this.classRepository = classRepository;
         this.sectionRepository = sectionRepository;
@@ -67,6 +71,7 @@ public class AcademicService {
         this.timetableRepository = timetableRepository;
         this.timetableSettingsRepository = timetableSettingsRepository;
         this.userRepository = userRepository;
+        this.studentRepository = studentRepository;
         this.catalogCache = catalogCache;
     }
 
@@ -330,6 +335,16 @@ public class AcademicService {
     public List<Map<String, Object>> teacherTimetable() {
         return describeSlots(timetableRepository.findByTenantIdAndTeacherUserIdOrderByDayOfWeekAscStartTimeAsc(
                 tid(), TenantContext.getUserId()));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> myTimetable() {
+        Student me = studentRepository.findByTenantIdAndUserId(tid(), TenantContext.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
+        if (me.getClassId() == null || me.getSectionId() == null) {
+            return List.of();
+        }
+        return classTimetable(me.getClassId(), me.getSectionId());
     }
 
     @Transactional(readOnly = true)

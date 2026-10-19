@@ -211,6 +211,7 @@ export const academicApi = {
     api.put<TimetableSettings>(`${v1}/timetable/settings`, body),
   teacherTimetable: () => api.get<TimetableSlot[]>(`${v1}/teacher/timetable`),
   teacherToday: () => api.get<TimetableSlot[]>(`${v1}/teacher/timetable/today`),
+  myTimetable: () => api.get<TimetableSlot[]>(`${v1}/timetable/me`),
 };
 
 export const studentApi = {
@@ -251,6 +252,8 @@ export const attendanceApi = {
     api.post<StudentAttendance[]>(`${v1}/attendance/lectures/${slotId}`, body),
   lectureSheet: (slotId: string, date: string) =>
     api.get<StudentAttendance[]>(`${v1}/attendance/lectures/${slotId}?date=${date}`),
+  mine: (from: string, to: string) =>
+    api.get<StudentAttendance[]>(`${v1}/attendance/me?from=${from}&to=${to}`),
   studentHistory: (studentId: string, from: string, to: string) =>
     api.get<StudentAttendance[]>(`${v1}/attendance/students/${studentId}?from=${from}&to=${to}`),
   markTeacher: (body: Record<string, unknown>) =>
@@ -301,6 +304,22 @@ export const examApi = {
     api.post<ExamResult>(`${v1}/exams/sessions/${sessionId}/results`, body),
   publish: (sessionId: string) => api.post<ExamSession>(`${v1}/exams/sessions/${sessionId}/publish`),
   sessionResults: (sessionId: string) => api.get<ExamResult[]>(`${v1}/exams/sessions/${sessionId}/results`),
+  myResult: (sessionId: string) =>
+    api.get<{
+      session: ExamSession;
+      subjects: ExamResult[];
+      totalMarks: number;
+      obtainedMarks: number;
+      percentage: number;
+      grade: string;
+      passStatus: string;
+      studentName?: string;
+      rollNumber?: string;
+      announced?: boolean;
+      pending?: boolean;
+      announceAt?: string;
+      countdownSeconds?: number;
+    }>(`${v1}/exams/sessions/${sessionId}/mine`),
   studentResult: (sessionId: string, studentId: string) =>
     api.get<{
       session: ExamSession;
@@ -355,15 +374,11 @@ export const feeApi = {
   generate: (body: Record<string, unknown>) => api.post<FeeChallan[]>(`${v1}/fees/challans/generate`, body),
   studentChallans: (studentId: string) => api.get<FeeChallan[]>(`${v1}/fees/students/${studentId}/challans`),
   myChallanSummaries: (limit = 20) =>
-    api.get<{ challanNumber: string; totalPayable: number; status: string }[]>(`${v1}/fees/me/challans?limit=${limit}`),
+    api.get<FeeChallan[]>(`${v1}/fees/me/challans?limit=${limit}`),
   parentChallanSummaries: (limit = 20) =>
-    api.get<{ studentId?: string; challanNumber: string; totalPayable: number; status: string }[]>(
-      `${v1}/fees/children/challans?limit=${limit}`,
-    ),
+    api.get<FeeChallan[]>(`${v1}/fees/children/challans?limit=${limit}`),
   childChallanSummaries: (studentId: string, limit = 20) =>
-    api.get<{ studentId?: string; challanNumber: string; totalPayable: number; status: string }[]>(
-      `${v1}/fees/students/${studentId}/challans?summary=true&limit=${limit}`,
-    ),
+    api.get<FeeChallan[]>(`${v1}/fees/students/${studentId}/challans?summary=true&limit=${limit}`),
   submitProof: (id: string, body: { slipUrl: string; transactionRef?: string }) =>
     api.post<FeeChallan>(`${v1}/fees/challans/${id}/proofs`, body),
   reviewProof: (id: string, approve: boolean, remarks?: string) =>

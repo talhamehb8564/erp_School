@@ -132,6 +132,17 @@ public class AttendanceService {
                 student.getTenantId(), studentId, from, to);
     }
 
+    @Transactional(readOnly = true)
+    public List<StudentAttendance> myHistory(LocalDate from, LocalDate to) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
+                .orElseThrow(() -> new BusinessException("No student profile is linked to this account"));
+        LocalDate end = to != null ? to : LocalDate.now();
+        LocalDate start = from != null ? from : end.minusDays(30);
+        return studentAttendanceRepository.findByTenantIdAndStudentIdAndAttendanceDateBetween(
+                tenantId, me.getId(), start, end);
+    }
+
     @Transactional
     public TeacherAttendance markTeacher(UUID teacherUserId, LocalDate date, AttendanceStatus status,
                                          String remarks, boolean deductSalary, BigDecimal deductionAmount) {

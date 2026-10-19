@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class FeatureService {
 
-    private static final long TTL_MS = 15_000;
+    private static final long TTL_MS = 45_000;
 
     private final TenantFeatureRepository featureRepository;
     private final TenantRepository tenantRepository;

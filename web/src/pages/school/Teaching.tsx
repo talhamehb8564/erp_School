@@ -25,6 +25,36 @@ function useStudentDirectory(classId?: string, sectionId?: string) {
 
 export function AttendancePage() {
   const { user } = useSession();
+  if (user?.role === "PARENT" || user?.role === "STUDENT") return <FamilyAttendance />;
+  return <StaffAttendance />;
+}
+
+function FamilyAttendance() {
+  const { user } = useSession();
+  const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
+  const sid = useActiveStudentId(undefined);
+  const history = useAsync(() => {
+    const from = new Date();
+    from.setDate(from.getDate() - 30);
+    const fromStr = from.toISOString().slice(0, 10);
+    const toStr = today();
+    if (user?.role === "STUDENT") return attendanceApi.mine(fromStr, toStr);
+    if (!sid) return Promise.resolve([]);
+    return attendanceApi.studentHistory(sid, fromStr, toStr);
+  }, [user?.role, sid]);
+  return (
+    <>
+      <div className="page-title"><div><h1>Attendance</h1><p>Last 30 days from lecture rolls</p></div></div>
+      {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
+      <QueryState status={history} label="attendance">
+        <Table headers={["Date", "Status", "Remarks"]} rows={(history.data || []).map((r) => [r.attendanceDate, <Badge key={r.id} value={r.status} />, r.remarks || "—"])} />
+      </QueryState>
+    </>
+  );
+}
+
+function StaffAttendance() {
+  const { user } = useSession();
   const teacher = user?.role === "TEACHER";
   const { classes, sections } = useLookups();
   const [classId, setClassId] = useState("");
@@ -39,26 +69,6 @@ export function AttendancePage() {
   const roster = useAsync(() => (slotId ? attendanceApi.roster(slotId) : Promise.resolve([])), [slotId]);
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
   const toast = useToast();
-  const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
-  const me = useAsync(() => (user?.role === "STUDENT" ? studentApi.me() : Promise.resolve(null)), [user?.role]);
-  const sid = useActiveStudentId(me.data?.id);
-  const history = useAsync(() => {
-    if (!sid) return Promise.resolve([]);
-    const from = new Date(); from.setDate(from.getDate() - 30);
-    return attendanceApi.studentHistory(sid, from.toISOString().slice(0, 10), today());
-  }, [sid]);
-
-  if (user?.role === "PARENT" || user?.role === "STUDENT") {
-    return (
-      <>
-        <div className="page-title"><div><h1>Attendance</h1><p>Last 30 days from lecture rolls</p></div></div>
-        {user.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
-        <QueryState status={history} label="attendance">
-          <Table headers={["Date", "Status", "Remarks"]} rows={(history.data || []).map((r) => [r.attendanceDate, <Badge key={r.id} value={r.status} />, r.remarks || "—"])} />
-        </QueryState>
-      </>
-    );
-  }
 
   return (
     <>
@@ -157,6 +167,68 @@ function StaffAttendanceCard() {
 
 export function HomeworkPage() {
   const { user } = useSession();
+  if (user?.role === "PARENT" || user?.role === "STUDENT") return <FamilyHomework />;
+  return <StaffHomework />;
+}
+
+function FamilyHomework() {
+  const { user } = useSession();
+  const list = useAsync(() => homeworkApi.list(undefined, undefined, 40), []);
+  const toast = useToast();
+  const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
+  const sid = useActiveStudentId(undefined);
+  const child = (kids.data || []).find((k) => k.id === sid);
+  const [active, setActive] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const homeworkRows = (list.data || []).filter((h) => {
+    if (user?.role !== "PARENT") return true;
+    if (!child) return false;
+    return h.classId === child.classId && h.sectionId === child.sectionId;
+  });
+  const current = (list.data || []).find((h) => h.id === active);
+  const canSubmit = user?.role === "STUDENT" || (user?.role === "PARENT" && !!sid);
+  return (
+    <>
+      <div className="page-title"><div><h1>Homework</h1><p>Assignments and submissions</p></div></div>
+      {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
+      <QueryState status={list} label="homework">
+        <Table
+          headers={["Title", "Due", ""]}
+          rows={homeworkRows.map((h) => [
+            h.title, fmtDate(h.dueDate),
+            <Button key={h.id} kind="ghost" onClick={() => setActive(h.id)}>Open</Button>,
+          ])}
+        />
+      </QueryState>
+      <Modal title="Homework" open={!!active} onClose={() => setActive(null)}>
+        {current?.attachments?.length ? (
+          <div className="row" style={{ marginBottom: 12 }}>
+            {current.attachments.map((a) => (
+              <FileLink key={a.id || a.fileUrl} href={a.fileUrl} label={a.fileName || "Attachment"} />
+            ))}
+          </div>
+        ) : null}
+        {current?.description ? <p className="hint">{current.description}</p> : null}
+        {canSubmit ? (
+          <Form busyLabel="Submitting…" onSubmit={async () => {
+            let fileUrl: string | undefined;
+            if (file) fileUrl = (await fileApi.upload(file)).url;
+            await homeworkApi.submit(active!, { studentId: user?.role === "PARENT" ? sid || undefined : undefined, fileUrl, notes });
+            toast("ok", "Submitted"); setActive(null); setFile(null); setNotes("");
+          }}>
+            <Field label="Notes"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+            <Field label="File"><input type="file" accept=".pdf,image/*,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} /></Field>
+            <Button type="submit" kind="brass" loadingText="Submitting…">Submit work</Button>
+          </Form>
+        ) : <Empty title="Select a child to submit homework" />}
+      </Modal>
+    </>
+  );
+}
+
+function StaffHomework() {
+  const { user } = useSession();
   const { classes, sections, subjects, className, subjectName } = useLookups();
   const list = useAsync(() => homeworkApi.list(), []);
   const assigns = useAsync(() => (user?.role === "TEACHER" ? academicApi.assignments() : Promise.resolve([])), [user?.role]);
@@ -174,23 +246,9 @@ export function HomeworkPage() {
     ? (sections[form.classId] || []).filter((s) => (assigns.data || []).some((a) => a.sectionId === s.id && a.classId === form.classId))
     : (sections[form.classId] || []);
   const [active, setActive] = useState<string | null>(null);
-  const subs = useAsync(() => (active && user?.role !== "STUDENT" && user?.role !== "PARENT" ? homeworkApi.submissions(active) : Promise.resolve([])), [active, user?.role]);
-  const me = useAsync(() => (user?.role === "STUDENT" ? studentApi.me() : Promise.resolve(null)), [user?.role]);
-  const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
-  const sid = useActiveStudentId(me.data?.id);
-  const child = (kids.data || []).find((k) => k.id === sid);
-  const [notes, setNotes] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const homeworkRows = (list.data || []).filter((h) => {
-    if (user?.role !== "PARENT") return true;
-    if (!child) return false;
-    return h.classId === child.classId && h.sectionId === child.sectionId;
-  });
+  const subs = useAsync(() => (active ? homeworkApi.submissions(active) : Promise.resolve([])), [active]);
   const current = (list.data || []).find((h) => h.id === active);
-  const dir = useStudentDirectory(
-    user?.role !== "STUDENT" && user?.role !== "PARENT" ? current?.classId : undefined,
-    current?.sectionId,
-  );
+  const dir = useStudentDirectory(current?.classId, current?.sectionId);
 
   return (
     <>
@@ -200,11 +258,10 @@ export function HomeworkPage() {
           <Button kind="brass" onClick={() => setOpen(true)}>Assign</Button>
         ) : null}
       </div>
-      {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
       <QueryState status={list} label="homework">
         <Table
           headers={["Title", "Class", "Subject", "Due", ""]}
-          rows={homeworkRows.map((h) => [
+          rows={(list.data || []).map((h) => [
             h.title, className(h.classId), subjectName(h.subjectId), fmtDate(h.dueDate),
             <Button key={h.id} kind="ghost" onClick={() => setActive(h.id)}>Open</Button>,
           ])}
@@ -240,29 +297,16 @@ export function HomeworkPage() {
             ))}
           </div>
         ) : null}
-        {(user?.role === "STUDENT" || user?.role === "PARENT") && sid ? (
-          <Form busyLabel="Submitting…" onSubmit={async () => {
-            let fileUrl: string | undefined;
-            if (file) fileUrl = (await fileApi.upload(file)).url;
-            await homeworkApi.submit(active!, { studentId: sid, fileUrl, notes });
-            toast("ok", "Submitted"); setActive(null); setFile(null); setNotes("");
-          }}>
-            <Field label="Notes"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
-            <Field label="File"><input type="file" accept=".pdf,image/*,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} /></Field>
-            <Button type="submit" kind="brass" loadingText="Submitting…">Submit work</Button>
-          </Form>
-        ) : (
-          <QueryState status={subs} label="submissions">
-            <Table
-              headers={["Student", "Status", "Notes", "File", ""]}
-              rows={(subs.data || []).map((s) => [
-                dir.nameOf(s.studentId), <Badge key={s.id} value={s.status} />, s.notes || "—",
-                <FileLink key={`f${s.id}`} href={s.fileUrl} />,
-                <Button key={`rv${s.id}`} kind="ghost" loadingText="Reviewing…" onClick={async () => { await homeworkApi.review(s.id, "Reviewed"); toast("ok", "Reviewed"); void subs.reload(); }}>Review</Button>,
-              ])}
-            />
-          </QueryState>
-        )}
+        <QueryState status={subs} label="submissions">
+          <Table
+            headers={["Student", "Status", "Notes", "File", ""]}
+            rows={(subs.data || []).map((s) => [
+              dir.nameOf(s.studentId), <Badge key={s.id} value={s.status} />, s.notes || "—",
+              <FileLink key={`f${s.id}`} href={s.fileUrl} />,
+              <Button key={`rv${s.id}`} kind="ghost" loadingText="Reviewing…" onClick={async () => { await homeworkApi.review(s.id, "Reviewed"); toast("ok", "Reviewed"); void subs.reload(); }}>Review</Button>,
+            ])}
+          />
+        </QueryState>
       </Modal>
     </>
   );
@@ -283,21 +327,76 @@ function isUpcomingExam(announceAt?: string, seconds?: number, published?: boole
 
 export function ExamsPage() {
   const { user } = useSession();
+  if (user?.role === "PARENT" || user?.role === "STUDENT") return <FamilyExams />;
+  return <StaffExams />;
+}
+
+function FamilyExams() {
+  const { user } = useSession();
+  const sessions = useAsync(() => examApi.sessions(), []);
+  const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
+  const sid = useActiveStudentId(undefined);
+  const [sessionId, setSessionId] = useState("");
+  const mine = useAsync(() => {
+    if (!sessionId) return Promise.resolve(null);
+    if (user?.role === "STUDENT") return examApi.myResult(sessionId);
+    if (!sid) return Promise.resolve(null);
+    return examApi.studentResult(sessionId, sid);
+  }, [sessionId, user?.role, sid]);
+  useEffect(() => {
+    if (sessionId || !sessions.data?.length) return;
+    setSessionId(sessions.data[0].id);
+  }, [sessions.data, sessionId]);
+  const subjectLabel = (id?: string) => (id ? id.slice(0, 8) : "—");
+  return (
+    <>
+      <div className="page-title"><div><h1>Marks & results</h1><p>Published exam marksheets</p></div></div>
+      {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
+      <QueryState status={sessions} label="exam sessions">
+        <Field label="Exam session">
+          <select value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
+            <option value="">Select</option>
+            {(sessions.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </Field>
+      </QueryState>
+      <QueryState status={mine} label="results">
+        {mine.data && mine.data.announced === false && isUpcomingExam(mine.data.announceAt, mine.data.countdownSeconds, false) ? (
+          <ResultCountdown announceAt={mine.data.announceAt} seconds={mine.data.countdownSeconds} onDone={() => void mine.reload()} />
+        ) : mine.data?.pending || mine.data?.announced === false ? (
+          <div className="card">
+            <p className="kicker">Results</p>
+            <h3>Result Pending - Awaiting Subject Submission</h3>
+            <p className="hint">Announcement time has passed, but not every subject has marks yet. The marksheet will appear when all teachers have submitted.</p>
+          </div>
+        ) : mine.data ? (
+          <Marksheet
+            school={undefined}
+            studentName={mine.data.studentName || "—"}
+            roll={mine.data.rollNumber}
+            grade={mine.data.grade}
+            obtained={mine.data.obtainedMarks}
+            total={mine.data.totalMarks}
+            percentage={mine.data.percentage}
+            passStatus={mine.data.passStatus}
+            rows={(mine.data.subjects || []).map((r) => [subjectLabel(r.subjectId), r.obtainedMarks, r.totalMarks, r.grade || "—"])}
+          />
+        ) : <Empty title="Select a published session" />}
+      </QueryState>
+    </>
+  );
+}
+
+function StaffExams() {
+  const { user } = useSession();
   const { classes, subjects, subjectName, className, sections } = useLookups();
   const sessions = useAsync(() => examApi.sessions(), []);
   const toast = useToast();
   const [name, setName] = useState("");
   const [sessionId, setSessionId] = useState("");
-  const results = useAsync(() => (sessionId && user?.role !== "STUDENT" && user?.role !== "PARENT" ? examApi.sessionResults(sessionId) : Promise.resolve([])), [sessionId, user?.role]);
-  const me = useAsync(() => (user?.role === "STUDENT" ? studentApi.me() : Promise.resolve(null)), [user?.role]);
-  const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
-  const sid = useActiveStudentId(me.data?.id);
-  const mine = useAsync(() => (sessionId && sid ? examApi.studentResult(sessionId, sid) : Promise.resolve(null)), [sessionId, sid]);
+  const results = useAsync(() => (sessionId ? examApi.sessionResults(sessionId) : Promise.resolve([])), [sessionId]);
   const [mark, setMark] = useState({ classId: "", sectionId: "", studentId: "", subjectId: "", totalMarks: "100", obtainedMarks: "0", absent: false });
-  const dir = useStudentDirectory(
-    user?.role !== "STUDENT" && user?.role !== "PARENT" ? mark.classId || undefined : undefined,
-    mark.sectionId || undefined,
-  );
+  const dir = useStudentDirectory(mark.classId || undefined, mark.sectionId || undefined);
   const roster = useAsync(() => (mark.classId ? studentApi.roster(mark.classId, mark.sectionId || undefined) : Promise.resolve([])), [mark.classId, mark.sectionId]);
   const assigns = useAsync(() => (user?.role === "TEACHER" ? academicApi.assignments() : Promise.resolve([])), [user?.role]);
   const entry = useAsync(() => (sessionId && (user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? examApi.entryStatus(sessionId) : Promise.resolve([])), [sessionId, user?.role]);
@@ -339,7 +438,6 @@ export function ExamsPage() {
   return (
     <>
       <div className="page-title"><div><h1>Marks & results</h1><p>Offline exam sessions — published results only for families</p></div></div>
-      {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
       <div className="card result-search">
         <p className="kicker">Result lookup</p>
         <h3 style={{ marginTop: 4 }}>Search by roll number</h3>
@@ -389,32 +487,6 @@ export function ExamsPage() {
         </select>
       </Field>
       </QueryState>
-      {user?.role === "STUDENT" || user?.role === "PARENT" ? (
-        <QueryState status={mine} label="results">
-          {mine.data && mine.data.announced === false && isUpcomingExam(mine.data.announceAt, mine.data.countdownSeconds, false) ? (
-            <ResultCountdown announceAt={mine.data.announceAt} seconds={mine.data.countdownSeconds} onDone={() => void mine.reload()} />
-          ) : mine.data?.pending || mine.data?.announced === false ? (
-            <div className="card">
-              <p className="kicker">Results</p>
-              <h3>Result Pending - Awaiting Subject Submission</h3>
-              <p className="hint">Announcement time has passed, but not every subject has marks yet. The marksheet will appear when all teachers have submitted.</p>
-            </div>
-          ) : mine.data ? (
-            <Marksheet
-              school={undefined}
-              studentName={mine.data.studentName || "—"}
-              roll={mine.data.rollNumber}
-              grade={mine.data.grade}
-              obtained={mine.data.obtainedMarks}
-              total={mine.data.totalMarks}
-              percentage={mine.data.percentage}
-              passStatus={mine.data.passStatus}
-              rows={(mine.data.subjects || []).map((r) => [subjectName(r.subjectId), r.obtainedMarks, r.totalMarks, r.grade || "—"])}
-            />
-          ) : <Empty title="Select a published session" />}
-        </QueryState>
-      ) : (
-        <>
           {(user?.role === "TEACHER" || user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") && sessionId ? (
             <div className="card" style={{ marginBottom: 12 }}>
               <h3>Enter marks</h3>
@@ -514,8 +586,6 @@ export function ExamsPage() {
             />
           </QueryState>
           )}
-        </>
-      )}
     </>
   );
 }

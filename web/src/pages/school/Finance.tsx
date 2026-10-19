@@ -11,6 +11,84 @@ import type { SchoolSettings } from "../../lib/types";
 
 export function FeesPage() {
   const { user } = useSession();
+  if (user?.role === "PARENT" || user?.role === "STUDENT") return <FamilyFees />;
+  return <StaffFees />;
+}
+
+function FamilyFees() {
+  const { user } = useSession();
+  const toast = useToast();
+  const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
+  const sid = useActiveStudentId(undefined);
+  const mine = useAsync(() => {
+    if (user?.role === "STUDENT") return feeApi.myChallanSummaries(24);
+    if (sid) return feeApi.childChallanSummaries(sid, 24);
+    return Promise.resolve([]);
+  }, [user?.role, sid]);
+  const payInfo = useAsync(() => settingsApi.get(), []);
+  const [slip, setSlip] = useState<(Record<string, unknown> & { id?: string }) | null>(null);
+  const [proofFor, setProofFor] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [ref, setRef] = useState("");
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  return (
+    <>
+      <div className="page-title"><div><h1>Fee challans</h1><p>Pay by uploading a bank slip — no online gateway</p></div></div>
+      {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
+      {payInfo.data && (payInfo.data.bankName || payInfo.data.accountNumber || payInfo.data.paymentInstructions) ? (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3>How to pay</h3>
+          <p>{payInfo.data.bankName ? `${payInfo.data.bankName} · ` : ""}{payInfo.data.accountTitle || ""} {payInfo.data.accountNumber || ""}{payInfo.data.iban ? ` · IBAN ${payInfo.data.iban}` : ""}</p>
+          {payInfo.data.jazzcash ? <p>JazzCash {payInfo.data.jazzcash}</p> : null}
+          {payInfo.data.easypaisa ? <p>Easypaisa {payInfo.data.easypaisa}</p> : null}
+          {payInfo.data.paymentInstructions ? <p className="hint">{payInfo.data.paymentInstructions}</p> : null}
+        </div>
+      ) : null}
+      <QueryState status={mine} label="fee challans">
+        <Table
+          headers={["Challan", "Month", "Due", "Amount", "Status", ""]}
+          rows={(mine.data || []).map((c) => [
+            c.challanNumber,
+            fmtDate(c.month),
+            fmtDate(c.dueDate),
+            money(c.totalPayable),
+            <Badge key={c.id} value={c.status} />,
+            <div key={`act${c.id}`} className="row">
+              <Button kind="ghost" onClick={async () => { setSlip(await feeApi.getChallan(c.id)); }}>Fee slip</Button>
+              {c.status === "PAID" ? "Paid" : <Button kind="ghost" onClick={() => { setProofFor(c.id); setFile(null); setRef(""); setUploadPct(null); }}>Upload proof</Button>}
+            </div>,
+          ])}
+        />
+      </QueryState>
+      <Modal title="Payment proof" open={!!proofFor} onClose={() => { setProofFor(null); setFile(null); setUploadPct(null); }}>
+        <Form busyLabel="Uploading…" onSubmit={async () => {
+          if (!file || !proofFor) throw new Error("Choose a slip file first.");
+          setUploadPct(0);
+          const up = await fileApi.upload(file, setUploadPct);
+          if (!up?.url) throw new Error("Upload did not return a file URL.");
+          await feeApi.submitProof(proofFor, { slipUrl: up.url, transactionRef: ref });
+          toast("ok", "Proof submitted for verification");
+          setProofFor(null);
+          setFile(null);
+          setUploadPct(null);
+          void mine.reload();
+        }}>
+          <Field label="Reference"><input value={ref} onChange={(e) => setRef(e.target.value)} /></Field>
+          <Field label="Slip screenshot or PDF">
+            <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} required />
+          </Field>
+          {file ? <p className="hint" style={{ margin: 0 }}>{file.name} · {Math.round(file.size / 1024)} KB{file.type ? ` · ${file.type}` : ""}</p> : null}
+          {uploadPct != null ? <p className="hint">Uploading {uploadPct}%</p> : null}
+          <Button type="submit" kind="brass" loadingText="Uploading…">Submit</Button>
+        </Form>
+      </Modal>
+      <ChallanSlipModal slip={slip} onClose={() => setSlip(null)} className={() => "—"} />
+    </>
+  );
+}
+
+function StaffFees() {
+  const { user } = useSession();
   const { classes, className, sections } = useLookups();
   const toast = useToast();
   const ops = canOperateFees(user?.role);
@@ -23,11 +101,6 @@ export function FeesPage() {
     () => (user?.role === "PRINCIPAL" ? feeApi.byStatus("UNPAID", unpaidPage, unpaidSize) : Promise.resolve([])),
     [user?.role, unpaidPage],
   );
-  const me = useAsync(() => (user?.role === "STUDENT" ? studentApi.me() : Promise.resolve(null)), [user?.role]);
-  const kids = useAsync(() => (user?.role === "PARENT" ? studentApi.children() : Promise.resolve([])), [user?.role]);
-  const sid = useActiveStudentId(me.data?.id);
-  const mine = useAsync(() => (sid ? feeApi.studentChallans(sid) : Promise.resolve([])), [sid]);
-  const payInfo = useAsync(() => (user?.role === "PARENT" || user?.role === "STUDENT" ? settingsApi.get() : Promise.resolve(null)), [user?.role]);
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -52,69 +125,6 @@ export function FeesPage() {
   const [file, setFile] = useState<File | null>(null);
   const [ref, setRef] = useState("");
   const [uploadPct, setUploadPct] = useState<number | null>(null);
-
-  if (user?.role === "PARENT" || user?.role === "STUDENT") {
-    const child = (kids.data || []).find((k) => k.id === sid) || me.data;
-    return (
-      <>
-        <div className="page-title"><div><h1>Fee challans</h1><p>Pay by uploading a bank slip — no online gateway</p></div></div>
-        {user.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
-        {payInfo.data && (payInfo.data.bankName || payInfo.data.accountNumber || payInfo.data.paymentInstructions) ? (
-          <div className="card" style={{ marginBottom: 16 }}>
-            <h3>How to pay</h3>
-            <p>{payInfo.data.bankName ? `${payInfo.data.bankName} · ` : ""}{payInfo.data.accountTitle || ""} {payInfo.data.accountNumber || ""}{payInfo.data.iban ? ` · IBAN ${payInfo.data.iban}` : ""}</p>
-            {payInfo.data.jazzcash ? <p>JazzCash {payInfo.data.jazzcash}</p> : null}
-            {payInfo.data.easypaisa ? <p>Easypaisa {payInfo.data.easypaisa}</p> : null}
-            {payInfo.data.paymentInstructions ? <p className="hint">{payInfo.data.paymentInstructions}</p> : null}
-          </div>
-        ) : null}
-        <QueryState status={mine} label="fee challans">
-          <Table
-            headers={["Name", "Roll", "Class", "Campus", "Challan", "Month", "Due", "Amount", "Status", "Slip", ""]}
-            rows={(mine.data || []).map((c) => [
-              c.studentName || child?.user?.fullName || "—",
-              c.rollNumber || child?.rollNumber || "—",
-              className(c.classId || child?.classId),
-              c.campusName || "—",
-              c.challanNumber,
-              fmtDate(c.month),
-              fmtDate(c.dueDate),
-              money(c.totalPayable),
-              <Badge key={c.id} value={c.status} />,
-              c.proofs?.[0]?.slipUrl ? <FileLink key={`sl${c.id}`} href={c.proofs[0].slipUrl} label="View slip" /> : "—",
-              <div key={`act${c.id}`} className="row">
-                <Button kind="ghost" onClick={async () => { setSlip(await feeApi.getChallan(c.id)); }}>Fee slip</Button>
-                {c.status === "PAID" ? "Paid" : <Button kind="ghost" onClick={() => { setProofFor(c.id); setFile(null); setRef(""); setUploadPct(null); }}>Upload proof</Button>}
-              </div>,
-            ])}
-          />
-        </QueryState>
-        <Modal title="Payment proof" open={!!proofFor} onClose={() => { setProofFor(null); setFile(null); setUploadPct(null); }}>
-          <Form busyLabel="Uploading…" onSubmit={async () => {
-            if (!file || !proofFor) throw new Error("Choose a slip file first.");
-            setUploadPct(0);
-            const up = await fileApi.upload(file, setUploadPct);
-            if (!up?.url) throw new Error("Upload did not return a file URL.");
-            await feeApi.submitProof(proofFor, { slipUrl: up.url, transactionRef: ref });
-            toast("ok", "Proof submitted for verification");
-            setProofFor(null);
-            setFile(null);
-            setUploadPct(null);
-            void mine.reload();
-          }}>
-            <Field label="Reference"><input value={ref} onChange={(e) => setRef(e.target.value)} /></Field>
-            <Field label="Slip screenshot or PDF">
-              <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} required />
-            </Field>
-            {file ? <p className="hint" style={{ margin: 0 }}>{file.name} · {Math.round(file.size / 1024)} KB{file.type ? ` · ${file.type}` : ""}</p> : null}
-            {uploadPct != null ? <p className="hint">Uploading {uploadPct}%</p> : null}
-            <Button type="submit" kind="brass" loadingText="Uploading…">Submit</Button>
-          </Form>
-        </Modal>
-        <ChallanSlipModal slip={slip} onClose={() => setSlip(null)} className={className} />
-      </>
-    );
-  }
 
   return (
     <>

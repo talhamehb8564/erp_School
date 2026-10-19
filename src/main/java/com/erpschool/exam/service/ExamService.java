@@ -154,6 +154,10 @@ public class ExamService {
                     .filter(s -> s.getCampusId() == null || campusId.equals(s.getCampusId()))
                     .toList();
         }
+        UserRole role = TenantContext.getRole();
+        if (role == UserRole.STUDENT || role == UserRole.PARENT) {
+            rows = rows.stream().filter(ExamSession::isPublished).toList();
+        }
         return rows;
     }
 
@@ -425,6 +429,14 @@ public class ExamService {
         );
 
         return m;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> myResult(UUID sessionId) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
+        return studentResult(sessionId, me.getId());
     }
 
     @Transactional(readOnly = true)

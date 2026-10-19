@@ -186,6 +186,12 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.ok(academicService.classTimetable(classId, sectionId)));
     }
 
+    @GetMapping("/timetable/me")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> myTimetable() {
+        return ResponseEntity.ok(ApiResponse.ok(academicService.myTimetable()));
+    }
+
     @GetMapping("/teacher/timetable")
     @PreAuthorize("hasRole('TEACHER')")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> teacherTimetable() {

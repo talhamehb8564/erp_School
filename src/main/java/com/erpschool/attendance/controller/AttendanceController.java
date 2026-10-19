@@ -65,6 +65,14 @@ public class AttendanceController {
         return ResponseEntity.ok(ApiResponse.ok(attendanceService.lectureSheet(slotId, date)));
     }
 
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<List<StudentAttendance>>> myHistory(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(ApiResponse.ok(attendanceService.myHistory(from, to)));
+    }
+
     @GetMapping("/students/{studentId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<StudentAttendance>>> studentHistory(

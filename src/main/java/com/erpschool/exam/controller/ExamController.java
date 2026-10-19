@@ -107,6 +107,12 @@ public class ExamController {
         return ResponseEntity.ok(ApiResponse.ok(examService.sessionResults(id)));
     }
 
+    @GetMapping("/sessions/{id}/mine")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> mine(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(examService.myResult(id)));
+    }
+
     @GetMapping("/sessions/{id}/students/{studentId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Map<String, Object>>> student(

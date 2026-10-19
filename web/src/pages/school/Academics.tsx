@@ -214,23 +214,56 @@ export function AcademicsPage() {
 
 export function TimetablePage() {
   const { user } = useSession();
+  if (user?.role === "PARENT" || user?.role === "STUDENT") return <FamilyTimetable />;
+  return <StaffTimetable />;
+}
+
+function FamilyTimetable() {
+  const { user } = useSession();
+  const kids = useAsyncKids(user?.role === "PARENT");
+  const childId = useActiveStudentId(null);
+  const child = (kids.data || []).find((k) => k.id === childId);
+  const slots = useAsync(
+    () => {
+      if (user?.role === "STUDENT") return academicApi.myTimetable();
+      if (child?.classId && child?.sectionId) return academicApi.timetable(child.classId, child.sectionId);
+      return Promise.resolve([]);
+    },
+    [user?.role, child?.classId, child?.sectionId],
+  );
+  return (
+    <>
+      <div className="page-title"><div><h1>Timetable</h1><p>Lectures stored as timetable slots</p></div></div>
+      {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
+      <QueryState status={slots} label="timetable">
+        <Table
+          headers={["Day", "Time", "Class", "Subject", "Teacher"]}
+          rows={(slots.data || []).map((s) => [
+            dayName(s.dayOfWeek),
+            `${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`,
+            s.className || "—",
+            s.subjectName || "—",
+            s.teacherName || "—",
+          ])}
+        />
+      </QueryState>
+    </>
+  );
+}
+
+function StaffTimetable() {
+  const { user } = useSession();
   const { classes, sections, subjects, className, subjectName } = useLookups();
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
-  const kids = useAsyncKids(user?.role === "PARENT");
-  const meStudent = useAsync(() => (user?.role === "STUDENT" ? studentApi.me() : Promise.resolve(null)), [user?.role]);
-  const childId = useActiveStudentId(null);
-  const child = (kids.data || []).find((k) => k.id === childId);
-  const effectiveClass = user?.role === "PARENT" ? child?.classId : user?.role === "STUDENT" ? meStudent.data?.classId : classId;
-  const effectiveSection = user?.role === "PARENT" ? child?.sectionId : user?.role === "STUDENT" ? meStudent.data?.sectionId : sectionId;
   const teacher = user?.role === "TEACHER";
   const slots = useAsync(
     () => teacher
       ? academicApi.teacherTimetable()
-      : effectiveClass && effectiveSection
-        ? academicApi.timetable(effectiveClass, effectiveSection)
+      : classId && sectionId
+        ? academicApi.timetable(classId, sectionId)
         : Promise.resolve([]),
-    [teacher, effectiveClass, effectiveSection],
+    [teacher, classId, sectionId],
   );
   const toast = useToast();
   const teachers = useAsync(() => (user?.role === "SCHOOL_ADMIN" ? userApi.list({ role: "TEACHER" }) : Promise.resolve(null)), [user?.role]);
@@ -242,8 +275,7 @@ export function TimetablePage() {
       <div className="page-title"><div><h1>Timetable</h1><p>Lectures stored as timetable slots</p></div>
         {user?.role === "SCHOOL_ADMIN" ? <Button kind="brass" onClick={() => setOpen(true)}>Add lecture</Button> : null}
       </div>
-      {user?.role === "PARENT" ? <ChildSwitch childrenList={kids.data || []} /> : null}
-      {!teacher && user?.role !== "PARENT" && user?.role !== "STUDENT" ? (
+      {!teacher ? (
         <div className="row" style={{ marginBottom: 12 }}>
           <select className="search" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
             <option value="">Class</option>
