@@ -64,6 +64,21 @@ public class AuditService {
                                       String entityType,
                                       String entityId,
                                       Map<String, Object> details) {
+        HttpServletRequest request = currentRequest();
+        recordSameTransaction(tenantId, userId, username, role, action, entityType, entityId, details,
+                HttpRequestUtils.clientIp(request), HttpRequestUtils.userAgent(request));
+    }
+
+    public void recordSameTransaction(UUID tenantId,
+                                      UUID userId,
+                                      String username,
+                                      String role,
+                                      String action,
+                                      String entityType,
+                                      String entityId,
+                                      Map<String, Object> details,
+                                      String ipAddress,
+                                      String userAgent) {
         AuditLog log = new AuditLog();
         log.setTenantId(tenantId);
         log.setUserId(userId);
@@ -73,9 +88,8 @@ public class AuditService {
         log.setEntityType(entityType);
         log.setEntityId(entityId);
         log.setDetails(details);
-        HttpServletRequest request = currentRequest();
-        log.setIpAddress(HttpRequestUtils.clientIp(request));
-        log.setUserAgent(HttpRequestUtils.userAgent(request));
+        log.setIpAddress(ipAddress);
+        log.setUserAgent(userAgent);
         auditLogRepository.save(log);
     }
 

@@ -8,6 +8,7 @@ import { homeFor, LOGIN_PORTALS } from "../lib/routes";
 import { Button, Field, Form } from "../ui/kit";
 import RotatingLine from "../ui/RotatingLine";
 import { useToast } from "../lib/toast";
+import { prefetchPortal } from "../lib/prefetch";
 
 const MAP: Record<string, Role> = {
   teacher: "TEACHER",
@@ -66,6 +67,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
           busyLabel="Signing in…"
           onSubmit={async () => {
             const u = await login(username, password, expected);
+            prefetchPortal(u.role);
             toast("ok", `Signed in as ${u.fullName || u.username}`);
             nav(homeFor(u), { replace: true });
           }}

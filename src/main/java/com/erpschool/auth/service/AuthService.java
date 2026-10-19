@@ -29,12 +29,19 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 @Service
 public class AuthService {
 
     private static final int MAX_FAILED_ATTEMPTS = 8;
     private static final int LOCK_MINUTES = 15;
+    private static final Executor LOGIN_FOLLOW_UP = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "auth-login-followup");
+        t.setDaemon(true);
+        return t;
+    });
 
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
@@ -122,21 +129,34 @@ public class AuthService {
         assertTenantAllowsLogin(user, tenant);
 
         Instant now = Instant.now();
-        AuthResponse response = writeTx.execute(status -> {
-            userRepository.markSuccessfulLogin(user.getId(), now, UserStatus.ACTIVE);
-            user.setFailedLoginAttempts(0);
-            user.setLockedUntil(null);
-            user.setLastLoginAt(now);
-            user.setStatus(UserStatus.ACTIVE);
-            AuthResponse issued = issueTokens(user, request, tenant);
-            auditService.recordSameTransaction(user.getTenantId(), user.getId(), user.getUsername(),
-                    user.getRole().name(), AuditService.LOGIN_SUCCESS, "User", user.getId().toString(), null);
-            return issued;
-        });
-
+        String ip = HttpRequestUtils.clientIp(request);
+        String ua = HttpRequestUtils.userAgent(request);
+        UUID userId = user.getId();
+        UUID tenantId = user.getTenantId();
+        String username = user.getUsername();
+        String role = user.getRole().name();
+        /* Tokens first so the HTTP response is not blocked on users.last_login_at
+           (the Neon write that previously stalled login for several seconds).
+           last_login and LOGIN_SUCCESS audit still run; they just follow the response. */
+        AuthResponse response = writeTx.execute(status -> issueTokens(user, request, tenant));
         if (response == null) {
             throw new UnauthorizedException("Unable to complete login");
         }
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setLastLoginAt(now);
+        user.setStatus(UserStatus.ACTIVE);
+        LOGIN_FOLLOW_UP.execute(() -> {
+            try {
+                writeTx.executeWithoutResult(status -> {
+                    userRepository.markSuccessfulLogin(userId, now, UserStatus.ACTIVE);
+                    auditService.recordSameTransaction(tenantId, userId, username, role,
+                            AuditService.LOGIN_SUCCESS, "User", userId.toString(), null, ip, ua);
+                });
+            } catch (RuntimeException ignored) {
+                /* Caller already has a valid session. */
+            }
+        });
         return response;
     }
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { publicApi, setupApi } from "../api/services";
 import { useBranding } from "../lib/branding";
@@ -66,6 +67,7 @@ export default function Welcome() {
   const [slide, setSlide] = useState(0);
   const [menu, setMenu] = useState(false);
   const [paused, setPaused] = useState(false);
+  const burgerRef = useRef<HTMLButtonElement>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -93,7 +95,28 @@ export default function Welcome() {
   }, [menu]);
   useEffect(() => {
     if (!menu) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(false); };
+    burgerRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenu(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const root = document.getElementById("site-menu");
+      if (!root) return;
+      const nodes = [burgerRef.current, ...Array.from(root.querySelectorAll<HTMLElement>("a,button"))].filter((el): el is HTMLElement => Boolean(el));
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menu]);
@@ -169,11 +192,55 @@ export default function Welcome() {
 
   const closeMenu = () => setMenu(false);
 
+  const burger = (
+    <button
+      ref={burgerRef}
+      type="button"
+      className={`burger-x ${menu ? "open" : ""}`}
+      aria-label={menu ? "Close menu" : "Open menu"}
+      aria-expanded={menu}
+      aria-controls="site-menu"
+      onClick={() => setMenu((v) => !v)}
+    >
+      <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+    </button>
+  );
+
+  const drawer = (
+    <div
+      className={`site-drawer ${menu ? "open" : ""}`}
+      aria-hidden={!menu}
+      {...(!menu ? ({ inert: "" } as Record<string, string>) : {})}
+    >
+      <button type="button" className="site-scrim" aria-label="Close menu" tabIndex={menu ? 0 : -1} onClick={closeMenu} />
+      <div
+        id="site-menu"
+        className="site-drawer-panel"
+        role="dialog"
+        aria-modal={menu}
+        aria-label="Site menu"
+      >
+        <div className="site-drawer-top" aria-hidden="true" />
+        <nav className="site-drawer-links" aria-label="On this page">
+          {SITE_MENU.map((item, i) => (
+            <a key={item.href} href={item.href} style={{ "--i": i } as CSSProperties} onClick={closeMenu}>{item.label}</a>
+          ))}
+          {school?.admissions?.enabled ? (
+            <Link to="/apply" className="btn brass" style={{ "--i": SITE_MENU.length } as CSSProperties} onClick={closeMenu}>
+              {school.admissions.ctaLabel || "Apply for Admission"}
+            </Link>
+          ) : null}
+          <Link to="/portals" className="btn ghost" style={{ "--i": SITE_MENU.length + 1 } as CSSProperties} onClick={closeMenu}>School Portal</Link>
+        </nav>
+      </div>
+    </div>
+  );
+
   return (
     <div className="site">
       <header className="site-nav">
         <a href="#top" className="site-brand">
-          {school?.logoUrl ? <img src={school.logoUrl} alt="" /> : <div className="mark">{letter}</div>}
+          {school?.logoUrl ? <img src={school.logoUrl} alt="" /> : <div className="mark" aria-hidden="true">{letter}</div>}
           <div>
             <strong>{name}</strong>
             {school?.tagline ? <div className="hint">{school.tagline}</div> : null}
@@ -190,35 +257,15 @@ export default function Welcome() {
           ) : null}
           <Link to="/portals" className="btn ghost sm site-nav-portal">School Portal</Link>
         </div>
-        <div className="burger-slot">
-          <button
-            type="button"
-            className={`burger-x ${menu ? "open" : ""}`}
-            aria-label={menu ? "Close menu" : "Open menu"}
-            aria-expanded={menu}
-            onClick={() => setMenu((v) => !v)}
-          >
-            <span /><span /><span />
-          </button>
-        </div>
+        <div className="burger-slot" aria-hidden="true" />
       </header>
-      <div className={`site-drawer ${menu ? "open" : ""}`} aria-hidden={!menu}>
-        <button type="button" className="site-scrim" aria-label="Close menu" onClick={closeMenu} />
-        <nav className="site-drawer-panel" aria-label="Site">
-          <div className="site-drawer-top" aria-hidden="true" />
-          <div className="site-drawer-links">
-            {SITE_MENU.map((item, i) => (
-              <a key={item.href} href={item.href} style={{ "--i": i } as CSSProperties} onClick={closeMenu}>{item.label}</a>
-            ))}
-            {school?.admissions?.enabled ? (
-              <Link to="/apply" className="btn brass" style={{ "--i": SITE_MENU.length } as CSSProperties} onClick={closeMenu}>
-                {school.admissions.ctaLabel || "Apply for Admission"}
-              </Link>
-            ) : null}
-            <Link to="/portals" className="btn ghost" style={{ "--i": SITE_MENU.length + 1 } as CSSProperties} onClick={closeMenu}>School Portal</Link>
-          </div>
-        </nav>
-      </div>
+      {createPortal(
+        <>
+          {burger}
+          {drawer}
+        </>,
+        document.body,
+      )}
 
       <section className="site-hero" id="top" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
         <div className="site-hero-media">
@@ -322,7 +369,7 @@ export default function Welcome() {
           <div className="site-gallery">
             {gallery.items.map((g, i) => (
               <figure key={g.imageUrl + i}>
-                <img src={g.imageUrl} alt={g.caption || ""} loading="lazy" />
+                <img src={g.imageUrl} alt={g.caption || "School life"} loading="lazy" />
                 {g.caption ? <figcaption>{g.caption}</figcaption> : null}
               </figure>
             ))}
