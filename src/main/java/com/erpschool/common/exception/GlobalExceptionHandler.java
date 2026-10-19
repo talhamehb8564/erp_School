@@ -85,7 +85,7 @@ public class GlobalExceptionHandler {
         String lower = detail == null ? "" : detail.toLowerCase();
         if (lower.contains("uq_admission_app_active_cnic")) {
             return ResponseEntity.badRequest().body(ApiResponse.fail("ADMISSION_EXISTS",
-                    "Your admission request has already been submitted using this CNIC. Please wait. Our team will contact you regarding your admission."));
+                    "Your request has already been submitted using this CNIC. Please wait — our team will contact you."));
         }
         if (lower.contains("uq_admission_appt_slot")) {
             return ResponseEntity.status(HttpStatus.CONFLICT)

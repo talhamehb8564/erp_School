@@ -121,8 +121,10 @@ public class AdmissionService {
     @Transactional
     public Map<String, Object> adminConfig() {
         UUID tenantId = TenantGuard.requireTenantId(null);
-        ensureCoreFields(tenantId);
-        AdmissionSettings settings = settings(tenantId);
+        if (!fieldRepository.existsByTenantId(tenantId)) {
+            ensureCoreFields(tenantId);
+        }
+        AdmissionSettings settings = settingsRepository.findById(tenantId).orElseGet(() -> unsavedSettings(tenantId));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("settings", toSettings(settings));
         out.put("featureEnabled", featureService.enabled(tenantId, SchoolFeature.ADMISSIONS));
@@ -375,7 +377,6 @@ public class AdmissionService {
         if (!Boolean.TRUE.equals(summary.get("enabled"))) {
             throw new BusinessException("ADMISSIONS_CLOSED", "Admissions are not open for this school");
         }
-        ensureCoreFields(tenant.getId());
         UUID campusId = parseUuid(body.get("campusId"));
         if (campusId != null) {
             requireCampus(tenant.getId(), campusId);
@@ -404,7 +405,7 @@ public class AdmissionService {
         String phone = normalizePhone(str(answers.get("phone")));
         answers.put("cnic", cnic);
         answers.put("phone", phone);
-        rejectDuplicateCnic(tenant.getId(), campusId, cnic, studentName);
+        rejectDuplicateCnic(tenant.getId(), cnic, studentName);
 
         Instant slotStart = parseInstant(body.get("slotStart"));
         boolean apptEnabled = Boolean.TRUE.equals(summary.get("appointmentEnabled"));
@@ -428,10 +429,14 @@ public class AdmissionService {
         try {
             applicationRepository.saveAndFlush(app);
         } catch (DataIntegrityViolationException ex) {
-            throw duplicateCnicOrRethrow(tenant.getId(), campusId, cnic, studentName, ex);
+            throw duplicateCnicOrRethrow(tenant.getId(), cnic, studentName, ex);
         }
 
-        Map<String, Object> out = toApplication(app, null, campusId == null ? null : campusNames(tenant.getId()).get(campusId));
+        String campusName = null;
+        if (campusId != null) {
+            campusName = campusRepository.findById(campusId).map(Campus::getName).orElse(null);
+        }
+        Map<String, Object> out = toApplication(app, null, campusName);
         if (slotStart != null) {
             out.put("appointment", book(tenant.getId(), app, campusId, slotStart));
         }
@@ -557,13 +562,18 @@ public class AdmissionService {
 
     private AdmissionSettings settings(UUID tenantId) {
         return settingsRepository.findById(tenantId).orElseGet(() -> {
-            AdmissionSettings s = new AdmissionSettings();
-            s.setTenantId(tenantId);
-            s.setEnabled(true);
-            s.setCtaLabel("Apply for Admission");
+            AdmissionSettings s = unsavedSettings(tenantId);
             s.setUpdatedAt(Instant.now());
             return settingsRepository.save(s);
         });
+    }
+
+    private AdmissionSettings unsavedSettings(UUID tenantId) {
+        AdmissionSettings s = new AdmissionSettings();
+        s.setTenantId(tenantId);
+        s.setEnabled(true);
+        s.setCtaLabel("Apply for Admission");
+        return s;
     }
 
     private Tenant resolveSchool(String code) {
@@ -571,12 +581,9 @@ public class AdmissionService {
             return tenantRepository.findByCodeIgnoreCase(code.trim())
                     .orElseThrow(() -> new ResourceNotFoundException("School", code));
         }
-        List<Tenant> active = tenantRepository.findByStatusInOrderByCreatedAtAsc(
-                List.of(TenantStatus.ACTIVE, TenantStatus.PENDING));
-        if (active.isEmpty()) {
-            throw new ResourceNotFoundException("No school is configured yet");
-        }
-        return active.get(0);
+        return tenantRepository.findFirstByStatusInOrderByCreatedAtAsc(
+                        List.of(TenantStatus.ACTIVE, TenantStatus.PENDING))
+                .orElseThrow(() -> new ResourceNotFoundException("No school is configured yet"));
     }
 
     private void requireCampus(UUID tenantId, UUID campusId) {
@@ -917,16 +924,16 @@ public class AdmissionService {
         return schoolWide;
     }
 
-    private void rejectDuplicateCnic(UUID tenantId, UUID campusId, String cnic, String studentName) {
-        AdmissionApplication existing = findBlockingCnic(tenantId, campusId, cnic);
+    private void rejectDuplicateCnic(UUID tenantId, String cnic, String studentName) {
+        AdmissionApplication existing = findBlockingCnic(tenantId, cnic);
         if (existing != null) {
             throw duplicateCnicException(existing, studentName);
         }
     }
 
-    private BusinessException duplicateCnicOrRethrow(UUID tenantId, UUID campusId, String cnic,
+    private BusinessException duplicateCnicOrRethrow(UUID tenantId, String cnic,
                                                      String studentName, DataIntegrityViolationException ex) {
-        AdmissionApplication existing = findBlockingCnic(tenantId, campusId, cnic);
+        AdmissionApplication existing = findBlockingCnic(tenantId, cnic);
         if (existing != null) {
             return duplicateCnicException(existing, studentName);
         }
@@ -937,22 +944,19 @@ public class AdmissionService {
         throw ex;
     }
 
-    private AdmissionApplication findBlockingCnic(UUID tenantId, UUID campusId, String cnic) {
+    private AdmissionApplication findBlockingCnic(UUID tenantId, String cnic) {
         List<AdmissionApplication> rows = applicationRepository.findByTenantIdAndCnicAndStatusIn(
                 tenantId, cnic, BLOCKING_CNIC);
+        AdmissionApplication accepted = null;
+        AdmissionApplication other = null;
         for (AdmissionApplication row : rows) {
-            if (campusIdsMatch(campusId, row.getCampusId())) {
-                return row;
+            if (row.getStatus() == AdmissionApplicationStatus.ACCEPTED) {
+                accepted = row;
+            } else if (other == null) {
+                other = row;
             }
         }
-        return null;
-    }
-
-    static boolean campusIdsMatch(UUID left, UUID right) {
-        if (left == null && right == null) {
-            return true;
-        }
-        return left != null && left.equals(right);
+        return accepted != null ? accepted : other;
     }
 
     static BusinessException duplicateCnicException(AdmissionApplication existing, String requestedName) {
@@ -965,8 +969,8 @@ public class AdmissionService {
                             + " using this CNIC has already been accepted. Please contact the school if you need further assistance.");
         }
         return new BusinessException("ADMISSION_EXISTS",
-                "Your admission request has already been submitted for " + name
-                        + " using this CNIC. Please wait. Our team will contact you regarding your admission.");
+                "Your request has already been submitted for " + name
+                        + " using this CNIC. Please wait — our team will contact you.");
     }
 
     static String normalizeCnic(String raw) {

@@ -28,7 +28,7 @@ function maskCnic(raw: unknown) {
 
 export default function ApplyAdmission() {
   const { school, campuses, campus, setCampusId: setBrandCampus } = useBranding();
-  const formQ = useAsync(() => publicAdmissionApi.form(school?.code), [school?.code]);
+  const formQ = useAsync(() => publicAdmissionApi.form(), []);
   const form = formQ.data;
   const fields = (form?.fields || []) as FieldDef[];
   const formCampuses = ((form?.campuses || []) as { id: string; name: string }[]);

@@ -19,6 +19,8 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
 
     java.util.List<Tenant> findByStatusInOrderByCreatedAtAsc(java.util.Collection<TenantStatus> statuses);
 
+    Optional<Tenant> findFirstByStatusInOrderByCreatedAtAsc(java.util.Collection<TenantStatus> statuses);
+
     Page<Tenant> findByStatus(TenantStatus status, Pageable pageable);
 
     /**

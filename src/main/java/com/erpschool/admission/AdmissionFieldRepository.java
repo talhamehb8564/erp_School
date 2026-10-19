@@ -9,5 +9,7 @@ public interface AdmissionFieldRepository extends JpaRepository<AdmissionField, 
 
     List<AdmissionField> findByTenantIdOrderBySortOrderAsc(UUID tenantId);
 
+    boolean existsByTenantId(UUID tenantId);
+
     boolean existsByTenantIdAndFieldKey(UUID tenantId, String fieldKey);
 }

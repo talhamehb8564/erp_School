@@ -58,6 +58,7 @@ class AdmissionServiceTest {
         pending.setStatus(AdmissionApplicationStatus.SUBMITTED);
         BusinessException pendingEx = AdmissionService.duplicateCnicException(pending, "Ali Ahmed");
         assertThat(pendingEx.getMessage()).contains("Ali Ahmed");
+        assertThat(pendingEx.getMessage()).contains("already been submitted");
         assertThat(pendingEx.getMessage()).doesNotContain("35202");
         assertThat(pendingEx.getErrorCode()).isEqualTo("ADMISSION_EXISTS");
 

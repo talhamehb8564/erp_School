@@ -164,13 +164,12 @@ function AccountDash() {
   return (
     <>
       <div className="page-title"><div><h1>Finance desk</h1><p>Challans and payment proofs</p></div></div>
-      <QueryState status={d} label="finance desk">
-        <div className="grid stats">
-          <Stat label="Students" value={d.data?.students as number} loading={d.loading} />
-          <Stat label="Unpaid" value={unpaidCount} loading={d.loading} />
-          <Stat label="Pending proofs" value={Number(d.data?.pendingFeeProofs || 0)} loading={d.loading} />
-        </div>
-      </QueryState>
+      <div className="grid stats">
+        <Stat label="Students" value={d.data?.students as number} loading={d.loading} />
+        <Stat label="Unpaid" value={unpaidCount} loading={d.loading} />
+        <Stat label="Pending proofs" value={Number(d.data?.pendingFeeProofs || 0)} loading={d.loading} />
+      </div>
+      {d.error && !d.data ? <ErrorBox error={d.error} onRetry={() => void d.reload()} title="Unable to load finance desk" /> : null}
       {on("FEES") ? (
       <div className="card" style={{ marginTop: 16 }}>
         <h3>Proofs to verify</h3>

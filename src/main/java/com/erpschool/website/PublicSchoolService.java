@@ -159,11 +159,8 @@ public class PublicSchoolService {
             return tenantRepository.findByCodeIgnoreCase(code.trim())
                     .orElseThrow(() -> new ResourceNotFoundException("School", code));
         }
-        List<Tenant> active = tenantRepository.findByStatusInOrderByCreatedAtAsc(
-                List.of(TenantStatus.ACTIVE, TenantStatus.PENDING));
-        if (active.isEmpty()) {
-            throw new ResourceNotFoundException("No school is configured yet");
-        }
-        return active.get(0);
+        return tenantRepository.findFirstByStatusInOrderByCreatedAtAsc(
+                        List.of(TenantStatus.ACTIVE, TenantStatus.PENDING))
+                .orElseThrow(() -> new ResourceNotFoundException("No school is configured yet"));
     }
 }

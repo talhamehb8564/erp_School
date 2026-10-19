@@ -151,6 +151,10 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+    if (hasSchool.current) {
+      setLoading(false);
+      return;
+    }
     void reload();
   }, [publicSite, reload]);
 
