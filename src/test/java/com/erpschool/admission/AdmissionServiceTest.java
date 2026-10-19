@@ -44,5 +44,30 @@ class AdmissionServiceTest {
                 .containsExactly(
                         LocalTime.of(16, 0), LocalTime.of(16, 30), LocalTime.of(17, 0),
                         LocalTime.of(17, 30), LocalTime.of(18, 0), LocalTime.of(18, 30));
+        assertThat(AdmissionService.slotStarts(LocalTime.of(8, 0), LocalTime.of(15, 0), 60))
+                .containsExactly(
+                        LocalTime.of(8, 0), LocalTime.of(9, 0), LocalTime.of(10, 0), LocalTime.of(11, 0),
+                        LocalTime.of(12, 0), LocalTime.of(13, 0), LocalTime.of(14, 0));
+    }
+
+    @Test
+    void duplicateCnicMessageUsesNameNotTheNumber() {
+        AdmissionApplication pending = new AdmissionApplication();
+        pending.setStudentName("Ali Ahmed");
+        pending.setCnic("3520212345671");
+        pending.setStatus(AdmissionApplicationStatus.SUBMITTED);
+        BusinessException pendingEx = AdmissionService.duplicateCnicException(pending, "Ali Ahmed");
+        assertThat(pendingEx.getMessage()).contains("Ali Ahmed");
+        assertThat(pendingEx.getMessage()).doesNotContain("35202");
+        assertThat(pendingEx.getErrorCode()).isEqualTo("ADMISSION_EXISTS");
+
+        AdmissionApplication accepted = new AdmissionApplication();
+        accepted.setStudentName("Ali Ahmed");
+        accepted.setCnic("3520212345671");
+        accepted.setStatus(AdmissionApplicationStatus.ACCEPTED);
+        BusinessException acceptedEx = AdmissionService.duplicateCnicException(accepted, "Ali Ahmed");
+        assertThat(acceptedEx.getErrorCode()).isEqualTo("ADMISSION_EXISTS_ACCEPTED");
+        assertThat(acceptedEx.getMessage()).contains("already been accepted");
+        assertThat(acceptedEx.getMessage()).doesNotContain("3520212345671");
     }
 }

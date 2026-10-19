@@ -46,6 +46,10 @@ public class AdmissionService {
     private static final String[] CORE_KEYS = {"studentName", "guardianName", "cnic", "phone"};
     private static final List<AdmissionAppointmentStatus> HOLDING = List.of(
             AdmissionAppointmentStatus.BOOKED, AdmissionAppointmentStatus.ACCEPTED);
+    private static final List<AdmissionApplicationStatus> BLOCKING_CNIC = List.of(
+            AdmissionApplicationStatus.SUBMITTED,
+            AdmissionApplicationStatus.REVIEWED,
+            AdmissionApplicationStatus.ACCEPTED);
 
     private final AdmissionSettingsRepository settingsRepository;
     private final AdmissionFieldRepository fieldRepository;
@@ -323,7 +327,9 @@ public class AdmissionService {
             throw new BusinessException("Unknown application status");
         }
         AdmissionApplicationStatus prev = app.getStatus();
-        if ((prev == AdmissionApplicationStatus.ACCEPTED || prev == AdmissionApplicationStatus.REJECTED)
+        if ((prev == AdmissionApplicationStatus.ACCEPTED
+                || prev == AdmissionApplicationStatus.REJECTED
+                || prev == AdmissionApplicationStatus.CANCELLED)
                 && prev != next) {
             throw new BusinessException("ALREADY_DECIDED", "This application has already been " + prev.name().toLowerCase(Locale.ROOT));
         }
@@ -398,6 +404,7 @@ public class AdmissionService {
         String phone = normalizePhone(str(answers.get("phone")));
         answers.put("cnic", cnic);
         answers.put("phone", phone);
+        rejectDuplicateCnic(tenant.getId(), campusId, cnic, studentName);
 
         Instant slotStart = parseInstant(body.get("slotStart"));
         boolean apptEnabled = Boolean.TRUE.equals(summary.get("appointmentEnabled"));
@@ -418,7 +425,11 @@ public class AdmissionService {
         app.setPhone(phone);
         app.setPayload(writeJson(answers));
         app.setStatus(AdmissionApplicationStatus.SUBMITTED);
-        applicationRepository.save(app);
+        try {
+            applicationRepository.saveAndFlush(app);
+        } catch (DataIntegrityViolationException ex) {
+            throw duplicateCnicOrRethrow(tenant.getId(), campusId, cnic, studentName, ex);
+        }
 
         Map<String, Object> out = toApplication(app, null, campusId == null ? null : campusNames(tenant.getId()).get(campusId));
         if (slotStart != null) {
@@ -445,7 +456,8 @@ public class AdmissionService {
         if (parseClosedDays(settings == null ? "7" : settings.getClosedDays()).contains(dow)) {
             return List.of();
         }
-        List<SchoolOpenPeriod> periods = periodRepository.findByTenantIdAndDayOfWeekAndEnabledTrue(tenantId, dow);
+        List<SchoolOpenPeriod> periods = usablePeriods(
+                periodRepository.findByTenantIdAndDayOfWeekAndEnabledTrue(tenantId, dow), campusId);
         Instant dayStart = date.atStartOfDay(ZONE).toInstant();
         Instant dayEnd = date.plusDays(1).atStartOfDay(ZONE).toInstant();
         Set<Instant> taken = new HashSet<>();
@@ -454,23 +466,22 @@ public class AdmissionService {
             taken.add(booked.getSlotStart());
         }
         Instant now = Instant.now();
-        List<Map<String, Object>> out = new ArrayList<>();
+        /* One map keyed by start Instant so overlapping periods cannot emit 09:00 twice. */
+        LinkedHashMap<Instant, Map<String, Object>> unique = new LinkedHashMap<>();
         if (periods.isEmpty()) {
             LocalTime startAt = settings != null && settings.getOpenStart() != null
                     ? settings.getOpenStart() : LocalTime.of(9, 0);
             LocalTime endAt = settings != null && settings.getOpenEnd() != null
                     ? settings.getOpenEnd() : LocalTime.of(13, 0);
             int minutes = settings != null && settings.getSlotMinutes() > 0 ? settings.getSlotMinutes() : 30;
-            appendSlots(out, date, startAt, endAt, minutes, now, taken, hideTaken);
-            return out;
-        }
-        for (SchoolOpenPeriod period : periods) {
-            if (campusId != null && period.getCampusId() != null && !campusId.equals(period.getCampusId())) {
-                continue;
+            appendSlots(unique, date, startAt, endAt, minutes, now, taken, hideTaken);
+        } else {
+            for (SchoolOpenPeriod period : periods) {
+                appendSlots(unique, date, period.getStartTime(), period.getEndTime(), period.getSlotMinutes(),
+                        now, taken, hideTaken);
             }
-            appendSlots(out, date, period.getStartTime(), period.getEndTime(), period.getSlotMinutes(), now, taken, hideTaken);
         }
-        return out;
+        return new ArrayList<>(unique.values());
     }
 
     Map<String, Object> book(UUID tenantId, AdmissionApplication app, UUID campusId, Instant slotStart) {
@@ -484,17 +495,20 @@ public class AdmissionService {
             throw new BusinessException("SLOT_TAKEN", "This application already has an appointment");
         }
         LocalDate date = slotStart.atZone(ZONE).toLocalDate();
-        boolean allowed = slots(tenantId, date, campusId, false).stream()
-                .anyMatch(s -> slotStart.toString().equals(s.get("start")) && Boolean.FALSE.equals(s.get("booked")));
-        if (!allowed) {
+        List<Map<String, Object>> offered = slots(tenantId, date, campusId, false);
+        Map<String, Object> match = null;
+        for (Map<String, Object> s : offered) {
+            if (slotStart.toString().equals(s.get("start"))) {
+                match = s;
+                break;
+            }
+        }
+        if (match == null || Boolean.TRUE.equals(match.get("booked"))) {
             throw new BusinessException("SLOT_TAKEN", "That appointment time is not available");
         }
         Instant slotEnd = slotStart.plusSeconds(30 * 60);
-        for (Map<String, Object> s : slots(tenantId, date, campusId, false)) {
-            if (slotStart.toString().equals(s.get("start")) && s.get("end") instanceof String end) {
-                slotEnd = Instant.parse(end);
-                break;
-            }
+        if (match.get("end") instanceof String end) {
+            slotEnd = Instant.parse(end);
         }
         AdmissionAppointment appt = new AdmissionAppointment();
         appt.setTenantId(tenantId);
@@ -735,10 +749,13 @@ public class AdmissionService {
         return b.toString();
     }
 
-    private void appendSlots(List<Map<String, Object>> out, LocalDate date, LocalTime startAt, LocalTime endAt,
-                             int minutes, Instant now, Set<Instant> taken, boolean hideTaken) {
+    private void appendSlots(LinkedHashMap<Instant, Map<String, Object>> out, LocalDate date, LocalTime startAt,
+                             LocalTime endAt, int minutes, Instant now, Set<Instant> taken, boolean hideTaken) {
         for (LocalTime t : slotStarts(startAt, endAt, minutes)) {
             Instant start = date.atTime(t).atZone(ZONE).toInstant();
+            if (out.containsKey(start)) {
+                continue;
+            }
             Instant end = date.atTime(t.plusMinutes(minutes)).atZone(ZONE).toInstant();
             boolean booked = taken.contains(start);
             if (start.isAfter(now) && (!hideTaken || !booked)) {
@@ -746,13 +763,13 @@ public class AdmissionService {
                 row.put("start", start.toString());
                 row.put("end", end.toString());
                 row.put("booked", booked);
-                out.add(row);
+                out.put(start, row);
             }
         }
     }
 
     private void regenerateOpenDays(UUID tenantId, AdmissionSettings settings, Object sessionsRaw) {
-        List<LocalTime[]> sessions = new ArrayList<>();
+        LinkedHashMap<String, OpenWindow> windows = new LinkedHashMap<>();
         if (sessionsRaw instanceof List<?> list && !list.isEmpty()) {
             for (Object row : list) {
                 if (!(row instanceof Map<?, ?> map)) {
@@ -764,14 +781,14 @@ public class AdmissionService {
                 if (start == null || end == null || !end.isAfter(start) || !SLOT_MINUTES.contains(minutes)) {
                     throw new BusinessException("Each opening period needs a start, end, and slot length");
                 }
-                sessions.add(new LocalTime[]{start, end, LocalTime.of(minutes / 60, minutes % 60)});
+                windows.putIfAbsent(start + "|" + end + "|" + minutes, new OpenWindow(start, end, minutes));
             }
         }
-        if (sessions.isEmpty()) {
+        if (windows.isEmpty()) {
             LocalTime start = settings.getOpenStart() == null ? LocalTime.of(9, 0) : settings.getOpenStart();
             LocalTime end = settings.getOpenEnd() == null ? LocalTime.of(13, 0) : settings.getOpenEnd();
             int minutes = settings.getSlotMinutes() <= 0 ? 30 : settings.getSlotMinutes();
-            sessions.add(new LocalTime[]{start, end, LocalTime.of(minutes / 60, minutes % 60)});
+            windows.put(start + "|" + end + "|" + minutes, new OpenWindow(start, end, minutes));
         }
         Set<Integer> closed = parseClosedDays(settings.getClosedDays());
         periodRepository.deleteByTenantId(tenantId);
@@ -780,19 +797,21 @@ public class AdmissionService {
             if (closed.contains(day)) {
                 continue;
             }
-            for (LocalTime[] session : sessions) {
-                int minutes = session[2].getHour() * 60 + session[2].getMinute();
+            for (OpenWindow session : windows.values()) {
                 SchoolOpenPeriod period = new SchoolOpenPeriod();
                 period.setTenantId(tenantId);
                 period.setDayOfWeek(day);
-                period.setStartTime(session[0]);
-                period.setEndTime(session[1]);
-                period.setSlotMinutes(minutes);
+                period.setStartTime(session.start());
+                period.setEndTime(session.end());
+                period.setSlotMinutes(session.minutes());
                 period.setEnabled(true);
                 period.setCreatedBy(actor);
                 periodRepository.save(period);
             }
         }
+    }
+
+    private record OpenWindow(LocalTime start, LocalTime end, int minutes) {
     }
 
     private Map<UUID, AdmissionAppointment> appointmentsByApplication(UUID tenantId, List<AdmissionApplication> apps) {
@@ -872,6 +891,82 @@ public class AdmissionService {
             t = t.plusMinutes(minutes);
         }
         return out;
+    }
+
+    static List<SchoolOpenPeriod> usablePeriods(List<SchoolOpenPeriod> periods, UUID campusId) {
+        if (periods == null || periods.isEmpty()) {
+            return List.of();
+        }
+        if (campusId != null) {
+            List<SchoolOpenPeriod> forCampus = new ArrayList<>();
+            for (SchoolOpenPeriod period : periods) {
+                if (campusId.equals(period.getCampusId())) {
+                    forCampus.add(period);
+                }
+            }
+            if (!forCampus.isEmpty()) {
+                return forCampus;
+            }
+        }
+        List<SchoolOpenPeriod> schoolWide = new ArrayList<>();
+        for (SchoolOpenPeriod period : periods) {
+            if (period.getCampusId() == null) {
+                schoolWide.add(period);
+            }
+        }
+        return schoolWide;
+    }
+
+    private void rejectDuplicateCnic(UUID tenantId, UUID campusId, String cnic, String studentName) {
+        AdmissionApplication existing = findBlockingCnic(tenantId, campusId, cnic);
+        if (existing != null) {
+            throw duplicateCnicException(existing, studentName);
+        }
+    }
+
+    private BusinessException duplicateCnicOrRethrow(UUID tenantId, UUID campusId, String cnic,
+                                                     String studentName, DataIntegrityViolationException ex) {
+        AdmissionApplication existing = findBlockingCnic(tenantId, campusId, cnic);
+        if (existing != null) {
+            return duplicateCnicException(existing, studentName);
+        }
+        String detail = ex.getMostSpecificCause() == null ? "" : String.valueOf(ex.getMostSpecificCause().getMessage());
+        if (detail.toLowerCase(Locale.ROOT).contains("uq_admission_app_active_cnic")) {
+            return duplicateCnicException(null, studentName);
+        }
+        throw ex;
+    }
+
+    private AdmissionApplication findBlockingCnic(UUID tenantId, UUID campusId, String cnic) {
+        List<AdmissionApplication> rows = applicationRepository.findByTenantIdAndCnicAndStatusIn(
+                tenantId, cnic, BLOCKING_CNIC);
+        for (AdmissionApplication row : rows) {
+            if (campusIdsMatch(campusId, row.getCampusId())) {
+                return row;
+            }
+        }
+        return null;
+    }
+
+    static boolean campusIdsMatch(UUID left, UUID right) {
+        if (left == null && right == null) {
+            return true;
+        }
+        return left != null && left.equals(right);
+    }
+
+    static BusinessException duplicateCnicException(AdmissionApplication existing, String requestedName) {
+        String name = existing != null && existing.getStudentName() != null && !existing.getStudentName().isBlank()
+                ? existing.getStudentName()
+                : (requestedName == null || requestedName.isBlank() ? "this student" : requestedName);
+        if (existing != null && existing.getStatus() == AdmissionApplicationStatus.ACCEPTED) {
+            return new BusinessException("ADMISSION_EXISTS_ACCEPTED",
+                    "An admission request for " + name
+                            + " using this CNIC has already been accepted. Please contact the school if you need further assistance.");
+        }
+        return new BusinessException("ADMISSION_EXISTS",
+                "Your admission request has already been submitted for " + name
+                        + " using this CNIC. Please wait. Our team will contact you regarding your admission.");
     }
 
     static String normalizeCnic(String raw) {

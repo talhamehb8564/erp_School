@@ -21,9 +21,20 @@ function asTime(iso?: unknown) {
   return d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
+function minutesOf(t: string) {
+  const [h, m] = String(t || "00:00").slice(0, 5).split(":").map((x) => Number(x) || 0);
+  return h * 60 + m;
+}
+
+function windowInside(inner: { start: string; end: string }, outerStart: string, outerEnd: string) {
+  return minutesOf(inner.start) >= minutesOf(outerStart) && minutesOf(inner.end) <= minutesOf(outerEnd);
+}
+
 function statusLabel(raw: unknown) {
   const s = String(raw || "");
   if (s === "SUBMITTED") return "Pending";
+  if (s === "REVIEWED") return "Under Review";
+  if (s === "CANCELLED") return "Cancelled";
   return pretty(s);
 }
 
@@ -61,8 +72,15 @@ export default function AdmissionsPage() {
       const k = `${start}|${end}|${slot}`;
       unique.set(k, { start, end, minutes: slot });
     }
-    const primary = `${String(settings.openStart || "09:00").slice(0, 5)}|${String(settings.openEnd || "13:00").slice(0, 5)}|${String(settings.slotMinutes || 30)}`;
-    setExtras([...unique.values()].filter((s) => `${s.start}|${s.end}|${s.minutes}` !== primary));
+    const primaryStart = String(settings.openStart || "09:00").slice(0, 5);
+    const primaryEnd = String(settings.openEnd || "13:00").slice(0, 5);
+    const primaryMinutes = String(settings.slotMinutes || 30);
+    const primary = `${primaryStart}|${primaryEnd}|${primaryMinutes}`;
+    setExtras([...unique.values()].filter((s) => {
+      if (`${s.start}|${s.end}|${s.minutes}` === primary) return false;
+      /* Old overlapping windows (09:00–13:00 inside a new 08:00–15:00) caused duplicate times. */
+      return !windowInside(s, primaryStart, primaryEnd);
+    }));
   }, [settings, cfg.data?.openPeriods]);
 
   const saveFlag = async (patch: Record<string, unknown>) => {
@@ -156,7 +174,10 @@ export default function AdmissionsPage() {
                 slotMinutes: Number(minutes),
                 sessions: [
                   { startTime: openStart, endTime: openEnd, slotMinutes: Number(minutes) },
-                  ...extras.map((s) => ({ startTime: s.start, endTime: s.end, slotMinutes: Number(s.minutes) })),
+                  ...extras
+                    .filter((s) => `${s.start}|${s.end}|${s.minutes}` !== `${openStart}|${openEnd}|${minutes}`)
+                    .filter((s) => !windowInside(s, openStart, openEnd))
+                    .map((s) => ({ startTime: s.start, endTime: s.end, slotMinutes: Number(s.minutes) })),
                 ],
               });
               toast("ok", "Appointment hours saved");

@@ -83,6 +83,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
         String detail = ex.getMostSpecificCause() == null ? "" : ex.getMostSpecificCause().getMessage();
         String lower = detail == null ? "" : detail.toLowerCase();
+        if (lower.contains("uq_admission_app_active_cnic")) {
+            return ResponseEntity.badRequest().body(ApiResponse.fail("ADMISSION_EXISTS",
+                    "Your admission request has already been submitted using this CNIC. Please wait. Our team will contact you regarding your admission."));
+        }
+        if (lower.contains("uq_admission_appt_slot")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.fail("SLOT_TAKEN", "That appointment time is already booked"));
+        }
         if (lower.contains("unique") || lower.contains("duplicate") || lower.contains("uk_")
                 || lower.contains("already exists")) {
             return ResponseEntity.status(HttpStatus.CONFLICT)

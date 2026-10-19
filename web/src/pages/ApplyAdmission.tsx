@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { publicAdmissionApi } from "../api/services";
 import { useBranding } from "../lib/branding";
@@ -20,6 +20,12 @@ function slotLabel(iso: string) {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function maskCnic(raw: unknown) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length < 5) return "••••";
+  return `${digits.slice(0, 5)}-*******-${digits.slice(-1)}`;
+}
+
 export default function ApplyAdmission() {
   const { school, campuses, campus, setCampusId: setBrandCampus } = useBranding();
   const formQ = useAsync(() => publicAdmissionApi.form(school?.code), [school?.code]);
@@ -33,16 +39,39 @@ export default function ApplyAdmission() {
   const [slotStart, setSlotStart] = useState("");
   const [help, setHelp] = useState(false);
   const [done, setDone] = useState<Record<string, unknown> | null>(null);
-  const slotsQ = useAsync(
-    () => (form?.appointmentEnabled && date
-      ? publicAdmissionApi.slots(school?.code, date, campusId || undefined)
-      : Promise.resolve([])),
-    [form?.appointmentEnabled, date, campusId, school?.code],
-  );
+  const [slots, setSlots] = useState<{ start: string; end: string; booked?: boolean }[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState<unknown>(null);
+
+  const loadSlots = useCallback(async () => {
+    if (!form?.appointmentEnabled || !date) {
+      setSlots([]);
+      setSlotsLoading(false);
+      setSlotsError(null);
+      return;
+    }
+    setSlots([]);
+    setSlotStart("");
+    setSlotsLoading(true);
+    setSlotsError(null);
+    try {
+      const rows = await publicAdmissionApi.slots(school?.code, date, campusId || undefined);
+      setSlots(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      setSlots([]);
+      setSlotsError(e);
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, [form?.appointmentEnabled, date, campusId, school?.code]);
 
   useEffect(() => {
     if (campus?.id && !campusId) setCampusId(campus.id);
   }, [campus?.id, campusId]);
+
+  useEffect(() => {
+    void loadSlots();
+  }, [loadSlots]);
 
   const pickCampus = (id: string) => {
     setCampusId(id);
@@ -72,7 +101,7 @@ export default function ApplyAdmission() {
     return <input type={type} value={v} required={f.required} onChange={(e) => set(f.fieldKey, e.target.value)} />;
   };
 
-  const slots = useMemo(() => slotsQ.data || [], [slotsQ.data]);
+  const slotsQ = { data: slots, loading: slotsLoading, error: slotsError, reload: () => void loadSlots() };
 
   return (
     <div className="site apply-page">
@@ -104,7 +133,7 @@ export default function ApplyAdmission() {
             ) : done ? (
               <div className="card">
                 <h3>Application received</h3>
-                <p>{String(done.studentName)} · CNIC {String(done.cnic)}</p>
+                <p>{String(done.studentName)} · CNIC {maskCnic(done.cnic)}</p>
                 {done.appointment ? (
                   <p>Appointment {slotLabel(String((done.appointment as { slotStart?: string }).slotStart || ""))}</p>
                 ) : null}
@@ -140,7 +169,7 @@ export default function ApplyAdmission() {
                     <h3>Appointment {form.appointmentRequired ? "(required)" : "(optional)"}</h3>
                     <p className="hint">Times are generated from this school’s opening hours. Booked times cannot be selected again.</p>
                     <Field label="Date">
-                      <input type="date" value={date} required={Boolean(form.appointmentRequired)} onChange={(e) => { setDate(e.target.value); setSlotStart(""); }} />
+                      <input type="date" value={date} required={Boolean(form.appointmentRequired)} onChange={(e) => { setDate(e.target.value); setSlotStart(""); setSlots([]); }} />
                     </Field>
                     {date ? (
                       <QueryState status={slotsQ} label="open slots">

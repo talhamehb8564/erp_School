@@ -4,5 +4,6 @@ public enum AdmissionApplicationStatus {
     SUBMITTED,
     REVIEWED,
     ACCEPTED,
-    REJECTED
+    REJECTED,
+    CANCELLED
 }

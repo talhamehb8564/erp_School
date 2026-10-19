@@ -133,7 +133,7 @@ public class AuthService {
         String ua = HttpRequestUtils.userAgent(request);
         UUID userId = user.getId();
         UUID tenantId = user.getTenantId();
-        String username = user.getUsername();
+        String accountUsername = user.getUsername();
         String role = user.getRole().name();
         /* Tokens first so the HTTP response is not blocked on users.last_login_at
            (the Neon write that previously stalled login for several seconds).
@@ -150,7 +150,7 @@ public class AuthService {
             try {
                 writeTx.executeWithoutResult(status -> {
                     userRepository.markSuccessfulLogin(userId, now, UserStatus.ACTIVE);
-                    auditService.recordSameTransaction(tenantId, userId, username, role,
+                    auditService.recordSameTransaction(tenantId, userId, accountUsername, role,
                             AuditService.LOGIN_SUCCESS, "User", userId.toString(), null, ip, ua);
                 });
             } catch (RuntimeException ignored) {
