@@ -1,0 +1,22 @@
+-- Global school website content (tenant) and branch-specific contact/heroes (campus).
+
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secondary_color VARCHAR(16);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tagline VARCHAR(300);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS about_text TEXT;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS academics_text TEXT;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS achievements_text TEXT;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS facebook_url VARCHAR(300);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS instagram_url VARCHAR(300);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS youtube_url VARCHAR(300);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS twitter_url VARCHAR(300);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR(300);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS gallery_json TEXT;
+
+ALTER TABLE school_settings ADD COLUMN IF NOT EXISTS secondary_color VARCHAR(16);
+
+ALTER TABLE campuses ADD COLUMN IF NOT EXISTS email VARCHAR(150);
+ALTER TABLE campuses ADD COLUMN IF NOT EXISTS facebook_url VARCHAR(300);
+ALTER TABLE campuses ADD COLUMN IF NOT EXISTS instagram_url VARCHAR(300);
+ALTER TABLE campuses ADD COLUMN IF NOT EXISTS youtube_url VARCHAR(300);
+ALTER TABLE campuses ADD COLUMN IF NOT EXISTS twitter_url VARCHAR(300);
+ALTER TABLE campuses ADD COLUMN IF NOT EXISTS hero_json TEXT;
