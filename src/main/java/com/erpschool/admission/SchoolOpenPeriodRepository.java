@@ -10,4 +10,6 @@ public interface SchoolOpenPeriodRepository extends JpaRepository<SchoolOpenPeri
     List<SchoolOpenPeriod> findByTenantIdOrderByDayOfWeekAscStartTimeAsc(UUID tenantId);
 
     List<SchoolOpenPeriod> findByTenantIdAndDayOfWeekAndEnabledTrue(UUID tenantId, int dayOfWeek);
+
+    void deleteByTenantId(UUID tenantId);
 }

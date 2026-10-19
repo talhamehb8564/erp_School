@@ -101,17 +101,16 @@ export function FeatureProvider({ children }: { children: ReactNode }) {
     const cached = readFeatureCache(user.tenantId);
     if (cached) {
       setFlags(cached);
-      setLoaded(true);
-      const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
-      if (typeof idle === "function") {
-        const id = idle(() => { void reload(); }, { timeout: 800 });
-        const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
-        return () => cancel?.(id);
-      }
-      const t = window.setTimeout(() => { void reload(); }, 0);
-      return () => window.clearTimeout(t);
     }
-    void reload();
+    setLoaded(true);
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(() => { void reload(); }, { timeout: 1200 });
+      const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      return () => cancel?.(id);
+    }
+    const t = window.setTimeout(() => { void reload(); }, 0);
+    return () => window.clearTimeout(t);
   }, [user?.id, user?.tenantId]);
 
   const value = useMemo<Features>(() => ({

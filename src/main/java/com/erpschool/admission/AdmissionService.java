@@ -27,13 +27,16 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class AdmissionService {
@@ -41,6 +44,8 @@ public class AdmissionService {
     static final ZoneId ZONE = ZoneId.of("Asia/Karachi");
     private static final Set<Integer> SLOT_MINUTES = Set.of(15, 20, 30, 45, 60);
     private static final String[] CORE_KEYS = {"studentName", "guardianName", "cnic", "phone"};
+    private static final List<AdmissionAppointmentStatus> HOLDING = List.of(
+            AdmissionAppointmentStatus.BOOKED, AdmissionAppointmentStatus.ACCEPTED);
 
     private final AdmissionSettingsRepository settingsRepository;
     private final AdmissionFieldRepository fieldRepository;
@@ -88,7 +93,7 @@ public class AdmissionService {
         return out;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public Map<String, Object> publicForm(String code) {
         Tenant tenant = resolveSchool(code);
         Map<String, Object> summary = publicSummary(tenant.getId());
@@ -102,7 +107,6 @@ public class AdmissionService {
             out.put("fields", List.of());
             return out;
         }
-        ensureCoreFields(tenant.getId());
         out.put("fields", fieldRepository.findByTenantIdOrderBySortOrderAsc(tenant.getId()).stream()
                 .filter(AdmissionField::isEnabled)
                 .map(this::toField)
@@ -144,9 +148,39 @@ public class AdmissionService {
         if (settings.isAppointmentRequired()) {
             settings.setAppointmentEnabled(true);
         }
+        if (body.containsKey("closedDays")) {
+            settings.setClosedDays(writeClosedDays(parseClosedDays(body.get("closedDays"))));
+        }
+        if (body.containsKey("openStart")) {
+            LocalTime start = parseTime(body.get("openStart"), settings.getOpenStart());
+            if (start != null) {
+                settings.setOpenStart(start);
+            }
+        }
+        if (body.containsKey("openEnd")) {
+            LocalTime end = parseTime(body.get("openEnd"), settings.getOpenEnd());
+            if (end != null) {
+                settings.setOpenEnd(end);
+            }
+        }
+        if (body.get("slotMinutes") instanceof Number n) {
+            int minutes = n.intValue();
+            if (!SLOT_MINUTES.contains(minutes)) {
+                throw new BusinessException("Slot length must be 15, 20, 30, 45 or 60 minutes");
+            }
+            settings.setSlotMinutes(minutes);
+        }
+        if (settings.getOpenStart() != null && settings.getOpenEnd() != null
+                && !settings.getOpenEnd().isAfter(settings.getOpenStart())) {
+            throw new BusinessException("Closing time must be after opening time");
+        }
         settings.setUpdatedAt(Instant.now());
         settings.setUpdatedBy(TenantContext.getUserId());
         settingsRepository.save(settings);
+        if (body.containsKey("closedDays") || body.containsKey("openStart") || body.containsKey("openEnd")
+                || body.containsKey("slotMinutes") || body.containsKey("sessions")) {
+            regenerateOpenDays(tenantId, settings, body.get("sessions"));
+        }
         catalogCache.evictTenant(tenantId);
         return toSettings(settings);
     }
@@ -260,8 +294,21 @@ public class AdmissionService {
     @Transactional(readOnly = true)
     public PageResponse<Map<String, Object>> applications(Pageable pageable) {
         UUID tenantId = TenantGuard.requireTenantId(null);
-        return PageResponse.from(applicationRepository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable)
-                .map(this::toApplication));
+        var page = applicationRepository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
+        Map<UUID, AdmissionAppointment> appts = appointmentsByApplication(tenantId, page.getContent());
+        Map<UUID, String> campuses = campusNames(tenantId);
+        return PageResponse.from(page.map(app -> toApplication(app, appts.get(app.getId()), campuses.get(app.getCampusId()))));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> application(UUID id) {
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        AdmissionApplication app = applicationRepository.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Application", id));
+        AdmissionAppointment appt = appointmentRepository
+                .findFirstByTenantIdAndApplicationIdOrderByCreatedAtDesc(tenantId, id)
+                .orElse(null);
+        return toApplication(app, appt, campusNames(tenantId).get(app.getCampusId()));
     }
 
     @Transactional
@@ -269,14 +316,35 @@ public class AdmissionService {
         UUID tenantId = TenantGuard.requireTenantId(null);
         AdmissionApplication app = applicationRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application", id));
+        AdmissionApplicationStatus next;
         try {
-            app.setStatus(AdmissionApplicationStatus.valueOf(statusRaw.trim().toUpperCase(Locale.ROOT)));
+            next = AdmissionApplicationStatus.valueOf(statusRaw.trim().toUpperCase(Locale.ROOT));
         } catch (Exception ex) {
             throw new BusinessException("Unknown application status");
         }
+        AdmissionApplicationStatus prev = app.getStatus();
+        if ((prev == AdmissionApplicationStatus.ACCEPTED || prev == AdmissionApplicationStatus.REJECTED)
+                && prev != next) {
+            throw new BusinessException("ALREADY_DECIDED", "This application has already been " + prev.name().toLowerCase(Locale.ROOT));
+        }
+        app.setStatus(next);
         app.setUpdatedBy(TenantContext.getUserId());
         applicationRepository.save(app);
-        return toApplication(app);
+        AdmissionAppointment appt = appointmentRepository
+                .findFirstByTenantIdAndApplicationIdOrderByCreatedAtDesc(tenantId, id)
+                .orElse(null);
+        if (appt != null) {
+            if (next == AdmissionApplicationStatus.ACCEPTED) {
+                appt.setStatus(AdmissionAppointmentStatus.ACCEPTED);
+            } else if (next == AdmissionApplicationStatus.REJECTED) {
+                appt.setStatus(AdmissionAppointmentStatus.REJECTED);
+            } else if (next == AdmissionApplicationStatus.SUBMITTED) {
+                appt.setStatus(AdmissionAppointmentStatus.BOOKED);
+            }
+            appt.setUpdatedBy(TenantContext.getUserId());
+            appointmentRepository.save(appt);
+        }
+        return toApplication(app, appt, campusNames(tenantId).get(app.getCampusId()));
     }
 
     @Transactional(readOnly = true)
@@ -352,7 +420,7 @@ public class AdmissionService {
         app.setStatus(AdmissionApplicationStatus.SUBMITTED);
         applicationRepository.save(app);
 
-        Map<String, Object> out = toApplication(app);
+        Map<String, Object> out = toApplication(app, null, campusId == null ? null : campusNames(tenant.getId()).get(campusId));
         if (slotStart != null) {
             out.put("appointment", book(tenant.getId(), app, campusId, slotStart));
         }
@@ -373,32 +441,34 @@ public class AdmissionService {
             throw new BusinessException("Date is required");
         }
         int dow = date.getDayOfWeek() == DayOfWeek.SUNDAY ? 7 : date.getDayOfWeek().getValue();
+        AdmissionSettings settings = settingsRepository.findById(tenantId).orElse(null);
+        if (parseClosedDays(settings == null ? "7" : settings.getClosedDays()).contains(dow)) {
+            return List.of();
+        }
         List<SchoolOpenPeriod> periods = periodRepository.findByTenantIdAndDayOfWeekAndEnabledTrue(tenantId, dow);
         Instant dayStart = date.atStartOfDay(ZONE).toInstant();
         Instant dayEnd = date.plusDays(1).atStartOfDay(ZONE).toInstant();
         Set<Instant> taken = new HashSet<>();
-        for (AdmissionAppointment booked : appointmentRepository.findBookedInRange(
-                tenantId, campusId, dayStart, dayEnd, AdmissionAppointmentStatus.BOOKED)) {
+        for (AdmissionAppointment booked : appointmentRepository.findHeldInRange(
+                tenantId, campusId, dayStart, dayEnd, HOLDING)) {
             taken.add(booked.getSlotStart());
         }
         Instant now = Instant.now();
         List<Map<String, Object>> out = new ArrayList<>();
+        if (periods.isEmpty()) {
+            LocalTime startAt = settings != null && settings.getOpenStart() != null
+                    ? settings.getOpenStart() : LocalTime.of(9, 0);
+            LocalTime endAt = settings != null && settings.getOpenEnd() != null
+                    ? settings.getOpenEnd() : LocalTime.of(13, 0);
+            int minutes = settings != null && settings.getSlotMinutes() > 0 ? settings.getSlotMinutes() : 30;
+            appendSlots(out, date, startAt, endAt, minutes, now, taken, hideTaken);
+            return out;
+        }
         for (SchoolOpenPeriod period : periods) {
             if (campusId != null && period.getCampusId() != null && !campusId.equals(period.getCampusId())) {
                 continue;
             }
-            for (LocalTime t : slotStarts(period.getStartTime(), period.getEndTime(), period.getSlotMinutes())) {
-                Instant start = date.atTime(t).atZone(ZONE).toInstant();
-                Instant end = date.atTime(t.plusMinutes(period.getSlotMinutes())).atZone(ZONE).toInstant();
-                boolean booked = taken.contains(start);
-                if (start.isAfter(now) && (!hideTaken || !booked)) {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("start", start.toString());
-                    row.put("end", end.toString());
-                    row.put("booked", booked);
-                    out.add(row);
-                }
-            }
+            appendSlots(out, date, period.getStartTime(), period.getEndTime(), period.getSlotMinutes(), now, taken, hideTaken);
         }
         return out;
     }
@@ -407,8 +477,10 @@ public class AdmissionService {
         if (slotStart == null) {
             throw new BusinessException("Appointment time is required");
         }
-        if (appointmentRepository.findByTenantIdAndApplicationIdAndStatus(
-                tenantId, app.getId(), AdmissionAppointmentStatus.BOOKED).isPresent()) {
+        AdmissionAppointment existing = appointmentRepository
+                .findFirstByTenantIdAndApplicationIdOrderByCreatedAtDesc(tenantId, app.getId())
+                .orElse(null);
+        if (existing != null && HOLDING.contains(existing.getStatus())) {
             throw new BusinessException("SLOT_TAKEN", "This application already has an appointment");
         }
         LocalDate date = slotStart.atZone(ZONE).toLocalDate();
@@ -540,6 +612,10 @@ public class AdmissionService {
         m.put("appointmentEnabled", settings.isAppointmentEnabled());
         m.put("appointmentRequired", settings.isAppointmentRequired());
         m.put("ctaLabel", settings.getCtaLabel());
+        m.put("closedDays", new ArrayList<>(parseClosedDays(settings.getClosedDays())));
+        m.put("openStart", settings.getOpenStart() == null ? "09:00" : settings.getOpenStart().toString());
+        m.put("openEnd", settings.getOpenEnd() == null ? "13:00" : settings.getOpenEnd().toString());
+        m.put("slotMinutes", settings.getSlotMinutes() <= 0 ? 30 : settings.getSlotMinutes());
         return m;
     }
 
@@ -570,9 +646,14 @@ public class AdmissionService {
     }
 
     private Map<String, Object> toApplication(AdmissionApplication app) {
+        return toApplication(app, null, null);
+    }
+
+    private Map<String, Object> toApplication(AdmissionApplication app, AdmissionAppointment appt, String campusName) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", app.getId());
         m.put("campusId", app.getCampusId());
+        m.put("campusName", campusName);
         m.put("studentName", app.getStudentName());
         m.put("guardianName", app.getGuardianName());
         m.put("cnic", app.getCnic());
@@ -580,6 +661,9 @@ public class AdmissionService {
         m.put("status", app.getStatus().name());
         m.put("createdAt", app.getCreatedAt());
         m.put("payload", readJson(app.getPayload()));
+        if (appt != null) {
+            m.put("appointment", toAppointment(appt));
+        }
         return m;
     }
 
@@ -649,6 +733,132 @@ public class AdmissionService {
             }
         }
         return b.toString();
+    }
+
+    private void appendSlots(List<Map<String, Object>> out, LocalDate date, LocalTime startAt, LocalTime endAt,
+                             int minutes, Instant now, Set<Instant> taken, boolean hideTaken) {
+        for (LocalTime t : slotStarts(startAt, endAt, minutes)) {
+            Instant start = date.atTime(t).atZone(ZONE).toInstant();
+            Instant end = date.atTime(t.plusMinutes(minutes)).atZone(ZONE).toInstant();
+            boolean booked = taken.contains(start);
+            if (start.isAfter(now) && (!hideTaken || !booked)) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("start", start.toString());
+                row.put("end", end.toString());
+                row.put("booked", booked);
+                out.add(row);
+            }
+        }
+    }
+
+    private void regenerateOpenDays(UUID tenantId, AdmissionSettings settings, Object sessionsRaw) {
+        List<LocalTime[]> sessions = new ArrayList<>();
+        if (sessionsRaw instanceof List<?> list && !list.isEmpty()) {
+            for (Object row : list) {
+                if (!(row instanceof Map<?, ?> map)) {
+                    continue;
+                }
+                LocalTime start = parseTime(map.get("startTime"), settings.getOpenStart());
+                LocalTime end = parseTime(map.get("endTime"), settings.getOpenEnd());
+                int minutes = map.get("slotMinutes") instanceof Number n ? n.intValue() : settings.getSlotMinutes();
+                if (start == null || end == null || !end.isAfter(start) || !SLOT_MINUTES.contains(minutes)) {
+                    throw new BusinessException("Each opening period needs a start, end, and slot length");
+                }
+                sessions.add(new LocalTime[]{start, end, LocalTime.of(minutes / 60, minutes % 60)});
+            }
+        }
+        if (sessions.isEmpty()) {
+            LocalTime start = settings.getOpenStart() == null ? LocalTime.of(9, 0) : settings.getOpenStart();
+            LocalTime end = settings.getOpenEnd() == null ? LocalTime.of(13, 0) : settings.getOpenEnd();
+            int minutes = settings.getSlotMinutes() <= 0 ? 30 : settings.getSlotMinutes();
+            sessions.add(new LocalTime[]{start, end, LocalTime.of(minutes / 60, minutes % 60)});
+        }
+        Set<Integer> closed = parseClosedDays(settings.getClosedDays());
+        periodRepository.deleteByTenantId(tenantId);
+        UUID actor = TenantContext.getUserId();
+        for (int day = 1; day <= 7; day++) {
+            if (closed.contains(day)) {
+                continue;
+            }
+            for (LocalTime[] session : sessions) {
+                int minutes = session[2].getHour() * 60 + session[2].getMinute();
+                SchoolOpenPeriod period = new SchoolOpenPeriod();
+                period.setTenantId(tenantId);
+                period.setDayOfWeek(day);
+                period.setStartTime(session[0]);
+                period.setEndTime(session[1]);
+                period.setSlotMinutes(minutes);
+                period.setEnabled(true);
+                period.setCreatedBy(actor);
+                periodRepository.save(period);
+            }
+        }
+    }
+
+    private Map<UUID, AdmissionAppointment> appointmentsByApplication(UUID tenantId, List<AdmissionApplication> apps) {
+        if (apps == null || apps.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = apps.stream().map(AdmissionApplication::getId).toList();
+        return appointmentRepository.findByTenantIdAndApplicationIdIn(tenantId, ids).stream()
+                .collect(Collectors.toMap(AdmissionAppointment::getApplicationId, a -> a, (a, b) ->
+                        a.getCreatedAt() != null && b.getCreatedAt() != null && a.getCreatedAt().isAfter(b.getCreatedAt()) ? a : b));
+    }
+
+    private Map<UUID, String> campusNames(UUID tenantId) {
+        return campusRepository.findByTenantIdOrderByNameAsc(tenantId).stream()
+                .collect(Collectors.toMap(Campus::getId, Campus::getName, (a, b) -> a));
+    }
+
+    static Set<Integer> parseClosedDays(Object raw) {
+        Set<Integer> out = new LinkedHashSet<>();
+        if (raw instanceof Collection<?> col) {
+            for (Object item : col) {
+                addClosedDay(out, item);
+            }
+        } else if (raw instanceof int[] arr) {
+            for (int d : arr) {
+                if (d >= 1 && d <= 7) {
+                    out.add(d);
+                }
+            }
+        } else if (raw != null) {
+            String text = String.valueOf(raw).trim();
+            if (!text.isBlank() && !"null".equalsIgnoreCase(text)) {
+                for (String part : text.split("[,\\s]+")) {
+                    addClosedDay(out, part);
+                }
+            }
+        }
+        if (out.isEmpty() && raw == null) {
+            out.add(7);
+        }
+        return out;
+    }
+
+    private static void addClosedDay(Set<Integer> out, Object item) {
+        if (item instanceof Number n) {
+            int d = n.intValue();
+            if (d >= 1 && d <= 7) {
+                out.add(d);
+            }
+            return;
+        }
+        try {
+            int d = Integer.parseInt(String.valueOf(item).trim());
+            if (d >= 1 && d <= 7) {
+                out.add(d);
+            }
+        } catch (NumberFormatException ignored) {
+            /* skip */
+        }
+    }
+
+    static String writeClosedDays(Set<Integer> days) {
+        if (days == null || days.isEmpty()) {
+            return "";
+        }
+        return days.stream().sorted().map(String::valueOf).collect(Collectors.joining(","));
     }
 
     static List<LocalTime> slotStarts(LocalTime start, LocalTime end, int minutes) {

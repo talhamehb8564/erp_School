@@ -36,6 +36,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [forcedLocked, setForcedLocked] = useState(false);
   const [childId, setChildIdState] = useState<string | null>(() => localStorage.getItem(CHILD_KEY));
   const leaving = useRef(false);
+  const skipIdleMe = useRef(false);
 
   const persist = (next: User | null) => {
     setUser(next);
@@ -118,6 +119,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     if (user) {
+      if (skipIdleMe.current) {
+        skipIdleMe.current = false;
+        setLoading(false);
+        return;
+      }
       const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
       if (typeof idle === "function") {
         const id = idle(() => { void reload(); }, { timeout: 800 });
@@ -179,6 +185,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
     persist(payload.user);
     writeFeatureCache(payload.user.tenantId, payload.features);
+    skipIdleMe.current = true;
     if (!applyTenant(payload.user, payload.tenant)) {
       await loadTenant(payload.user);
     }

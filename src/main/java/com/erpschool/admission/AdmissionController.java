@@ -97,6 +97,12 @@ public class AdmissionController {
         return ResponseEntity.ok(ApiResponse.ok(admissionService.applications(pageable)));
     }
 
+    @GetMapping("/applications/{id}")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> application(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(admissionService.application(id)));
+    }
+
     @PutMapping("/applications/{id}/status")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> status(

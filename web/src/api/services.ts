@@ -99,6 +99,8 @@ export const admissionApi = {
   updatePeriod: (id: string, body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/admissions/open-periods/${id}`, body),
   deletePeriod: (id: string) => api.del<void>(`${v1}/admissions/open-periods/${id}`),
   applications: (page = 0) => api.get<Page<Record<string, unknown>>>(`${v1}/admissions/applications?page=${page}&size=20`),
+  application: (id: string) => api.get<Record<string, unknown>>(`${v1}/admissions/applications/${id}`),
+  setStatus: (id: string, status: string) => api.put<Record<string, unknown>>(`${v1}/admissions/applications/${id}/status`, { status }),
 };
 
 export const publicAdmissionApi = {

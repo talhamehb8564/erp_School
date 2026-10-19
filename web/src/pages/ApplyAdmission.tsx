@@ -170,7 +170,11 @@ export default function ApplyAdmission() {
                 ) : null}
                 <div className="row" style={{ marginTop: 8 }}>
                   <Button type="submit" kind="brass" loadingText="Submitting…">Submit application</Button>
-                  <Button kind="ghost" onClick={() => setHelp((v) => !v)}>{help ? "Hide contact" : "Need help? Contact us"}</Button>
+                  <span className="apply-help-toggle">
+                    <Button kind="ghost" onClick={() => setHelp((v) => !v)}>
+                      {help ? "Hide contact" : "Contact us"}
+                    </Button>
+                  </span>
                 </div>
               </Form>
             )}

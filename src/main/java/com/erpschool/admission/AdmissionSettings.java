@@ -11,6 +11,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.UUID;
 
 @Getter
@@ -36,6 +37,18 @@ public class AdmissionSettings {
 
     @Column(name = "cta_label", nullable = false, length = 80)
     private String ctaLabel = "Apply for Admission";
+
+    @Column(name = "closed_days", nullable = false, length = 20)
+    private String closedDays = "7";
+
+    @Column(name = "open_start", nullable = false)
+    private LocalTime openStart = LocalTime.of(9, 0);
+
+    @Column(name = "open_end", nullable = false)
+    private LocalTime openEnd = LocalTime.of(13, 0);
+
+    @Column(name = "slot_minutes", nullable = false)
+    private int slotMinutes = 30;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();

@@ -26,6 +26,15 @@ class AdmissionServiceTest {
     }
 
     @Test
+    void closedDaysDefaultToSundayAndSerialize() {
+        assertThat(AdmissionService.parseClosedDays(null)).containsExactly(7);
+        assertThat(AdmissionService.parseClosedDays("7")).containsExactly(7);
+        assertThat(AdmissionService.parseClosedDays("6,7")).containsExactly(6, 7);
+        assertThat(AdmissionService.writeClosedDays(AdmissionService.parseClosedDays(java.util.List.of(7, 1))))
+                .isEqualTo("1,7");
+    }
+
+    @Test
     void slotsAreGeneratedFromOpenHoursAndDuration() {
         assertThat(AdmissionService.slotStarts(LocalTime.of(9, 0), LocalTime.of(13, 0), 30))
                 .containsExactly(
