@@ -1,7 +1,7 @@
 import { useSession } from "../../lib/session";
 import { useFeatures } from "../../lib/features";
 import { academicApi, examApi, feeApi, homeworkApi, reportApi, studentApi } from "../../api/services";
-import { Badge, Bars, Donut, Empty, ErrorBox, QueryState, Stat, Table, useAsync } from "../../ui/kit";
+import { Badge, Bars, Donut, Empty, ErrorBox, QueryState, Stat, Table, useAfterPaint, useAsync } from "../../ui/kit";
 import ResultCountdown, { isUpcomingExam, pickResultSession } from "../../ui/ResultCountdown";
 import { money, pretty } from "../../lib/format";
 import ChildSwitch from "./ChildSwitch";
@@ -16,8 +16,9 @@ export default function Dashboard() {
 }
 
 function UpcomingResultCard() {
-  const { on, flags } = useFeatures();
-  const sessions = useAsync(() => on("RESULTS") ? examApi.sessions() : Promise.resolve([]), [flags.RESULTS]);
+  const { on } = useFeatures();
+  const ready = useAfterPaint();
+  const sessions = useAsync(() => on("RESULTS") ? examApi.sessions() : Promise.resolve([]), [], ready && on("RESULTS"));
   const rows = sessions.data || [];
   const id = pickResultSession(rows);
   const selected = rows.find((s) => s.id === id);
@@ -103,12 +104,13 @@ function TeacherDash() {
 }
 
 function TeacherDashBody() {
-  const { on, flags } = useFeatures();
-  const lecturesQ = useAsync(() => on("TIMETABLE") ? academicApi.teacherToday() : Promise.resolve([]), [flags.TIMETABLE]);
-  const homeworkQ = useAsync(() => on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([]), [flags.HOMEWORK]);
+  const { on } = useFeatures();
+  const secondary = useAfterPaint();
+  const lecturesQ = useAsync(() => on("TIMETABLE") ? academicApi.teacherToday() : Promise.resolve([]), []);
+  const homeworkQ = useAsync(() => on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([]), [], secondary && on("HOMEWORK"));
   const progressQ = useAsync(() => on("ATTENDANCE") || on("TEACHER_ATTENDANCE")
     ? reportApi.teacherProgress()
-    : Promise.resolve({}), [flags.ATTENDANCE, flags.TEACHER_ATTENDANCE]);
+    : Promise.resolve({}), []);
   const lectures = (lecturesQ.data || []) as {
     id: string;
     startTime: string;
@@ -176,9 +178,10 @@ function TeacherDashBody() {
 }
 
 function AccountDash() {
-  const { on, flags } = useFeatures();
+  const { on } = useFeatures();
+  const secondary = useAfterPaint();
   const d = useAsync(() => reportApi.schoolDashboard());
-  const proofsQ = useAsync(() => on("FEES") ? feeApi.pendingProofs(12) : Promise.resolve([]), [flags.FEES]);
+  const proofsQ = useAsync(() => on("FEES") ? feeApi.pendingProofs(12) : Promise.resolve([]), [], secondary && on("FEES"));
   const pending = proofsQ.data || [];
   const unpaidCount = Number(d.data?.unpaidChallans || 0);
   return (
@@ -214,10 +217,11 @@ function ParentDash() {
 }
 
 function ParentDashBody() {
-  const { on, flags } = useFeatures();
+  const { on } = useFeatures();
   const { childId } = useSession();
+  const secondary = useAfterPaint();
   const kidsQ = useAsync(() => studentApi.children());
-  const feesQ = useAsync(() => on("FEES") ? feeApi.parentChallanSummaries(20) : Promise.resolve([]), [flags.FEES]);
+  const feesQ = useAsync(() => on("FEES") ? feeApi.parentChallanSummaries(20) : Promise.resolve([]), [], secondary && on("FEES"));
   const progressQ = useAsync(() => reportApi.childrenProgress());
   const kids = kidsQ.data || [];
   const all = feesQ.data || [];
@@ -271,10 +275,11 @@ function StudentDash() {
 }
 
 function StudentDashBody() {
-  const { on, flags } = useFeatures();
+  const { on } = useFeatures();
   const { user } = useSession();
-  const homeworkQ = useAsync(() => on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([]), [flags.HOMEWORK]);
-  const feesQ = useAsync(() => on("FEES") ? feeApi.myChallanSummaries(20) : Promise.resolve([]), [flags.FEES]);
+  const secondary = useAfterPaint();
+  const homeworkQ = useAsync(() => on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([]), [], secondary && on("HOMEWORK"));
+  const feesQ = useAsync(() => on("FEES") ? feeApi.myChallanSummaries(20) : Promise.resolve([]), [], secondary && on("FEES"));
   const progressQ = useAsync(() => reportApi.myProgress());
   const hw = homeworkQ.data || [];
   const fees = feesQ.data || [];

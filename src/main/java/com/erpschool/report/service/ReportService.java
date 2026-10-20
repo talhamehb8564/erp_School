@@ -125,7 +125,7 @@ public class ReportService {
     @Transactional(readOnly = true)
     public Map<String, Object> studentProgress(UUID studentId) {
         studentAccessService.requireStudent(studentId);
-        Map<String, Map<String, Object>> batch = studentProgressBatch(List.of(studentId));
+        Map<String, Map<String, Object>> batch = studentProgressBatch(List.of(studentId), true);
         Map<String, Object> one = batch.get(studentId.toString());
         return one != null ? one : emptyProgress();
     }
@@ -135,7 +135,9 @@ public class ReportService {
         UUID tenantId = TenantGuard.requireTenantId(null);
         Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
                 .orElseThrow(() -> new BusinessException("No student profile is linked to this account"));
-        return studentProgress(me.getId());
+        Map<String, Map<String, Object>> batch = studentProgressBatch(List.of(me.getId()), true);
+        Map<String, Object> one = batch.get(me.getId().toString());
+        return one != null ? one : emptyProgress();
     }
 
     /**
@@ -144,6 +146,10 @@ public class ReportService {
      */
     @Transactional(readOnly = true)
     public Map<String, Map<String, Object>> studentProgressBatch(Collection<UUID> studentIds) {
+        return studentProgressBatch(studentIds, false);
+    }
+
+    public Map<String, Map<String, Object>> studentProgressBatch(Collection<UUID> studentIds, boolean idsAlreadyAuthorized) {
         UUID tenantId = TenantGuard.requireTenantId(null);
         Map<String, Map<String, Object>> out = new HashMap<>();
         if (studentIds == null || studentIds.isEmpty()) {
@@ -153,13 +159,18 @@ public class ReportService {
                 .filter(s -> tenantId.equals(s.getTenantId()))
                 .toList();
         UserRole role = TenantContext.getRole();
-        if (role == UserRole.PARENT) {
-            Set<UUID> linked = parentStudentRepository
-                    .findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
-                    .stream()
-                    .map(ParentStudent::getStudentId)
-                    .collect(Collectors.toSet());
-            students = students.stream().filter(s -> linked.contains(s.getId())).toList();
+        if (!idsAlreadyAuthorized) {
+            if (role == UserRole.PARENT) {
+                Set<UUID> linked = parentStudentRepository
+                        .findByTenantIdAndParentUserId(tenantId, TenantContext.getUserId())
+                        .stream()
+                        .map(ParentStudent::getStudentId)
+                        .collect(Collectors.toSet());
+                students = students.stream().filter(s -> linked.contains(s.getId())).toList();
+            } else if (role == UserRole.STUDENT) {
+                UUID me = TenantContext.getUserId();
+                students = students.stream().filter(s -> me.equals(s.getUserId())).toList();
+            }
         } else if (role == UserRole.STUDENT) {
             UUID me = TenantContext.getUserId();
             students = students.stream().filter(s -> me.equals(s.getUserId())).toList();
@@ -217,22 +228,22 @@ public class ReportService {
         UUID userId = TenantContext.getUserId();
         LocalDate to = LocalDate.now();
         LocalDate from = to.minusDays(30);
-        List<com.erpschool.attendance.entity.TeacherAttendance> rows =
-                teacherAttendanceRepository.findByTenantIdAndTeacherUserIdAndAttendanceDateBetween(
-                        tenantId, userId, from, to);
         long present = 0;
         long absent = 0;
         long late = 0;
-        for (com.erpschool.attendance.entity.TeacherAttendance row : rows) {
+        long total = 0;
+        for (com.erpschool.attendance.repository.TeacherAttendanceRepository.StatusCount row :
+                teacherAttendanceRepository.countGrouped(tenantId, userId, from, to)) {
+            long n = row.getTotal();
+            total += n;
             if (row.getStatus() == AttendanceStatus.PRESENT) {
-                present++;
+                present += n;
             } else if (row.getStatus() == AttendanceStatus.ABSENT) {
-                absent++;
+                absent += n;
             } else if (row.getStatus() == AttendanceStatus.LATE) {
-                late++;
+                late += n;
             }
         }
-        long total = rows.size();
         Map<String, Object> m = new HashMap<>();
         m.put("attendancePercent", total == 0 ? 0 : Math.round(present * 10000.0 / total) / 100.0);
         m.put("present", present);
@@ -254,7 +265,7 @@ public class ReportService {
                 .stream()
                 .map(com.erpschool.student.entity.ParentStudent::getStudentId)
                 .toList();
-        return studentProgressBatch(ids);
+        return studentProgressBatch(ids, true);
     }
 
     @Transactional(readOnly = true)
@@ -268,14 +279,21 @@ public class ReportService {
     @Transactional(readOnly = true)
     public Map<String, Object> studentAttendance(UUID studentId, LocalDate from, LocalDate to) {
         Student student = studentAccessService.requireStudent(studentId);
-        long total = studentAttendanceRepository.countByTenantIdAndStudentIdAndAttendanceDateBetween(
-                student.getTenantId(), studentId, from, to);
-        long present = studentAttendanceRepository.countByTenantIdAndStudentIdAndStatusAndAttendanceDateBetween(
-                student.getTenantId(), studentId, AttendanceStatus.PRESENT, from, to);
-        long absent = studentAttendanceRepository.countByTenantIdAndStudentIdAndStatusAndAttendanceDateBetween(
-                student.getTenantId(), studentId, AttendanceStatus.ABSENT, from, to);
-        long late = studentAttendanceRepository.countByTenantIdAndStudentIdAndStatusAndAttendanceDateBetween(
-                student.getTenantId(), studentId, AttendanceStatus.LATE, from, to);
+        long total = 0;
+        long present = 0;
+        long absent = 0;
+        long late = 0;
+        for (StudentAttendanceRepository.CountRow row : studentAttendanceRepository.countGrouped(
+                student.getTenantId(), List.of(studentId), from, to)) {
+            total += row.getTotal();
+            if (row.getStatus() == AttendanceStatus.PRESENT) {
+                present += row.getTotal();
+            } else if (row.getStatus() == AttendanceStatus.ABSENT) {
+                absent += row.getTotal();
+            } else if (row.getStatus() == AttendanceStatus.LATE) {
+                late += row.getTotal();
+            }
+        }
         Map<String, Object> m = new HashMap<>();
         m.put("studentId", studentId);
         m.put("from", from);

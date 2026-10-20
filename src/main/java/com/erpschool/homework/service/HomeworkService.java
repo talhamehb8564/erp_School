@@ -178,20 +178,25 @@ public class HomeworkService {
             if (linkedIds.isEmpty()) {
                 return List.of();
             }
-            java.util.Set<String> seenSections = new java.util.HashSet<>();
-            java.util.LinkedHashMap<UUID, Homework> unique = new java.util.LinkedHashMap<>();
-            PageRequest parentPage = page == null ? PageRequest.of(0, 80) : page;
+            java.util.Set<UUID> classIds = new java.util.HashSet<>();
+            java.util.Set<UUID> sectionIds = new java.util.HashSet<>();
             for (Student st : studentRepository.findAllById(linkedIds)) {
                 if (st.getClassId() == null || st.getSectionId() == null) {
                     continue;
                 }
-                String key = st.getClassId() + ":" + st.getSectionId();
-                if (!seenSections.add(key)) {
-                    continue;
-                }
-                for (Homework h : homeworkRepository.findByTenantIdAndClassIdAndSectionIdOrderByDueDateDesc(
-                        tenantId, st.getClassId(), st.getSectionId(), parentPage)) {
+                classIds.add(st.getClassId());
+                sectionIds.add(st.getSectionId());
+            }
+            if (classIds.isEmpty()) {
+                return List.of();
+            }
+            java.util.LinkedHashMap<UUID, Homework> unique = new java.util.LinkedHashMap<>();
+            for (Homework h : homeworkRepository.findByTenantIdAndClassIdInOrderByDueDateDesc(tenantId, classIds)) {
+                if (h.getSectionId() != null && sectionIds.contains(h.getSectionId())) {
                     unique.putIfAbsent(h.getId(), h);
+                    if (unique.size() >= cap) {
+                        break;
+                    }
                 }
             }
             return cap(toMaps(List.copyOf(unique.values())), limit);

@@ -9,7 +9,7 @@ import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
 import { applyTheme, readTheme, type Theme } from "../lib/theme";
 import { ApiError } from "../api/client";
-import { Badge, Bars, Button, Donut, Empty, Field, FileLink, Form, Loading, Modal, Pager, QueryState, Search, Stat, Table, useAsync, useDebounced } from "../ui/kit";
+import { Badge, Bars, Button, Donut, Empty, Field, FileLink, Form, Loading, Modal, Pager, QueryState, Search, Stat, Table, useAfterPaint, useAsync, useDebounced } from "../ui/kit";
 import UserMenu from "../ui/UserMenu";
 import type { Tenant, TenantStatus } from "../lib/types";
 
@@ -83,9 +83,10 @@ export default function OwnerApp() {
 
 export function OwnerHome() {
   const toast = useToast();
+  const secondary = useAfterPaint();
   const dash = useAsync(() => reportApi.platformDashboard());
-  const schools = useAsync(() => tenantApi.list());
-  const subs = useAsync(() => subscriptionApi.list());
+  const schools = useAsync(() => tenantApi.list(), [], secondary);
+  const subs = useAsync(() => subscriptionApi.list(), [], secondary);
   const pending = (subs.data?.content || []).filter((s) => s.status === "PAYMENT_SUBMITTED");
   const nameOf = (tenantId: string) => schools.data?.content?.find((t) => t.id === tenantId)?.name || tenantId.slice(0, 8);
   return (

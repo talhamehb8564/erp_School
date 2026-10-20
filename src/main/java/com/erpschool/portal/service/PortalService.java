@@ -65,7 +65,7 @@ public class PortalService {
         Map<String, Object> m = new HashMap<>();
         m.put("children", children);
         m.put("fees", feeService.challanSummariesForStudents(childIds, DASH_FEES));
-        m.put("progressByChild", reportService.studentProgressBatch(childIds));
+        m.put("progressByChild", reportService.studentProgressBatch(childIds, true));
         return m;
     }
 

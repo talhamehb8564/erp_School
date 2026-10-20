@@ -21,6 +21,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmailIgnoreCase(String email);
 
+    @Query("""
+            SELECT u FROM User u
+            WHERE LOWER(u.username) = LOWER(:identifier)
+               OR (u.email IS NOT NULL AND LOWER(u.email) = LOWER(:identifier))
+            ORDER BY CASE WHEN LOWER(u.username) = LOWER(:identifier) THEN 0 ELSE 1 END
+            """)
+    java.util.List<User> findLoginCandidates(@Param("identifier") String identifier);
+
     boolean existsByUsernameIgnoreCase(String username);
 
     boolean existsByEmailIgnoreCase(String email);

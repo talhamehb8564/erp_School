@@ -9,6 +9,7 @@ import com.erpschool.common.exception.UnauthorizedException;
 import com.erpschool.common.util.HttpRequestUtils;
 import com.erpschool.common.util.TokenHasher;
 import com.erpschool.config.AppProperties;
+import com.erpschool.feature.FeatureService;
 import com.erpschool.security.JwtService;
 import com.erpschool.tenant.dto.TenantResponse;
 import com.erpschool.tenant.entity.Tenant;
@@ -50,6 +51,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final AppProperties appProperties;
     private final AuditService auditService;
+    private final FeatureService featureService;
     private final TransactionTemplate readTx;
     private final TransactionTemplate writeTx;
 
@@ -60,6 +62,7 @@ public class AuthService {
                        JwtService jwtService,
                        AppProperties appProperties,
                        AuditService auditService,
+                       FeatureService featureService,
                        PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
@@ -68,6 +71,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.appProperties = appProperties;
         this.auditService = auditService;
+        this.featureService = featureService;
         this.readTx = new TransactionTemplate(transactionManager);
         this.readTx.setReadOnly(true);
         this.writeTx = new TransactionTemplate(transactionManager);
@@ -81,9 +85,12 @@ public class AuthService {
     public AuthResponse login(String username, String password, HttpServletRequest request) {
         String identifier = username == null ? "" : username.trim();
         LoginRow loaded = readTx.execute(status -> {
-            User found = userRepository.findByUsernameIgnoreCase(identifier).orElse(null);
-            if (found == null && !identifier.isEmpty()) {
-                found = userRepository.findByEmailIgnoreCase(identifier).orElse(null);
+            User found = null;
+            if (!identifier.isEmpty()) {
+                java.util.List<User> matches = userRepository.findLoginCandidates(identifier);
+                if (matches != null && !matches.isEmpty()) {
+                    found = matches.get(0);
+                }
             }
             if (found == null) {
                 return new LoginRow(null, null);
@@ -127,6 +134,7 @@ public class AuthService {
             throw new UnauthorizedException("School account is not available");
         }
         assertTenantAllowsLogin(user, tenant);
+        Map<String, Boolean> features = snapshotFeatures(user.getTenantId());
 
         Instant now = Instant.now();
         String ip = HttpRequestUtils.clientIp(request);
@@ -138,7 +146,7 @@ public class AuthService {
         /* Tokens first so the HTTP response is not blocked on users.last_login_at
            (the Neon write that previously stalled login for several seconds).
            last_login and LOGIN_SUCCESS audit still run; they just follow the response. */
-        AuthResponse response = writeTx.execute(status -> issueTokens(user, request, tenant));
+        AuthResponse response = writeTx.execute(status -> issueTokens(user, request, tenant, features));
         if (response == null) {
             throw new UnauthorizedException("Unable to complete login");
         }
@@ -178,7 +186,7 @@ public class AuthService {
         assertTenantAllowsLogin(user, tenant);
         stored.revoke();
         refreshTokenRepository.save(stored);
-        return issueTokens(user, request, tenant);
+        return issueTokens(user, request, tenant, snapshotFeatures(user.getTenantId()));
     }
 
     @Transactional
@@ -268,7 +276,8 @@ public class AuthService {
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
     }
 
-    private AuthResponse issueTokens(User user, HttpServletRequest request, Tenant tenant) {
+    private AuthResponse issueTokens(User user, HttpServletRequest request, Tenant tenant,
+                                    Map<String, Boolean> features) {
         String accessToken = jwtService.createAccessToken(user);
         String refreshToken = TokenHasher.randomToken();
 
@@ -288,7 +297,19 @@ public class AuthService {
                 .expiresIn(jwtService.getAccessTtlSeconds())
                 .user(UserResponse.from(user))
                 .tenant(tenant == null ? null : TenantResponse.from(tenant))
+                .features(features == null || features.isEmpty() ? null : features)
                 .build();
+    }
+
+    private Map<String, Boolean> snapshotFeatures(UUID tenantId) {
+        if (tenantId == null) {
+            return Map.of();
+        }
+        try {
+            return featureService.snapshot(tenantId);
+        } catch (RuntimeException ignored) {
+            return Map.of();
+        }
     }
 
     private void registerFailure(User user) {

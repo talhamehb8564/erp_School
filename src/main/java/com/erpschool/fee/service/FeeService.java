@@ -302,7 +302,7 @@ public class FeeService {
         UUID tenantId = TenantGuard.requireTenantId(null);
         Student me = studentRepository.findByTenantIdAndUserId(tenantId, TenantContext.getUserId())
                 .orElseThrow(() -> new BusinessException("No student profile is linked to this account"));
-        return challanSummariesForStudents(List.of(me.getId()), limit);
+        return challanSummariesForStudents(List.of(me.getId()), limit, false);
     }
 
     @Transactional(readOnly = true)

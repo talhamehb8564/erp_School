@@ -7,6 +7,7 @@ import com.erpschool.auth.service.AuthService;
 import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.UnauthorizedException;
 import com.erpschool.config.AppProperties;
+import com.erpschool.feature.FeatureService;
 import com.erpschool.security.JwtService;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.entity.TenantStatus;
@@ -35,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,6 +51,8 @@ class AuthServiceTest {
     private RefreshTokenRepository refreshTokenRepository;
     @Mock
     private AuditService auditService;
+    @Mock
+    private FeatureService featureService;
 
     private PasswordEncoder passwordEncoder;
     private AuthService authService;
@@ -76,7 +80,8 @@ class AuthServiceTest {
             }
         };
         authService = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
-                passwordEncoder, jwtService, properties, auditService, txManager);
+                passwordEncoder, jwtService, properties, auditService, featureService, txManager);
+        lenient().when(featureService.snapshot(any())).thenReturn(Map.of("ATTENDANCE", true, "RESULTS", true));
 
         tenantId = UUID.randomUUID();
         teacher = new User();
@@ -92,7 +97,7 @@ class AuthServiceTest {
 
     @Test
     void loginSucceedsForActiveSchoolUser() {
-        when(userRepository.findByUsernameIgnoreCase("GVS-TCH-0001")).thenReturn(Optional.of(teacher));
+        when(userRepository.findLoginCandidates("GVS-TCH-0001")).thenReturn(List.of(teacher));
         Tenant tenant = new Tenant();
         tenant.setId(tenantId);
         tenant.setStatus(TenantStatus.ACTIVE);
@@ -109,12 +114,13 @@ class AuthServiceTest {
         assertThat(response.getUser().getTenantId()).isEqualTo(tenantId);
         assertThat(response.getTenant()).isNotNull();
         assertThat(response.getTenant().getId()).isEqualTo(tenantId);
+        assertThat(response.getFeatures()).containsEntry("ATTENDANCE", true);
         verify(refreshTokenRepository).save(ArgumentMatchers.any());
     }
 
     @Test
     void loginRejectedWhenSchoolSuspended() {
-        when(userRepository.findByUsernameIgnoreCase("GVS-TCH-0001")).thenReturn(Optional.of(teacher));
+        when(userRepository.findLoginCandidates("GVS-TCH-0001")).thenReturn(List.of(teacher));
         Tenant tenant = new Tenant();
         tenant.setId(tenantId);
         tenant.setStatus(TenantStatus.SUSPENDED);
@@ -136,7 +142,7 @@ class AuthServiceTest {
         admin.setLastName("Admin");
         admin.setRole(UserRole.SCHOOL_ADMIN);
         admin.setStatus(UserStatus.ACTIVE);
-        when(userRepository.findByUsernameIgnoreCase("GVS-ADM-0001")).thenReturn(Optional.of(admin));
+        when(userRepository.findLoginCandidates("GVS-ADM-0001")).thenReturn(List.of(admin));
         Tenant tenant = new Tenant();
         tenant.setId(tenantId);
         tenant.setStatus(TenantStatus.SUSPENDED);
@@ -154,8 +160,7 @@ class AuthServiceTest {
     @Test
     void loginSucceedsWithEmailAsWellAsUsername() {
         teacher.setEmail("teacher@greenvalley.school");
-        when(userRepository.findByUsernameIgnoreCase("teacher@greenvalley.school")).thenReturn(Optional.empty());
-        when(userRepository.findByEmailIgnoreCase("teacher@greenvalley.school")).thenReturn(Optional.of(teacher));
+        when(userRepository.findLoginCandidates("teacher@greenvalley.school")).thenReturn(List.of(teacher));
         Tenant tenant = new Tenant();
         tenant.setId(tenantId);
         tenant.setStatus(TenantStatus.ACTIVE);
@@ -172,7 +177,7 @@ class AuthServiceTest {
 
     @Test
     void loginRejectedForBadPassword() {
-        when(userRepository.findByUsernameIgnoreCase("GVS-TCH-0001")).thenReturn(Optional.of(teacher));
+        when(userRepository.findLoginCandidates("GVS-TCH-0001")).thenReturn(List.of(teacher));
         when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
         when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 

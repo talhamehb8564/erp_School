@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { featureApi } from "../api/services";
-import { readFeatureCache, writeFeatureCache } from "./featureCache";
+import { isFeatureCacheFresh, readFeatureCache, writeFeatureCache } from "./featureCache";
 import { useSession } from "./session";
 
 export const FEATURE_KEYS = [
@@ -101,15 +101,18 @@ export function FeatureProvider({ children }: { children: ReactNode }) {
     const cached = readFeatureCache(user.tenantId);
     if (cached) {
       setFlags(cached);
+      setLoaded(true);
+      if (isFeatureCacheFresh(user.tenantId)) return;
+    } else {
+      setLoaded(true);
     }
-    setLoaded(true);
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
     if (typeof idle === "function") {
-      const id = idle(() => { void reload(); }, { timeout: 1200 });
+      const id = idle(() => { void reload(); }, { timeout: 2500 });
       const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
       return () => cancel?.(id);
     }
-    const t = window.setTimeout(() => { void reload(); }, 0);
+    const t = window.setTimeout(() => { void reload(); }, 1500);
     return () => window.clearTimeout(t);
   }, [user?.id, user?.tenantId]);
 

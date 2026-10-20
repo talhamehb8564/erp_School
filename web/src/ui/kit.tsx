@@ -231,7 +231,22 @@ export function Table({ headers, rows }: { headers: string[]; rows: ReactNode[][
   );
 }
 
-export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
+export function useAfterPaint() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(() => setReady(true), { timeout: 200 });
+      const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+      return () => cancel?.(id);
+    }
+    const t = window.setTimeout(() => setReady(true), 0);
+    return () => window.clearTimeout(t);
+  }, []);
+  return ready;
+}
+
+export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], enabled = true) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
@@ -240,6 +255,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   fnRef.current = fn;
   dataRef.current = data;
   const reload = useCallback(async () => {
+    if (!enabled) return;
     const blocking = dataRef.current == null;
     if (blocking) setLoading(true);
     setError(null);
@@ -252,8 +268,12 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
   useEffect(() => {
+    if (!enabled) {
+      if (dataRef.current == null) setLoading(true);
+      return;
+    }
     let cancelled = false;
     dataRef.current = null;
     setData(null);
@@ -277,7 +297,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, enabled]);
   return { data, error, loading, reload, setData };
 }
 

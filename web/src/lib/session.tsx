@@ -187,8 +187,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         message: `This portal is for a different role. Your account is ${payload.user.role.replaceAll("_", " ").toLowerCase()}.`,
       });
     }
-    persist(payload.user);
     writeFeatureCache(payload.user.tenantId, payload.features);
+    persist(payload.user);
     skipIdleMe.current = true;
     if (!applyTenant(payload.user, payload.tenant)) {
       await loadTenant(payload.user);

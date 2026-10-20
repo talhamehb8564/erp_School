@@ -9,6 +9,7 @@ import { useBranding } from "../lib/branding";
 import { PATH_FEATURE, useFeatures } from "../lib/features";
 import { useSidebarWidth } from "../lib/sidebar";
 import { SCHOOL_NAV } from "../lib/nav";
+import { prefetchRoute } from "../lib/prefetch";
 import Locked from "./Locked";
 import ChangePassword from "./ChangePassword";
 import { Button, ErrorBox, Loading } from "../ui/kit";
@@ -91,7 +92,7 @@ export default function SchoolApp() {
               <div key={g.label} className="nav-group">
                 <div className="nav-sec">{g.label}</div>
                 {shown.map((i) => (
-                  <NavLink key={i.to} to={i.to} end={i.to === "/app"} className="nav-link" onClick={() => setOpen(false)}>
+                  <NavLink key={i.to} to={i.to} end={i.to === "/app"} className="nav-link" onClick={() => setOpen(false)} onMouseEnter={() => prefetchRoute(i.to, role)} onFocus={() => prefetchRoute(i.to, role)}>
                     {i.label}
                     {i.to === "/app/notifications" && unread ? ` (${unread})` : ""}
                   </NavLink>
