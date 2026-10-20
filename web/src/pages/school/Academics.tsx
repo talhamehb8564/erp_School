@@ -226,10 +226,11 @@ function FamilyTimetable() {
   const slots = useAsync(
     () => {
       if (user?.role === "STUDENT") return academicApi.myTimetable();
-      if (child?.classId && child?.sectionId) return academicApi.timetable(child.classId, child.sectionId);
-      return Promise.resolve([]);
+      if (!child?.classId || !child?.sectionId) return Promise.resolve([]);
+      return academicApi.timetable(child.classId, child.sectionId);
     },
     [user?.role, child?.classId, child?.sectionId],
+    user?.role === "STUDENT" || Boolean(child?.classId && child?.sectionId),
   );
   return (
     <>

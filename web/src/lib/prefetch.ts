@@ -1,4 +1,4 @@
-import { academicApi, attendanceApi, examApi, feeApi, homeworkApi, reportApi, studentApi } from "../api/services";
+import { academicApi, attendanceApi, examApi, feeApi, homeworkApi, notificationApi, reportApi, studentApi } from "../api/services";
 import type { Role } from "./types";
 
 /** Start only the first-screen GET while the portal chunk is still loading. */
@@ -52,5 +52,13 @@ export function prefetchRoute(path: string, role?: Role) {
   if (path === "/app/attendance" && role === "STUDENT") {
     const { from, to } = lastDaysRange();
     void attendanceApi.mine(from, to).catch(() => undefined);
+    return;
+  }
+  if (path === "/app/timetable" && role === "STUDENT") {
+    void academicApi.myTimetable().catch(() => undefined);
+    return;
+  }
+  if (path === "/app/notifications") {
+    void notificationApi.list().catch(() => undefined);
   }
 }

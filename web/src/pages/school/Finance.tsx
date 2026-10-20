@@ -22,9 +22,8 @@ function FamilyFees() {
   const sid = useActiveStudentId(undefined);
   const mine = useAsync(() => {
     if (user?.role === "STUDENT") return feeApi.myChallanSummaries(24);
-    if (sid) return feeApi.childChallanSummaries(sid, 24);
-    return Promise.resolve([]);
-  }, [user?.role, sid]);
+    return feeApi.childChallanSummaries(sid, 24);
+  }, [user?.role, sid], user?.role === "STUDENT" || Boolean(sid));
   const payInfo = useAsync(() => settingsApi.get(), []);
   const [slip, setSlip] = useState<(Record<string, unknown> & { id?: string }) | null>(null);
   const [proofFor, setProofFor] = useState<string | null>(null);

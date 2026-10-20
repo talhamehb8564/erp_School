@@ -40,9 +40,8 @@ function FamilyAttendance() {
     const fromStr = from.toISOString().slice(0, 10);
     const toStr = today();
     if (user?.role === "STUDENT") return attendanceApi.mine(fromStr, toStr);
-    if (!sid) return Promise.resolve([]);
     return attendanceApi.studentHistory(sid, fromStr, toStr);
-  }, [user?.role, sid]);
+  }, [user?.role, sid], user?.role === "STUDENT" || Boolean(sid));
   return (
     <>
       <div className="page-title"><div><h1>Attendance</h1><p>Last 30 days from lecture rolls</p></div></div>
@@ -338,11 +337,9 @@ function FamilyExams() {
   const sid = useActiveStudentId(undefined);
   const [sessionId, setSessionId] = useState("");
   const mine = useAsync(() => {
-    if (!sessionId) return Promise.resolve(null);
     if (user?.role === "STUDENT") return examApi.myResult(sessionId);
-    if (!sid) return Promise.resolve(null);
     return examApi.studentResult(sessionId, sid);
-  }, [sessionId, user?.role, sid]);
+  }, [sessionId, user?.role, sid], Boolean(sessionId) && (user?.role === "STUDENT" || Boolean(sid)));
   useEffect(() => {
     if (sessionId || !sessions.data?.length) return;
     setSessionId(pickResultSession(sessions.data));
