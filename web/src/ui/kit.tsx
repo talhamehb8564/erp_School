@@ -150,15 +150,11 @@ export function QueryState({
   label: string;
   children: ReactNode;
 }) {
-  if (status.loading && status.data == null) {
+  const emptyList = Array.isArray(status.data) && status.data.length === 0;
+  if (status.loading && (status.data == null || emptyList)) {
     return (
       <div className="query-skel" role="status" aria-label={`Loading ${label}`}>
-        <div className="grid stats" style={{ marginBottom: 14 }}>
-          <div className="card"><Skeleton lines={2} /></div>
-          <div className="card"><Skeleton lines={2} /></div>
-          <div className="card"><Skeleton lines={2} /></div>
-        </div>
-        <div className="card"><Skeleton lines={4} /></div>
+        <div className="card"><Skeleton lines={3} /></div>
       </div>
     );
   }
@@ -259,8 +255,9 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    const blocking = dataRef.current == null;
-    if (blocking) setLoading(true);
+    dataRef.current = null;
+    setData(null);
+    setLoading(true);
     setError(null);
     void (async () => {
       try {

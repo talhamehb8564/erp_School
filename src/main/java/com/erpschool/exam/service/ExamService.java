@@ -179,7 +179,11 @@ public class ExamService {
 
         ExamSession session = requireSession(sessionId);
 
-        if (session.isPublished()) {
+        // A release clock controls family visibility, not teacher entry.
+        // After publish with no announceAt, freeze edits. If announceAt is set,
+        // teachers may still fill missing subjects so complete students are not
+        // blocked by incomplete classmates.
+        if (session.isPublished() && session.getAnnounceAt() == null) {
             throw new BusinessException(
                     "Cannot change results after they are published"
             );
@@ -344,20 +348,24 @@ public class ExamService {
 
         if (role == UserRole.PARENT || role == UserRole.STUDENT) {
             Instant announceAt = session.getAnnounceAt();
-            if (announceAt != null && Instant.now().isBefore(announceAt)) {
+            Instant now = Instant.now();
+            if (announceAt != null && now.isBefore(announceAt)) {
                 Map<String, Object> waiting = new HashMap<>();
                 waiting.put("announced", false);
                 waiting.put("pending", false);
                 waiting.put("announceAt", announceAt);
-                waiting.put("countdownSeconds", Math.max(0, ChronoUnit.SECONDS.between(Instant.now(), announceAt)));
+                waiting.put("countdownSeconds", Math.max(0, ChronoUnit.SECONDS.between(now, announceAt)));
                 waiting.put("session", session);
                 waiting.put("studentId", student.getId());
                 waiting.put("rollNumber", student.getRollNumber());
                 waiting.put("subjects", List.of());
+                waiting.put("message", "Results are sealed until the scheduled release time");
                 return waiting;
             }
-            boolean timeReached = announceAt == null || !Instant.now().isBefore(announceAt);
-            if (!session.isPublished() && (announceAt == null || !timeReached)) {
+            boolean released = announceAt != null
+                    ? !now.isBefore(announceAt)
+                    : session.isPublished();
+            if (!released) {
                 throw new ForbiddenException("Results are not published yet");
             }
             if (!marksComplete(session, student)) {
@@ -369,7 +377,7 @@ public class ExamService {
                 pending.put("studentId", student.getId());
                 pending.put("rollNumber", student.getRollNumber());
                 pending.put("subjects", List.of());
-                pending.put("message", "Result Pending - Awaiting Subject Submission");
+                pending.put("message", "Result is not available yet. Some subject marks have not been entered. Please wait.");
                 return pending;
             }
         }

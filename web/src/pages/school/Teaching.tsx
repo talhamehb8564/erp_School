@@ -347,6 +347,11 @@ function FamilyExams() {
     if (sessionId || !sessions.data?.length) return;
     setSessionId(pickResultSession(sessions.data));
   }, [sessions.data, sessionId]);
+  useEffect(() => {
+    if (!mine.data?.pending) return;
+    const id = window.setInterval(() => { void mine.reload(); }, 8000);
+    return () => window.clearInterval(id);
+  }, [mine.data?.pending, mine.reload, sessionId, sid]);
   const selected = (sessions.data || []).find((s) => s.id === sessionId);
   const subjectLabel = (r: { subjectName?: string; subjectId?: string }) => r.subjectName || (r.subjectId ? r.subjectId.slice(0, 8) : "—");
   return (
@@ -379,8 +384,8 @@ function FamilyExams() {
         ) : mine.data?.pending || mine.data?.announced === false ? (
           <div className="card">
             <p className="kicker">Results</p>
-            <h3>Result Pending - Awaiting Subject Submission</h3>
-            <p className="hint">Announcement time has passed, but not every subject has marks yet. The marksheet will appear when all teachers have submitted.</p>
+            <h3>Result is not available yet</h3>
+            <p className="hint">{mine.data.message || "Some subject marks have not been entered. Please wait — your marksheet appears automatically when they are complete."}</p>
           </div>
         ) : mine.data ? (
           <Marksheet
@@ -585,7 +590,7 @@ function StaffExams() {
                       }}
                     />
                   </Field>
-                  <p className="hint">Students and parents see this session (including Final Term) with a live countdown. Marks stay hidden until this time, then the marksheet unlocks.</p>
+                  <p className="hint">Until this time nobody in the family sees marks. After it, each student sees a marksheet only if every required subject for that student is entered. Incomplete students keep waiting — they do not block classmates. Teachers can still fill missing subjects after the clock.</p>
                   <div className="row" style={{ marginTop: 8 }}>
                     <Button kind="ok" loadingText="Publishing…" onClick={async () => { await examApi.publish(sessionId); toast("ok", "Published"); void sessions.reload(); }}>Publish results</Button>
                   </div>

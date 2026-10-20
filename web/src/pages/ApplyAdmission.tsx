@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { publicAdmissionApi } from "../api/services";
 import { useBranding } from "../lib/branding";
@@ -42,6 +42,7 @@ export default function ApplyAdmission() {
   const [slots, setSlots] = useState<{ start: string; end: string; booked?: boolean }[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<unknown>(null);
+  const slotReq = useRef(0);
 
   const loadSlots = useCallback(async () => {
     if (!form?.appointmentEnabled || !date) {
@@ -50,18 +51,20 @@ export default function ApplyAdmission() {
       setSlotsError(null);
       return;
     }
-    setSlots([]);
+    const seq = ++slotReq.current;
     setSlotStart("");
     setSlotsLoading(true);
     setSlotsError(null);
     try {
       const rows = await publicAdmissionApi.slots(school?.code, date, campusId || undefined);
+      if (slotReq.current !== seq) return;
       setSlots(Array.isArray(rows) ? rows : []);
     } catch (e) {
+      if (slotReq.current !== seq) return;
       setSlots([]);
       setSlotsError(e);
     } finally {
-      setSlotsLoading(false);
+      if (slotReq.current === seq) setSlotsLoading(false);
     }
   }, [form?.appointmentEnabled, date, campusId, school?.code]);
 
@@ -100,8 +103,6 @@ export default function ApplyAdmission() {
     const type = f.fieldType === "TEL" ? "tel" : f.fieldType === "EMAIL" ? "email" : f.fieldType === "DATE" ? "date" : f.fieldType === "NUMBER" ? "number" : "text";
     return <input type={type} value={v} required={f.required} onChange={(e) => set(f.fieldKey, e.target.value)} />;
   };
-
-  const slotsQ = { data: slots, loading: slotsLoading, error: slotsError, reload: () => void loadSlots() };
 
   return (
     <div className="site apply-page">
@@ -169,11 +170,16 @@ export default function ApplyAdmission() {
                     <h3>Appointment {form.appointmentRequired ? "(required)" : "(optional)"}</h3>
                     <p className="hint">Times are generated from this school’s opening hours. Booked times cannot be selected again.</p>
                     <Field label="Date">
-                      <input type="date" value={date} required={Boolean(form.appointmentRequired)} onChange={(e) => { setDate(e.target.value); setSlotStart(""); setSlots([]); }} />
+                      <input type="date" value={date} required={Boolean(form.appointmentRequired)} onChange={(e) => { setDate(e.target.value); setSlotStart(""); }} />
                     </Field>
                     {date ? (
-                      <QueryState status={slotsQ} label="open slots">
-                        {!slots.length ? <Empty title="No open slots on this date" /> : (
+                      slotsLoading ? (
+                        <p className="hint" role="status">Loading open times…</p>
+                      ) : slotsError ? (
+                        <ErrorBox error={slotsError} onRetry={() => void loadSlots()} title="Unable to load open slots" />
+                      ) : !slots.length ? (
+                        <Empty title="No open slots on this date" />
+                      ) : (
                           <div className="slot-grid">
                             {slots.map((s) => {
                               const booked = Boolean(s.booked);
@@ -192,8 +198,7 @@ export default function ApplyAdmission() {
                               );
                             })}
                           </div>
-                        )}
-                      </QueryState>
+                      )
                     ) : null}
                   </div>
                 ) : null}

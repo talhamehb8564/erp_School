@@ -319,6 +319,7 @@ export const examApi = {
       pending?: boolean;
       announceAt?: string;
       countdownSeconds?: number;
+      message?: string;
     }>(`${v1}/exams/sessions/${sessionId}/mine`),
   studentResult: (sessionId: string, studentId: string) =>
     api.get<{

@@ -308,14 +308,17 @@ a.btn.brass:focus-visible,
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--brand) 18%, var(--card)), var(--card));
 }
+.hero-strip > div:first-child { flex: 1 1 160px; min-width: 0; }
 .hero-strip > .row { justify-content: flex-end; }
 .hero-wheels {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
   align-items: center;
-  flex: 0 0 auto;
-  min-width: 176px;
+  justify-content: flex-end;
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 100%;
 }
 .countdown {
   display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0;
@@ -332,13 +335,13 @@ a.btn.brass:focus-visible,
   0%, 100% { transform: translateY(0); filter: saturate(1); }
   50% { transform: translateY(-2px); filter: saturate(1.15); }
 }
-.hero-strip h1 { margin: 4px 0 6px; }
-.hero-strip p { margin: 0; color: var(--muted); }
+.hero-strip h1 { margin: 4px 0 6px; overflow-wrap: anywhere; }
+.hero-strip p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 .chart-card h3 { margin-top: 0; }
-.donut { display: flex; gap: 12px; align-items: center; min-width: 168px; flex: 0 0 auto; }
-.donut svg { display: block; flex: 0 0 auto; width: 88px; height: 88px; }
-.donut b { display: block; font-size: clamp(20px, 2vw, 28px); font-family: Fraunces, serif; font-variant-numeric: tabular-nums; }
-.donut span { color: var(--muted); font-size: 13px; }
+.donut { display: flex; gap: 10px; align-items: center; min-width: 0; flex: 1 1 140px; max-width: 100%; }
+.donut svg { display: block; flex: 0 0 auto; width: clamp(56px, 22vw, 88px); height: clamp(56px, 22vw, 88px); }
+.donut b { display: block; font-size: clamp(18px, 2vw, 28px); font-family: Fraunces, serif; font-variant-numeric: tabular-nums; }
+.donut span { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .result-search { margin-bottom: 16px; }
 .stat { position: relative; overflow: hidden; }
 .stat .label { color: var(--muted); font-size: 13px; }
@@ -1103,6 +1106,11 @@ html.menu-open, body.menu-open {
   .site-cta { padding: 18px; }
   .ticker-item { flex-basis: min(260px, 78vw); }
   .site-nav-apply { white-space: normal; text-align: center; }
+  .hero-wheels { flex: 1 1 100%; justify-content: flex-start; width: 100%; }
+  .donut { flex: 1 1 calc(50% - 8px); }
+  .countdown-cell { min-width: 0; flex: 1 1 64px; }
+  .page-title h1 { font-size: 22px; }
+  .row { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
