@@ -104,7 +104,7 @@ cd mobile
 EXPO_PUBLIC_API_URL=https://YOUR-API-HOST npx eas build --platform android
 ```
 
-Set the same extra in EAS secrets / `app.json` `expo.extra.apiUrl`. Store builds must use **HTTPS**. `usesCleartextTraffic` is enabled only so LAN HTTP works in development.
+Set the same extra in EAS secrets / `app.json` `expo.extra.apiUrl`. Store builds must use **HTTPS**. Android cleartext HTTP for LAN Boot is set via the `expo-build-properties` plugin (`android.usesCleartextTraffic` is **not** a valid `app.json` schema field on SDK 58). That plugin applies to prebuild / development / production APKs, not Expo Go (Expo Go already allows HTTP to Metro/LAN in development).
 
 ### JDK / API in this sandbox
 
@@ -116,8 +116,14 @@ This environment has **no JDK** and **Maven Central is blocked**. `mvn clean tes
 | --- | --- |
 | In-app list | `GET /api/v1/notifications` |
 | Mark one / mark visible | `POST /api/v1/notifications/{id}/read` only (no mark-all endpoint) |
-| Local OS banner | when unread count **increases** on a 45s poll / AppState resume |
-| Remote push (Expo token → FCM/APNs) | **not implemented** — backend has no device-token register API. Do not fake it. |
+| Local OS banner | when unread count **increases** on a 45s poll / AppState resume, using local scheduler APIs (not the `expo-notifications` barrel, which crashes Expo Go Android via `ExpoTopicSubscriptionModule`) |
+| Remote push (Expo token → FCM/APNs) | **not implemented** — backend has no device-token register API. Expo Go Android has not shipped remote push since SDK 53. Do not fake it. |
+
+### Expo Go vs development build
+
+- **Expo Go (SDK 58) is enough** for login, ERP screens, JWT, file picks, and **local** banners, as long as `src/lib/notifications.ts` never imports the `expo-notifications` package index.
+- **A development build is required** only for remote FCM/APNs push (not in this backend) or any native module Expo Go does not ship.
+- Phone Expo Go must be the **SDK 58** client. An older Expo Go will fail native modules even after this fix.
 
 ## Tests run vs blocked
 
@@ -137,6 +143,7 @@ This environment has **no JDK** and **Maven Central is blocked**. `mvn clean tes
 - `package-reanimated-backup/` is **not** part of the app and must not be committed.
 - Do not nest a git repo inside `mobile/`.
 - Do not force-push `main`.
+- Do not `import * as Notifications from "expo-notifications"` in a layout or any always-loaded module — Expo Go Android throws `ExpoTopicSubscriptionModule` and Expo Router then reports `ErrorBoundary` of undefined.
 
 ## File map (mobile ERP)
 

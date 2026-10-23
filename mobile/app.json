@@ -14,7 +14,6 @@
     },
     "android": {
       "package": "com.devzard.schoolerp",
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#1F4E5F",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -29,6 +28,14 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
       "expo-secure-store",
       [
         "expo-image-picker",
