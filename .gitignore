@@ -2,6 +2,11 @@
 local-api/node_modules/
 web/node_modules/
 web/dist/
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/expo-env.d.ts
+mobile/package-reanimated-backup/
 
 # Maven
 target/

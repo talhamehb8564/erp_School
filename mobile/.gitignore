@@ -37,6 +37,7 @@ yarn-error.*
 *.tsbuildinfo
 
 example
+package-reanimated-backup/
 
 # generated native folders
 /ios
