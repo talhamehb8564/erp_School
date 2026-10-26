@@ -53,6 +53,8 @@ export function Screen({
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top", "left", "right"]}>
       <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={[styles.scroll, padded && { padding: 16, paddingBottom: 40 }]}
         refreshControl={
           onRefresh ? (
@@ -313,11 +315,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { flexGrow: 1 },
   kicker: { fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 },
-  h1: { fontSize: 28, fontWeight: "800", letterSpacing: -0.4 },
+  h1: { fontSize: 26, fontWeight: "800", letterSpacing: -0.4 },
   h3: { fontSize: 16, fontWeight: "700" },
   sub: { fontSize: 14, marginTop: 4, lineHeight: 20 },
   card: { borderRadius: 16, padding: 14, borderWidth: 1, marginBottom: 12 },
-  stat: { flex: 1, minWidth: 96, borderRadius: 16, padding: 12, borderWidth: 1 },
+  stat: { flexGrow: 1, flexBasis: "30%", minWidth: 104, borderRadius: 16, padding: 12, borderWidth: 1 },
   statVal: { fontSize: 22, fontWeight: "800" },
   statLbl: { fontSize: 12, marginTop: 4 },
   badge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },

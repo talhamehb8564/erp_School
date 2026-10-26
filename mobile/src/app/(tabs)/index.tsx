@@ -1,8 +1,8 @@
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useSession } from "../../lib/session";
 import { useAppearance } from "../../lib/appearance";
 import { useFeatures } from "../../lib/features";
-import { Badge, Card, QueryState, Screen, Stat, Title, useAsync } from "../../ui/kit";
+import { Card, QueryState, Screen, Stat, Title, useAsync } from "../../ui/kit";
 import { academicApi, examApi, feeApi, homeworkApi, reportApi, studentApi, tenantApi } from "../../api/services";
 import { money, num, pretty } from "../../lib/format";
 import { ROLE_LABEL } from "../../lib/types";
@@ -66,7 +66,7 @@ function TeacherHome() {
   const progress = useAsync(() => reportApi.teacherProgress());
   const hw = useAsync(() => (on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([])), [], on("HOMEWORK"));
   return (
-    <Screen colors={colors} onRefresh={() => { void lectures.reload(); void progress.reload(); }} refreshing={lectures.loading}>
+    <Screen colors={colors} onRefresh={() => { void lectures.reload(); void progress.reload(); void hw.reload(); }} refreshing={lectures.loading}>
       <Upcoming />
       <Title kicker="Teacher" title={user?.fullName || "Teacher desk"} subtitle={`Attendance ${num(progress.data?.attendancePercent)}% this month.`} colors={colors} />
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
@@ -132,26 +132,34 @@ function ParentHome() {
   const active = childId || list[0]?.id;
   const p = (active && progress.data?.[active]) || {};
   return (
-    <Screen colors={colors} onRefresh={() => { void kids.reload(); void progress.reload(); }} refreshing={kids.loading}>
+    <Screen colors={colors} onRefresh={() => { void kids.reload(); void progress.reload(); void fees.reload(); }} refreshing={kids.loading}>
       <Upcoming />
       <Title kicker="Family" title="Selected child" subtitle={`Attendance ${num(p.attendancePercent)}% · Academic ${num(p.academicPercent)}%`} colors={colors} />
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-        {list.map((k) => (
-          <Badge key={k.id} value={k.id === active ? k.fullName || k.rollNumber : k.fullName} colors={colors} />
-        ))}
+        {list.map((k) => {
+          const onChip = k.id === active;
+          return (
+            <Pressable
+              key={k.id}
+              onPress={() => setChildId(k.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: onChip }}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: onChip ? colors.brand : colors.card,
+                borderWidth: 1,
+                borderColor: onChip ? colors.brand : colors.line,
+              }}
+            >
+              <Text style={{ color: onChip ? "#fff" : colors.ink, fontWeight: "700", fontSize: 13 }}>
+                {k.fullName || k.rollNumber}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
-      {list.map((k) =>
-        k.id === active ? null : (
-          <Text key={k.id} onPress={() => setChildId(k.id)} style={{ color: colors.brand, marginBottom: 8 }}>
-            Switch to {k.fullName || k.rollNumber}
-          </Text>
-        ),
-      )}
-      {list.length && !childId && list[0] ? (
-        <Text onPress={() => setChildId(list[0].id)} style={{ color: colors.muted, marginBottom: 8 }}>
-          Using {list[0].fullName || list[0].rollNumber}
-        </Text>
-      ) : null}
       {on("FEES") ? (
         <Card colors={colors}>
           <Text style={{ fontWeight: "800", color: colors.ink, marginBottom: 8 }}>Fee challans</Text>
@@ -175,7 +183,7 @@ function StudentHome() {
   const fees = useAsync(() => (on("FEES") ? feeApi.myChallanSummaries(20) : Promise.resolve([])), [], on("FEES"));
   const p = progress.data || {};
   return (
-    <Screen colors={colors} onRefresh={() => void progress.reload()} refreshing={progress.loading}>
+    <Screen colors={colors} onRefresh={() => { void progress.reload(); void hw.reload(); void fees.reload(); }} refreshing={progress.loading}>
       <Upcoming />
       <Title kicker="This month" title={user?.fullName || "My school"} subtitle={`Attendance ${num(p.attendancePercent)}% · Academic ${num(p.academicPercent)}%`} colors={colors} />
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>

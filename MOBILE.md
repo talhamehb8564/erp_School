@@ -85,7 +85,20 @@ Resolution order in `mobile/src/lib/config.ts`:
 4. Dev fallback: `http://127.0.0.1:8080` (simulator / emulator on the same machine)
 5. Production with none of the above: **empty string** — login shows “set EXPO_PUBLIC_API_URL”
 
-Physical device + emulator: Android emulator uses `10.0.2.2` for the host; set `EXPO_PUBLIC_API_URL=http://10.0.2.2:8080`. A real phone needs the PC LAN IP and Spring listening on `0.0.0.0`.
+Physical Android phone: **never** use `localhost` / `127.0.0.1` — that is the phone itself. The app uses, in order: `EXPO_PUBLIC_API_URL`, `extra.apiUrl`, the Metro LAN host + `:8080`, Android emulator `http://10.0.2.2:8080`, iOS simulator `http://127.0.0.1:8080`, otherwise empty (login tells you to set the URL). Spring already listens on `0.0.0.0`. Same Wi‑Fi, PC firewall must allow port 8080.
+
+## Windows Android native build (260-character Ninja path)
+
+`npx expo run:android` on Windows fails with Gesture Handler codegen if Android SDK CMake **3.22.1** is used. That package ships **Ninja 1.10.2**, which rejects object paths over 260 characters even when Windows long paths are on.
+
+This repo pins **CMake 3.31.6** (Ninja 1.12+, long-path aware) via `expo-build-properties` `android.cmakeVersion`, plus a small plugin that sets `CMAKE_OBJECT_PATH_MAX=1024`. You still must:
+
+1. Enable Windows long paths (Administrator PowerShell, then reboot):
+   `New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force`
+2. In Android Studio → SDK Manager → SDK Tools, install **CMake 3.31.6** (or let Gradle download it).
+3. Delete the generated `mobile\android` folder once, then `npx expo run:android` again so prebuild picks up the new CMake version.
+
+Do not copy the whole project to a shorter path unless CMake 3.31.6 cannot be installed. The original folder `D:\School\erp_School\mobile` is the source of truth.
 
 ## Setup
 

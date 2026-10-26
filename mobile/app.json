@@ -28,11 +28,13 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withCmakeObjectPathMax.js",
       [
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "cmakeVersion": "3.31.6"
           }
         }
       ],

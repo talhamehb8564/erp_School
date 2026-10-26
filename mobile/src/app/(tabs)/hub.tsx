@@ -22,7 +22,9 @@ export default function Hub() {
             key={m.href}
             onPress={() => router.push(m.href as never)}
             style={{
-              width: "47%",
+              flexGrow: 1,
+              flexBasis: "46%",
+              maxWidth: "48%",
               backgroundColor: colors.card,
               borderColor: colors.line,
               borderWidth: 1,

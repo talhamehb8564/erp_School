@@ -59,6 +59,7 @@ export default function LoginScreen() {
           label={`Sign in as ${ROLE_LABEL[role]}`}
           colors={colors}
           kind="brass"
+          disabled={!username.trim() || !password}
           onPress={async () => {
             setError("");
             try {
