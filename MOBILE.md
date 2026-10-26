@@ -91,12 +91,18 @@ Physical Android phone: **never** use `localhost` / `127.0.0.1` — that is the 
 
 `npx expo run:android` on Windows fails with Gesture Handler codegen if Android SDK CMake **3.22.1** is used. That package ships **Ninja 1.10.2**, which rejects object paths over 260 characters even when Windows long paths are on.
 
-This repo pins **CMake 3.31.6** (Ninja 1.12+, long-path aware) via `expo-build-properties` `android.cmakeVersion`, plus a small plugin that sets `CMAKE_OBJECT_PATH_MAX=1024`. You still must:
+This repo pins **CMake 3.31.6** (Ninja 1.12+, long-path aware) in two places:
 
-1. Enable Windows long paths (Administrator PowerShell, then reboot):
+- `expo-build-properties` `android.cmakeVersion` writes `android.cmakeVersion=3.31.6` to `gradle.properties` (AGP does **not** use that property to pick the CMake binary).
+- `mobile/plugins/withCmakeObjectPathMax.js` writes `android.externalNativeBuild.cmake.version "3.31.6"` into `android/app/build.gradle` (this is what AGP actually reads) and keeps `-DCMAKE_OBJECT_PATH_MAX=1024`.
+
+You still must:
+
+1. Enable Windows long paths (Administrator PowerShell, then reboot) if not already on:
    `New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force`
-2. In Android Studio → SDK Manager → SDK Tools, install **CMake 3.31.6** (or let Gradle download it).
-3. Delete the generated `mobile\android` folder once, then `npx expo run:android` again so prebuild picks up the new CMake version.
+2. In Android Studio → SDK Manager → SDK Tools, install **CMake 3.31.6** (already done on the machine that reported this).
+3. Delete the **generated** `mobile\android` folder (it is gitignored). A leftover prebuild from before this plugin still has no `cmake { version "3.31.6" }` and Gradle will keep using 3.22.1.
+4. From `mobile`, run `npx expo prebuild --platform android --clean` then `npx expo run:android`. Confirm `android\app\build.gradle` contains `version "3.31.6"` and the first CMake log line is **not** `CMake 3.22.1`.
 
 Do not copy the whole project to a shorter path unless CMake 3.31.6 cannot be installed. The original folder `D:\School\erp_School\mobile` is the source of truth.
 
