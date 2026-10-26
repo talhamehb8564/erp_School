@@ -5,7 +5,7 @@ import { useAppearance } from "../../lib/appearance";
 import { studentApi } from "../../api/services";
 import { Btn, Card, Chip, Screen, useAsync } from "../../ui/kit";
 import { BrandHeader } from "../../ui/logo";
-import { portalTitle, roleLabel } from "../../lib/format";
+import { brandSubtitle, roleLabel } from "../../lib/format";
 import { apiOrigin } from "../../lib/config";
 
 export default function Me() {
@@ -19,7 +19,7 @@ export default function Me() {
         brand={brand}
         colors={colors}
         kicker={roleLabel(user.role)}
-        subtitle={brand ? portalTitle(brand) : user.role === "ERP_OWNER" ? "Platform console" : "School ERP"}
+        subtitle={brand ? brandSubtitle(brand, roleLabel(user.role)) : user.role === "ERP_OWNER" ? "Platform console" : "School ERP"}
       />
       <Card colors={colors}>
         <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 18 }}>{user.fullName || user.username}</Text>

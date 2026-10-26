@@ -7,6 +7,7 @@ import { pickImage, pickImages, type PickedFile } from "../lib/picker";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, fileApi, homeworkApi } from "../api/services";
 import { Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, friendlyMessage, useAsync } from "../ui/kit";
+import { DateField } from "../ui/dates";
 import { fmtDate } from "../lib/format";
 import { mediaUrl } from "../lib/media";
 import { RequireAuth } from "../ui/gate";
@@ -172,7 +173,7 @@ function StaffHomework() {
           <Text style={{ color: colors.ink, fontWeight: "800", marginBottom: 8 }}>New assignment</Text>
           <Field label="Title" colors={colors} value={title} onChangeText={setTitle} />
           <Field label="Description" colors={colors} value={description} onChangeText={setDescription} multiline />
-          <Field label="Due date (YYYY-MM-DD)" colors={colors} value={dueDate} onChangeText={setDueDate} />
+          <DateField label="Due date" value={dueDate} onChange={setDueDate} colors={colors} />
           <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>Class</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
             {classOptions.map((c) => (

@@ -102,6 +102,28 @@ public class ExamService {
         return sessionRepository.save(session);
     }
 
+    /**
+     * Drops an unpublished session that has no marks. Published sessions and
+     * sessions with result rows are blocked so student records cannot vanish.
+     */
+    @Transactional
+    public void deleteSession(UUID sessionId) {
+        ExamSession session = requireSession(sessionId);
+        if (Boolean.TRUE.equals(session.getPublished())) {
+            throw new BusinessException("SESSION_PUBLISHED", "Published result sessions cannot be deleted.");
+        }
+        UUID tenantId = session.getTenantId();
+        List<ExamResult> results = resultRepository.findByTenantIdAndExamSessionId(tenantId, sessionId);
+        if (results != null && !results.isEmpty()) {
+            throw new BusinessException(
+                    "SESSION_HAS_RESULTS",
+                    "This session has marks for " + results.size()
+                            + " row(s). Deletion is blocked so student records are not lost.");
+        }
+        dateSheetRepository.deleteByTenantIdAndExamSessionId(tenantId, sessionId);
+        sessionRepository.delete(session);
+    }
+
     @Transactional
     public List<ExamDateSheetEntry> replaceDateSheet(UUID sessionId, List<ExamDateSheetEntry> entries) {
         ExamSession session = requireSession(sessionId);

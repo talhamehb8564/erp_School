@@ -7,7 +7,7 @@ import { Btn, Card, Chip, QueryState, Screen, Stat, useAsync } from "../../ui/ki
 import { BrandHeader } from "../../ui/logo";
 import { ProgressWheel } from "../../ui/wheel";
 import { academicApi, announcementApi, examApi, feeApi, homeworkApi, notificationApi, reportApi, studentApi, tenantApi } from "../../api/services";
-import { money, num, portalTitle, pretty, roleLabel } from "../../lib/format";
+import { brandSubtitle, money, num, pretty, roleLabel } from "../../lib/format";
 import ResultCountdown, { isUpcomingExam, pickResultSession } from "../../ui/countdown";
 
 export default function Home() {
@@ -87,7 +87,7 @@ function StaffHome() {
   const activePct = students > 0 ? Math.round((active * 10000) / students) / 100 : null;
   return (
     <Screen colors={colors} onRefresh={() => void d.reload()} refreshing={d.loading}>
-      <BrandHeader brand={brand} colors={colors} kicker={roleLabel(user!.role)} subtitle={brand ? portalTitle(brand) : "Live census"} />
+      <BrandHeader brand={brand} colors={colors} kicker={roleLabel(user!.role)} subtitle={brand ? brandSubtitle(brand, "Live census") : "Live census"} />
       <QueryState loading={d.loading} error={d.error} data={d.data} onRetry={() => void d.reload()} colors={colors}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-around", marginBottom: 8 }}>
           <ProgressWheel

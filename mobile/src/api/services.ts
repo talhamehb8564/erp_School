@@ -118,14 +118,24 @@ export const academicApi = {
     api.get<{ id: string; teacherUserId?: string; classId: string; sectionId: string; subjectId: string }[]>(
       `${v1}/teacher-assignments${teacherUserId ? `?teacherUserId=${teacherUserId}` : ""}`,
     ),
+  timetableSettings: () =>
+    api.get<{
+      workingDays?: string;
+      suggestedSlots?: { lectureNo?: number; startTime?: string; endTime?: string }[];
+    }>(`${v1}/timetable/settings`),
+  createSlot: (body: Record<string, unknown>) => api.post<TimetableSlot>(`${v1}/timetable`, body),
+  updateSlot: (id: string, body: Record<string, unknown>) => api.put<TimetableSlot>(`${v1}/timetable/${id}`, body),
+  deleteSlot: (id: string) => api.del<void>(`${v1}/timetable/${id}`),
+  applyPattern: (body: Record<string, unknown>) => api.post<TimetableSlot[]>(`${v1}/timetable/apply`, body),
 };
 
 export const studentApi = {
-  list: (classId?: string, sectionId?: string, page = 0, q?: string) => {
+  list: (classId?: string, sectionId?: string, page = 0, q?: string, status?: string) => {
     const p = new URLSearchParams({ size: "20", page: String(page) });
     if (classId) p.set("classId", classId);
     if (sectionId) p.set("sectionId", sectionId);
     if (q) p.set("q", q);
+    if (status) p.set("status", status);
     return api.get<Page<StudentUser>>(`${v1}/students?${p}`);
   },
   roster: (classId: string, sectionId?: string) => {
@@ -139,6 +149,8 @@ export const studentApi = {
   inactivate: (id: string, reason: string, note?: string) =>
     api.post<StudentUser>(`${v1}/students/${id}/inactivate`, { reason, note }),
   reactivate: (id: string, note?: string) => api.post<StudentUser>(`${v1}/students/${id}/reactivate`, { note }),
+  inactivateBulk: (body: { classId: string; sectionId?: string; reason: string; note?: string }) =>
+    api.post<{ inactivated?: number; skipped?: number }>(`${v1}/students/inactivate-bulk`, body),
 };
 
 export const attendanceApi = {
@@ -189,6 +201,7 @@ export const examApi = {
   byRoll: (sessionId: string, rollNumber: string) =>
     api.get<Record<string, unknown>>(`${v1}/exams/sessions/${sessionId}/results/by-roll?rollNumber=${encodeURIComponent(rollNumber)}`),
   sessionResults: (sessionId: string) => api.get<ExamResult[]>(`${v1}/exams/sessions/${sessionId}/results`),
+  deleteSession: (sessionId: string) => api.del<void>(`${v1}/exams/sessions/${sessionId}`),
 };
 
 export const onlineExamApi = {

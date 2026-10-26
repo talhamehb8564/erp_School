@@ -37,6 +37,7 @@ function ThemedStack() {
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="signin" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="students" options={{ title: "Students" }} />
         <Stack.Screen name="users" options={{ title: "Users" }} />

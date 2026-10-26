@@ -19,7 +19,9 @@ export default function Gate() {
             <>
               <SchoolLogo uri={brand?.logoUrl} name={brand?.name} color="#fff" size={72} />
               <Text style={{ color: "#fff", fontSize: 24, fontWeight: "800", textAlign: "center", marginTop: 16 }}>{brand!.name}</Text>
-              <Text style={{ color: "rgba(255,255,255,0.85)", marginTop: 6, textAlign: "center" }}>{brand!.code} Portal</Text>
+              {brand!.tagline ? (
+                <Text style={{ color: "rgba(255,255,255,0.85)", marginTop: 6, textAlign: "center" }}>{brand!.tagline}</Text>
+              ) : null}
             </>
           ) : (
             <>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -31,10 +32,10 @@ export function friendlyMessage(error: unknown, fallback = "Something went wrong
     const raw = error.message || "";
     if (/cannot read propert|undefined is not|null is not/i.test(raw)) return fallback;
     if (raw && !/exception|sql|hibernate|stacktrace/i.test(raw)) {
-      if (error.status === 403) return raw || "You do not have permission to do that.";
+      if (error.status === 403) return raw || "You do not have permission to do that. This action is blocked for your role.";
       return raw;
     }
-    if (error.status === 403) return "You do not have permission to do that.";
+    if (error.status === 403) return "You do not have permission to do that. This action is blocked for your role.";
     if (error.status === 404) return "The requested record was not found.";
     if (error.status === 409) return "This record already exists or conflicts with another.";
     if (error.status === 422) return "Please check the form and try again.";
@@ -224,19 +225,52 @@ export function Btn({
   );
 }
 
+export function confirmAction(title: string, message: string, ok = "Continue"): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+      { text: ok, style: "destructive", onPress: () => resolve(true) },
+    ]);
+  });
+}
+
 export function Field({
   label,
   colors,
+  secureTextEntry,
   ...rest
 }: { label: string; colors: Palette } & TextInputProps) {
+  const [hidden, setHidden] = useState(!!secureTextEntry);
   return (
     <View style={{ marginBottom: 12 }}>
       <Text style={[styles.fieldLbl, { color: colors.muted }]}>{label}</Text>
-      <TextInput
-        placeholderTextColor={colors.muted}
-        style={[styles.input, { color: colors.ink, borderColor: colors.line, backgroundColor: colors.card }]}
-        {...rest}
-      />
+      <View>
+        <TextInput
+          placeholderTextColor={colors.muted}
+          style={[
+            styles.input,
+            {
+              color: colors.ink,
+              borderColor: colors.line,
+              backgroundColor: colors.card,
+              paddingRight: secureTextEntry ? 44 : 12,
+            },
+          ]}
+          {...rest}
+          secureTextEntry={secureTextEntry ? hidden : false}
+        />
+        {secureTextEntry ? (
+          <Pressable
+            onPress={() => setHidden((h) => !h)}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? "Show password" : "Hide password"}
+            style={{ position: "absolute", right: 12, top: 14 }}
+            hitSlop={8}
+          >
+            <Ionicons name={hidden ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }

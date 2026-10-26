@@ -1,9 +1,32 @@
 import type { Role, SchoolBrand } from "./types";
 import { ROLE_LABEL } from "./types";
 
+/** In-app identity is the school's full name — never the short code (e.g. GVS). */
 export function portalTitle(brand?: SchoolBrand | null, fallback = "School ERP") {
-  if (brand?.code) return `${brand.code} Portal`;
+  const name = brand?.name?.trim();
+  if (name) return name;
   return fallback;
+}
+
+export function brandSubtitle(brand?: SchoolBrand | null, fallback = "Portal") {
+  const tag = brand?.tagline?.trim();
+  if (tag) return tag;
+  return fallback;
+}
+
+export function toHms(t?: string | { hour?: number; minute?: number } | number[] | null) {
+  if (t == null) return "08:00:00";
+  if (typeof t === "string") {
+    const hhmm = t.slice(0, 5);
+    return hhmm.length === 5 ? `${hhmm}:00` : t;
+  }
+  if (Array.isArray(t) && typeof t[0] === "number") {
+    return `${String(t[0]).padStart(2, "0")}:${String(t[1] || 0).padStart(2, "0")}:00`;
+  }
+  if (typeof t === "object" && typeof t.hour === "number") {
+    return `${String(t.hour).padStart(2, "0")}:${String(t.minute ?? 0).padStart(2, "0")}:00`;
+  }
+  return "08:00:00";
 }
 
 export function money(n?: number | string | null, currency = "PKR") {

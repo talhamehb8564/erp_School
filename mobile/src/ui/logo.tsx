@@ -2,10 +2,9 @@ import { useState } from "react";
 import { Text, View } from "react-native";
 import { Image } from "expo-image";
 import { mediaUrl } from "../lib/media";
-import { initials } from "../lib/format";
+import { brandSubtitle, initials } from "../lib/format";
 import type { SchoolBrand } from "../lib/types";
 import type { Palette } from "../lib/theme";
-import { portalTitle } from "../lib/format";
 
 export function SchoolLogo({
   uri,
@@ -66,7 +65,7 @@ export function BrandHeader({
   size?: number;
 }) {
   const title = brand?.name || "School ERP";
-  const sub = subtitle || (brand ? portalTitle(brand) : "School ERP");
+  const sub = subtitle ?? (brand ? brandSubtitle(brand) : undefined);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 }}>
       <SchoolLogo uri={brand?.logoUrl} name={brand?.name} color={colors.brand} size={size} />
@@ -79,9 +78,11 @@ export function BrandHeader({
         <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "800" }} numberOfLines={2}>
           {title}
         </Text>
-        <Text style={{ color: colors.muted, marginTop: 2 }} numberOfLines={2}>
-          {sub}
-        </Text>
+        {sub ? (
+          <Text style={{ color: colors.muted, marginTop: 2 }} numberOfLines={2}>
+            {sub}
+          </Text>
+        ) : null}
       </View>
     </View>
   );

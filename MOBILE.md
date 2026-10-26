@@ -19,21 +19,22 @@ Last GitHub commit this app was written against: inspect `HEAD` on `arena/01a0ae
 
 | Route | Roles | Live endpoints |
 | --- | --- | --- |
-| `/login` | public | `POST /auth/login` |
+| `/login` | public | portal list only (no password fields) |
+| `/signin` | public | `POST /auth/login` — username + password for the chosen portal |
 | `/(tabs)` Home | all signed-in | dashboards below |
 | `/(tabs)/hub` | all | feature-filtered `SCHOOL_NAV` modules |
 | `/(tabs)/alerts` | all | `GET /notifications`, `POST /notifications/{id}/read` (mark-all = loop) |
 | `/(tabs)/me` | all | `GET /auth/me`, children, logout `POST /auth/logout` |
 | `/password` | all | `POST /auth/change-password` (username-only, password-only, or both) |
-| `/students` | SCHOOL_ADMIN, PRINCIPAL, TEACHER, ACCOUNT_OFFICER | `GET /students` paged |
+| `/students` | SCHOOL_ADMIN, PRINCIPAL, TEACHER, ACCOUNT_OFFICER | `GET /students` paged; SCHOOL_ADMIN also `POST /students/{id}/inactivate`, `/reactivate`, `/students/inactivate-bulk` |
 | `/users` | SCHOOL_ADMIN, PRINCIPAL | `GET /users`, activate/deactivate |
 | `/campuses` | SCHOOL_ADMIN | `GET /campuses` |
 | `/academics` | SCHOOL_ADMIN, PRINCIPAL | `GET /classes`, `GET /subjects` |
-| `/timetable` | school roles | `/timetable/me`, `/teacher/timetable`, `/timetable?classId&sectionId` |
+| `/timetable` | school roles | Student `/timetable/me`; teacher `/teacher/timetable`; parent/admin/principal `GET /timetable?classId&sectionId`. **SCHOOL_ADMIN write:** `POST/PUT/DELETE /timetable`, `POST /timetable/apply` |
 | `/attendance` | school roles | lecture roster + `POST /attendance/lectures/{slotId}`; family history |
 | `/teacher-attendance` | SCHOOL_ADMIN, PRINCIPAL | `GET /attendance/teachers/day` |
 | `/homework` | school roles | list; teacher/admin create with **multiple** `attachments` via `POST /files` then `POST /homework`; family submit is **one** `fileUrl` (backend limit) |
-| `/exams` | school roles | sessions, `/mine`, `/students/{id}`, publish |
+| `/exams` | school roles | sessions, `/mine`, `/students/{id}`, publish, `POST …/announce-at`; SCHOOL_ADMIN/PRINCIPAL `DELETE /exams/sessions/{id}` (blocked if published or has marks) |
 | `/fees` | ACCOUNT_OFFICER, PRINCIPAL, PARENT, STUDENT — **not SCHOOL_ADMIN, not TEACHER** | ACCOUNT_OFFICER generate class/section/student + review proofs; PRINCIPAL views unpaid challans (pending-proofs API is officer-only) |
 | `/salaries` | SCHOOL_ADMIN, ACCOUNT_OFFICER, PRINCIPAL, TEACHER | `/salaries`, generate, pay |
 | `/announcements` | school roles | `GET/POST /announcements` |
@@ -67,12 +68,42 @@ Secondary widgets are not required before the first numbers render. Final Term c
 | SCHOOL_ADMIN | **blocked in the app** (empty state). Backend already rejects challan generate (`ACCOUNT_OFFICER` / `ERP_OWNER` only). |
 | TEACHER | no Fees module in nav |
 
+## Role × module matrix (UI hide + API 403)
+
+Buttons that cannot succeed are hidden. The server still enforces `@PreAuthorize`; 403s are shown as “You do not have permission…”. **Do not grant extra roles** so a screen appears to work.
+
+| Action | SCHOOL_ADMIN | PRINCIPAL | TEACHER | ACCOUNT_OFFICER | PARENT | STUDENT |
+| --- | --- | --- | --- | --- | --- | --- |
+| Timetable view (own/class) | class picker | class picker | own | — | child | `/me` |
+| Timetable create/edit/delete/apply | yes | no | no | no | no | no |
+| Student list | yes | yes | yes | yes | — | — |
+| Student inactivate / bulk | yes | no | no | no | no | no |
+| Lecture attendance mark | yes | yes | yes | no | view | view |
+| Staff attendance | yes | yes | no | no | no | no |
+| Exam session create / announce / delete | yes | yes | no | no | no | no |
+| Enter marks | yes | yes | assigned subjects | no | view | view |
+| Generate fee challans | **no** | no | no | yes | no | no |
+
+## Date & time pickers
+
+Attendance lecture date, staff attendance date, homework due date, fee month, exam `announceAt`, and online-exam start use an in-app calendar/time sheet (`mobile/src/ui/dates.tsx`). They are not a native datetime-picker dependency (SDK 58 pin). Values sent to the API are `YYYY-MM-DD`, `YYYY-MM-01`, or `yyyy-MM-ddTHH:mm` (Karachi on the server via `Instants.parse`).
+
+## Exam session delete (backend)
+
+`DELETE /api/v1/exams/sessions/{id}` (`ERP_OWNER`, `SCHOOL_ADMIN`, `PRINCIPAL`):
+
+- Published sessions → `SESSION_PUBLISHED`
+- Any result rows → `SESSION_HAS_RESULTS` (marks are never wiped)
+- Otherwise date-sheet rows are removed and the session is deleted
+
+Mobile confirms before calling. There is still **no** online-exam delete API.
+
 ## Auth & session
 
 1. `POST /api/v1/auth/login` `{ username, password }` → access + refresh + user + tenant + features.
 2. Tokens in SecureStore. Native `Authorization: Bearer`. CORS on the server is `*` with `allowCredentials: false`, which matches this (no cookies).
 3. 401 → `POST /api/v1/auth/refresh`. Failure → clear session → login.
-4. Portal chip is **expected role**. Wrong role signs out and shows `WRONG_PORTAL` — it does not keep the other role’s session.
+4. `/login` is the portal list. Tapping a role opens `/signin?role=…` (username, password, show/hide). The chosen portal is **expected role**. Wrong role signs out and shows `WRONG_PORTAL` — it does not keep the other role’s session.
 5. Logout: local tokens cleared first, then `POST /auth/logout`. School **name / code / logo / colours stay cached** so login is still branded (same as web logout keeping public branding).
 6. Cold start: cached user + token → tabs immediately, `GET /auth/me` in the background. No token → login immediately. **Do not** call `GET /api/v1/public/school` without a school code (that endpoint returns the first tenant and would show the wrong school).
 
@@ -80,9 +111,14 @@ Secondary widgets are not required before the first numbers render. Final Term c
 
 Play listing name stays **School ERP** (`com.devzard.schoolerp`). Inside the app, after a school user has signed in at least once:
 
-- Login / splash / hub / home / me show **that school’s name, short code (`{code} Portal`), logo, and colours** from the connected API (`GET /public/school`) and then login/`tenants/me`. Cache is keyed by API origin so a previous school is not reused.
+- Login / splash / hub / home / me show that school’s **full name** and logo (plus tagline when present) from the connected API (`GET /public/school`) and then login/`tenants/me`. The tenant **code is never the headline** (a school whose code is `GVS` must still read as its legal/display name, e.g. Devzard).
+- Cache is keyed by API origin so a previous school is not reused when the API URL changes.
 - Logo uses `expo-image` disk cache and falls back to initials if the URL is missing or broken.
 - First launch with no cached school uses a generic “School ERP” state — never a hardcoded school name.
+
+### Launcher / Play icon vs in-app logo
+
+The home-screen icon is **build-time only**: `mobile/app.json` `expo.icon` / `android.adaptiveIcon` and files under `mobile/assets/images/`. Changing a school’s logo in the database or on Settings **does not** change the icon of an already-installed APK. A per-school store icon requires a **rebuild** (and typically a distinct package / listing). Do not claim the in-app logo replaces the launcher.
 
 ## API base URL (never hardcode production localhost)
 
@@ -138,7 +174,7 @@ Play Store remaining (not done here): Expo/EAS `projectId`, Google Play signing 
 
 ### JDK / API in this sandbox
 
-This environment has **no JDK** and **Maven Central is blocked**. `mvn clean test` and `spring-boot:run` were **not** run for this mobile commit. Port **8080** was down. Do not invent timings. Device/simulator E2E was **not** run here.
+This environment has **no JDK** and **Maven Central is blocked**. `mvn clean test` and `spring-boot:run` were **not** run for this commit. Port **8080** was down. `npx tsc --noEmit` was **not** run here (`mobile/node_modules` / TypeScript not present). Device/simulator E2E and Windows NDK were **not** run. Do not invent timings.
 
 ## Notifications
 

@@ -8,7 +8,7 @@ import { useFeatures } from "../../lib/features";
 import { MODULES } from "../../lib/nav";
 import { Screen } from "../../ui/kit";
 import { BrandHeader } from "../../ui/logo";
-import { portalTitle, roleLabel } from "../../lib/format";
+import { brandSubtitle, roleLabel } from "../../lib/format";
 
 export default function Hub() {
   const { user, brand } = useSession();
@@ -23,7 +23,7 @@ export default function Hub() {
         brand={brand}
         colors={colors}
         kicker={roleLabel(user.role)}
-        subtitle={brand ? portalTitle(brand) : "Modules for your role"}
+        subtitle={brand ? brandSubtitle(brand, "Modules for your role") : "Modules for your role"}
       />
       <Text style={{ color: colors.muted, marginBottom: 14 }}>
         Only the modules your account is allowed to use. Same rules as the web ERP.

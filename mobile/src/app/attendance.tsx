@@ -3,9 +3,11 @@ import { Text, View } from "react-native";
 import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, attendanceApi, studentApi } from "../api/services";
-import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, friendlyMessage, useAsync } from "../ui/kit";
+import { Badge, Btn, Card, Chip, Empty, QueryState, Screen, Title, friendlyMessage, useAsync } from "../ui/kit";
+import { DateField } from "../ui/dates";
 import { dayName, fmtTime, today } from "../lib/format";
 import type { AttendanceStatus } from "../lib/types";
+import { RequireAuth } from "../ui/gate";
 
 export default function Attendance() {
   const { user } = useSession();
@@ -26,6 +28,7 @@ function FamilyAtt() {
     return attendanceApi.studentHistory(sid!, fromStr, today());
   }, [user?.role, sid], user?.role === "STUDENT" || Boolean(sid));
   return (
+    <RequireAuth roles={["STUDENT", "PARENT"]}>
     <Screen colors={colors} onRefresh={() => void history.reload()} refreshing={history.loading}>
       <Title title="Attendance" subtitle="Last 30 days from lecture rolls" colors={colors} />
       <QueryState loading={history.loading} error={history.error} data={history.data} onRetry={() => void history.reload()} colors={colors} empty={<Empty title="No marks" hint="Attendance appears after teachers save a lecture roll." colors={colors} />}>
@@ -38,6 +41,7 @@ function FamilyAtt() {
         ))}
       </QueryState>
     </Screen>
+    </RequireAuth>
   );
 }
 
@@ -63,6 +67,7 @@ function StaffAtt() {
   const roster = useAsync(() => (slotId ? attendanceApi.roster(slotId) : Promise.resolve([])), [slotId], Boolean(slotId));
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
   return (
+    <RequireAuth roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER"]}>
     <Screen colors={colors} onRefresh={() => { void teacherSlots.reload(); void classSlots.reload(); }} refreshing={teacherSlots.loading || classSlots.loading}>
       <Title title="Lecture attendance" subtitle="Pick a timetable slot, mark the roster, then save. Persists on the server." colors={colors} />
       {!teacher ? (
@@ -81,7 +86,7 @@ function StaffAtt() {
           </View>
         </>
       ) : null}
-      <Field label="Date (YYYY-MM-DD)" colors={colors} value={date} onChangeText={setDate} />
+      <DateField label="Lecture date" value={date} onChange={setDate} colors={colors} />
       {(slots || []).map((s) => (
         <Chip
           key={s.id}
@@ -127,5 +132,6 @@ function StaffAtt() {
         />
       ) : null}
     </Screen>
+    </RequireAuth>
   );
 }

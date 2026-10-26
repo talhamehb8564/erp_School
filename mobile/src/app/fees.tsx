@@ -6,6 +6,7 @@ import { pickImage } from "../lib/picker";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, feeApi, fileApi, settingsApi, studentApi } from "../api/services";
 import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, friendlyMessage, useAsync, useDebounced } from "../ui/kit";
+import { DateField } from "../ui/dates";
 import { money, pretty } from "../lib/format";
 import { mediaUrl } from "../lib/media";
 import { RequireAuth } from "../ui/gate";
@@ -163,7 +164,7 @@ function StaffFees() {
                 ))}
               </>
             ) : null}
-            <Field label="Month (YYYY-MM-01)" colors={colors} value={month} onChangeText={setMonth} />
+            <DateField label="Fee month" value={month} onChange={setMonth} colors={colors} mode="month" />
             {msg ? <Text style={{ color: colors.ok, marginBottom: 8 }}>{msg}</Text> : null}
             {err ? <Text style={{ color: colors.bad, marginBottom: 8 }}>{err}</Text> : null}
             <Btn

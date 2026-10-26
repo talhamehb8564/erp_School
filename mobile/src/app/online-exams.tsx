@@ -5,6 +5,7 @@ import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, onlineExamApi } from "../api/services";
 import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, friendlyMessage, useAsync } from "../ui/kit";
+import { DateField } from "../ui/dates";
 import { RequireAuth } from "../ui/gate";
 import { pretty } from "../lib/format";
 
@@ -75,7 +76,7 @@ function StaffOnline() {
                 <Chip key={s.id} label={s.name} selected={subjectId === s.id} onPress={() => setSubjectId(s.id)} colors={colors} />
               ))}
             </View>
-            <Field label="Start (ISO, e.g. 2026-10-26T09:00:00+05:00)" colors={colors} value={startAt} onChangeText={setStartAt} autoCapitalize="none" />
+            <DateField label="Starts at" value={startAt} onChange={setStartAt} colors={colors} mode="datetime" />
             <Field label="Duration minutes" colors={colors} value={duration} onChangeText={setDuration} keyboardType="numeric" />
             {err ? <Text style={{ color: colors.bad, marginBottom: 8 }}>{err}</Text> : null}
             {msg ? <Text style={{ color: colors.ok, marginBottom: 8 }}>{msg}</Text> : null}

@@ -228,6 +228,7 @@ export interface TimetableSlot {
   classId?: string;
   sectionId?: string;
   subjectId?: string;
+  teacherUserId?: string;
   className?: string;
   sectionName?: string;
   subjectName?: string;

@@ -3,7 +3,9 @@ import { Text, View } from "react-native";
 import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, examApi, studentApi } from "../api/services";
-import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, friendlyMessage, useAsync } from "../ui/kit";
+import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, confirmAction, friendlyMessage, useAsync } from "../ui/kit";
+import { DateField } from "../ui/dates";
+import { can } from "../lib/permissions";
 import { ProgressWheel } from "../ui/wheel";
 import ResultCountdown, { isUpcomingExam, pickResultSession } from "../ui/countdown";
 import { num } from "../lib/format";
@@ -106,6 +108,7 @@ function StaffExams() {
   const [roll, setRoll] = useState("");
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
+  const [announceAt, setAnnounceAt] = useState("");
   const sections = useAsync(() => (classId ? academicApi.sections(classId) : Promise.resolve([])), [classId], Boolean(classId));
   const students = useAsync(
     () => (classId ? studentApi.list(classId, sectionId || undefined, 0) : Promise.resolve({ content: [], last: true, totalElements: 0, totalPages: 0, page: 0, size: 20, first: true })),
@@ -113,6 +116,9 @@ function StaffExams() {
     Boolean(classId),
   );
   const selected = (sessions.data || []).find((s) => s.id === sessionId);
+  useEffect(() => {
+    setAnnounceAt(selected?.announceAt ? String(selected.announceAt) : "");
+  }, [selected?.id, selected?.announceAt]);
   return (
     <RequireAuth roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER"]}>
       <Screen colors={colors} onRefresh={() => void sessions.reload()} refreshing={sessions.loading}>
@@ -209,9 +215,49 @@ function StaffExams() {
             ) : null}
           </Card>
         ) : null}
-        {selected && (user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? (
+        {selected && can.manageExamSessions(user?.role) ? (
           <View style={{ gap: 8 }}>
+            <DateField label="Announce results at" value={announceAt} onChange={setAnnounceAt} colors={colors} mode="datetime" />
+            <Btn
+              label="Save announcement time"
+              kind="ghost"
+              colors={colors}
+              disabled={!announceAt}
+              onPress={async () => {
+                setErr("");
+                setMsg("");
+                try {
+                  await examApi.setAnnounceAt(selected.id, announceAt);
+                  setMsg("Announcement time saved.");
+                  await sessions.reload();
+                } catch (e) {
+                  setErr(friendlyMessage(e));
+                }
+              }}
+            />
             <Btn label="Publish results" colors={colors} onPress={async () => { await examApi.publish(selected.id); await sessions.reload(); }} />
+            <Btn
+              label="Delete session"
+              kind="danger"
+              colors={colors}
+              onPress={async () => {
+                if (!(await confirmAction(
+                  "Delete exam session?",
+                  "Published sessions and sessions with marks cannot be deleted. Empty drafts only — student results are never wiped.",
+                  "Delete",
+                ))) return;
+                setErr("");
+                setMsg("");
+                try {
+                  await examApi.deleteSession(selected.id);
+                  setSessionId("");
+                  setMsg("Session deleted.");
+                  await sessions.reload();
+                } catch (e) {
+                  setErr(friendlyMessage(e));
+                }
+              }}
+            />
           </View>
         ) : null}
       </Screen>
