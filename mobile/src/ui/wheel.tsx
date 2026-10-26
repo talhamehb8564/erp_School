@@ -1,19 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import { useReducedMotion } from "react-native-reanimated";
 import type { Palette } from "../lib/theme";
 
-const TICKS = 28;
+const TICKS = 32;
 
 /**
- * Real percentage ring. `null` / undefined = no data (not a fake 0).
- * `empty` is used when the backend returned 0 because there is no sample yet.
+ * Animated percentage ring. Values come from the backend.
+ * `empty` means the API returned no sample yet (not a fake 0%).
  */
 export function ProgressWheel({
   value,
@@ -32,33 +26,54 @@ export function ProgressWheel({
 }) {
   const reduce = useReducedMotion();
   const has = !loading && !empty && value != null && Number.isFinite(Number(value));
-  const pct = has ? Math.max(0, Math.min(100, Number(value))) : 0;
-  const shown = useSharedValue(reduce ? pct : 0);
+  const target = has ? Math.max(0, Math.min(100, Number(value))) : 0;
+  const [fill, setFill] = useState(reduce ? target : 0);
 
   useEffect(() => {
-    shown.value = withTiming(pct, { duration: reduce ? 0 : 700, easing: Easing.out(Easing.cubic) });
-  }, [pct, reduce, shown]);
-
-  const countStyle = useAnimatedStyle(() => ({
-    opacity: 1,
-  }));
+    if (!has) {
+      setFill(0);
+      return;
+    }
+    if (reduce) {
+      setFill(target);
+      return;
+    }
+    setFill(0);
+    const start = Date.now();
+    const dur = 900;
+    let frame = 0;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / dur);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setFill(target * eased);
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [has, target, reduce]);
 
   return (
     <View style={{ flexGrow: 1, flexBasis: "30%", minWidth: 104, alignItems: "center", marginBottom: 8 }}>
-      <View style={{ width: 108, height: 108, alignItems: "center", justifyContent: "center" }} accessible accessibilityRole="progressbar" accessibilityLabel={`${label} ${has ? Math.round(pct) : "no data"} percent`} accessibilityValue={{ min: 0, max: 100, now: has ? Math.round(pct) : 0 }}>
+      <View
+        style={{ width: 112, height: 112, alignItems: "center", justifyContent: "center" }}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={`${label} ${has ? Math.round(fill) : "no data"} percent`}
+        accessibilityValue={{ min: 0, max: 100, now: has ? Math.round(fill) : 0 }}
+      >
         {Array.from({ length: TICKS }, (_, i) => {
           const ang = (i / TICKS) * 2 * Math.PI - Math.PI / 2;
-          const on = has && (i + 0.5) / TICKS <= pct / 100;
-          const r = 46;
+          const on = has && (i + 0.5) / TICKS <= fill / 100;
+          const r = 48;
           return (
             <View
               key={i}
               style={{
                 position: "absolute",
-                left: 54 + r * Math.cos(ang) - 2,
-                top: 54 + r * Math.sin(ang) - 5,
+                left: 56 + r * Math.cos(ang) - 2,
+                top: 56 + r * Math.sin(ang) - 6,
                 width: 4,
-                height: 11,
+                height: 12,
                 borderRadius: 2,
                 backgroundColor: loading ? colors.line : on ? colors.brand : colors.line,
                 transform: [{ rotate: `${(i / TICKS) * 360}deg` }],
@@ -66,13 +81,13 @@ export function ProgressWheel({
             />
           );
         })}
-        <Animated.Text style={[{ color: colors.ink, fontSize: 22, fontWeight: "800" }, countStyle]}>
-          {loading ? "…" : has ? `${Math.round(pct)}%` : "—"}
-        </Animated.Text>
+        <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "800" }}>
+          {loading ? "…" : has ? `${Math.round(fill)}%` : "—"}
+        </Text>
       </View>
       <Text style={{ color: colors.ink, fontWeight: "800", marginTop: 8, textAlign: "center" }}>{label}</Text>
       <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 2, paddingHorizontal: 4 }}>
-        {loading ? "Loading" : empty ? "No data yet" : hint || (has ? `${Math.round(pct)} percent` : "Not available")}
+        {loading ? "Loading" : empty ? "No data yet" : hint || (has ? `${Math.round(target)} percent` : "Not available")}
       </Text>
     </View>
   );

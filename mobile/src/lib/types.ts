@@ -250,6 +250,10 @@ export interface SchoolSettings {
   jazzcash?: string;
   easypaisa?: string;
   paymentInstructions?: string;
+  logoUrl?: string;
+  primaryColor?: string;
+  accentColor?: string;
+  secondaryColor?: string;
 }
 
 export const ROLE_LABEL: Record<Role, string> = {

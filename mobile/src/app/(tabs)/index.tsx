@@ -6,7 +6,7 @@ import { useFeatures } from "../../lib/features";
 import { Btn, Card, Chip, QueryState, Screen, Stat, useAsync } from "../../ui/kit";
 import { BrandHeader } from "../../ui/logo";
 import { ProgressWheel } from "../../ui/wheel";
-import { academicApi, examApi, feeApi, homeworkApi, reportApi, studentApi, tenantApi } from "../../api/services";
+import { academicApi, announcementApi, examApi, feeApi, homeworkApi, notificationApi, reportApi, studentApi, tenantApi } from "../../api/services";
 import { money, num, portalTitle, pretty, roleLabel } from "../../lib/format";
 import ResultCountdown, { isUpcomingExam, pickResultSession } from "../../ui/countdown";
 
@@ -32,6 +32,38 @@ export default function Home() {
   if (user.role === "PARENT") return <ParentHome />;
   if (user.role === "STUDENT") return <StudentHome />;
   return <StaffHome />;
+}
+
+function QuickActions({ items }: { items: { label: string; href: string }[] }) {
+  const { colors } = useAppearance();
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+      {items.map((it) => (
+        <Btn key={it.href} label={it.label} kind="ghost" colors={colors} onPress={() => router.push(it.href as never)} />
+      ))}
+    </View>
+  );
+}
+
+function Notices() {
+  const { colors } = useAppearance();
+  const { on } = useFeatures();
+  const list = useAsync(() => (on("ANNOUNCEMENTS") ? announcementApi.list() : Promise.resolve([])), [], on("ANNOUNCEMENTS"));
+  const unread = useAsync(() => notificationApi.unread());
+  if (!on("ANNOUNCEMENTS") && !unread.data) return null;
+  return (
+    <Card colors={colors}>
+      <Text style={{ fontWeight: "800", color: colors.ink, marginBottom: 8 }}>
+        Notices {unread.data?.unread ? `· ${unread.data.unread} unread` : ""}
+      </Text>
+      {(list.data || []).slice(0, 3).map((a) => (
+        <Pressable key={a.id} onPress={() => router.push("/announcements")}>
+          <Text style={{ color: colors.ink, marginBottom: 6 }}>{a.title}</Text>
+        </Pressable>
+      ))}
+      {!(list.data || []).length ? <Text style={{ color: colors.muted }}>No announcements yet</Text> : null}
+    </Card>
+  );
 }
 
 function Upcoming() {
@@ -73,6 +105,15 @@ function StaffHome() {
           {on("FEES") ? <Stat label="Unpaid" value={num(d.data?.unpaidChallans)} colors={colors} index={2} /> : null}
         </View>
       </QueryState>
+      <QuickActions
+        items={[
+          { label: "Users", href: "/users" },
+          { label: "Students", href: "/students" },
+          { label: "Admissions", href: "/admissions" },
+          { label: "Settings", href: "/settings" },
+        ]}
+      />
+      <Notices />
     </Screen>
   );
 }
@@ -128,6 +169,15 @@ function TeacherHome() {
           <Btn label="Open homework" kind="ghost" colors={colors} onPress={() => router.push("/homework")} />
         </Card>
       ) : null}
+      <QuickActions
+        items={[
+          { label: "Attendance", href: "/attendance" },
+          { label: "Homework", href: "/homework" },
+          { label: "Results", href: "/exams" },
+          { label: "Online exams", href: "/online-exams" },
+        ]}
+      />
+      <Notices />
     </Screen>
   );
 }
@@ -220,6 +270,15 @@ function ParentHome() {
           <Btn label="Open fees" kind="ghost" colors={colors} onPress={() => router.push("/fees")} />
         </Card>
       ) : null}
+      <QuickActions
+        items={[
+          { label: "Attendance", href: "/attendance" },
+          { label: "Homework", href: "/homework" },
+          { label: "Results", href: "/exams" },
+          { label: "Fees", href: "/fees" },
+        ]}
+      />
+      <Notices />
     </Screen>
   );
 }
@@ -280,6 +339,15 @@ function StudentHome() {
           ))}
         </Card>
       ) : null}
+      <QuickActions
+        items={[
+          { label: "Homework", href: "/homework" },
+          { label: "Results", href: "/exams" },
+          { label: "Online exams", href: "/online-exams" },
+          { label: "Fees", href: "/fees" },
+        ]}
+      />
+      <Notices />
     </Screen>
   );
 }

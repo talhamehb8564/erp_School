@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, examApi, studentApi } from "../api/services";
-import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, useAsync } from "../ui/kit";
+import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, friendlyMessage, useAsync } from "../ui/kit";
 import { ProgressWheel } from "../ui/wheel";
 import ResultCountdown, { isUpcomingExam, pickResultSession } from "../ui/countdown";
 import { num } from "../lib/format";
@@ -94,13 +94,29 @@ function StaffExams() {
   const { colors } = useAppearance();
   const sessions = useAsync(() => examApi.sessions());
   const classes = useAsync(() => academicApi.classes());
+  const subjects = useAsync(() => academicApi.subjects());
   const [sessionId, setSessionId] = useState("");
   const [name, setName] = useState("Mid Term");
+  const [classId, setClassId] = useState("");
+  const [sectionId, setSectionId] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [subjectId, setSubjectId] = useState("");
+  const [total, setTotal] = useState("100");
+  const [obtained, setObtained] = useState("");
+  const [roll, setRoll] = useState("");
+  const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
+  const sections = useAsync(() => (classId ? academicApi.sections(classId) : Promise.resolve([])), [classId], Boolean(classId));
+  const students = useAsync(
+    () => (classId ? studentApi.list(classId, sectionId || undefined, 0) : Promise.resolve({ content: [], last: true, totalElements: 0, totalPages: 0, page: 0, size: 20, first: true })),
+    [classId, sectionId],
+    Boolean(classId),
+  );
   const selected = (sessions.data || []).find((s) => s.id === sessionId);
   return (
     <RequireAuth roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER"]}>
       <Screen colors={colors} onRefresh={() => void sessions.reload()} refreshing={sessions.loading}>
-        <Title title="Exam sessions" subtitle="Set release time on web if you need a datetime picker. Teachers fill marks for assigned subjects on web for large class sheets." colors={colors} />
+        <Title title="Exam sessions" subtitle="Teachers enter marks only for assigned subjects. Backend rejects the rest." colors={colors} />
         {(user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? (
           <Card colors={colors}>
             <Field label="New session name" colors={colors} value={name} onChangeText={setName} />
@@ -114,13 +130,85 @@ function StaffExams() {
             />
           </Card>
         ) : null}
-        {(sessions.data || []).map((s) => (
-          <Card key={s.id} colors={colors}>
-            <Text style={{ color: colors.ink, fontWeight: "800" }} onPress={() => setSessionId(s.id)}>{s.name}</Text>
-            <Badge value={s.published ? "PUBLISHED" : "DRAFT"} colors={colors} />
-            {s.announceAt ? <Text style={{ color: colors.muted }}>Release {s.announceAt}</Text> : null}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          {(sessions.data || []).map((s) => (
+            <Chip key={s.id} label={s.name} selected={s.id === sessionId} onPress={() => setSessionId(s.id)} colors={colors} />
+          ))}
+        </View>
+        {selected ? <Badge value={selected.published ? "PUBLISHED" : "DRAFT"} colors={colors} /> : null}
+        {selected ? (
+          <Card colors={colors}>
+            <Text style={{ color: colors.ink, fontWeight: "800", marginBottom: 8 }}>Enter marks</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>Class</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+              {(classes.data || []).map((c) => (
+                <Chip key={c.id} label={c.name} selected={classId === c.id} onPress={() => { setClassId(c.id); setSectionId(""); setStudentId(""); }} colors={colors} />
+              ))}
+            </View>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+              {(sections.data || []).map((s) => (
+                <Chip key={s.id} label={s.name} selected={sectionId === s.id} onPress={() => setSectionId(s.id)} colors={colors} />
+              ))}
+            </View>
+            <Field label="Search by roll (optional)" colors={colors} value={roll} onChangeText={setRoll} />
+            {(students.data?.content || []).slice(0, 12).map((st) => (
+              <Chip
+                key={st.id}
+                label={`${st.fullName || st.rollNumber} · ${st.rollNumber || ""}`}
+                selected={studentId === st.id}
+                onPress={() => setStudentId(st.id)}
+                colors={colors}
+              />
+            ))}
+            <Text style={{ color: colors.muted, fontSize: 12, marginTop: 8, marginBottom: 6 }}>Subject</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+              {(subjects.data || []).map((s) => (
+                <Chip key={s.id} label={s.name} selected={subjectId === s.id} onPress={() => setSubjectId(s.id)} colors={colors} />
+              ))}
+            </View>
+            <Field label="Total marks" colors={colors} value={total} onChangeText={setTotal} keyboardType="numeric" />
+            <Field label="Obtained marks" colors={colors} value={obtained} onChangeText={setObtained} keyboardType="numeric" />
+            {err ? <Text style={{ color: colors.bad, marginBottom: 8 }}>{err}</Text> : null}
+            {msg ? <Text style={{ color: colors.ok, marginBottom: 8 }}>{msg}</Text> : null}
+            <Btn
+              label="Save result"
+              colors={colors}
+              disabled={!sessionId || !studentId || !subjectId}
+              onPress={async () => {
+                setErr("");
+                setMsg("");
+                try {
+                  await examApi.upsertResult(sessionId, {
+                    studentId,
+                    subjectId,
+                    totalMarks: Number(total),
+                    obtainedMarks: Number(obtained),
+                  });
+                  setMsg("Marks saved.");
+                } catch (e) {
+                  setErr(friendlyMessage(e));
+                }
+              }}
+            />
+            {roll.trim() && sessionId ? (
+              <Btn
+                label="Find by roll"
+                kind="ghost"
+                colors={colors}
+                onPress={async () => {
+                  setErr("");
+                  try {
+                    const row = await examApi.byRoll(sessionId, roll.trim());
+                    setMsg(`Found ${String(row.studentName || row.rollNumber || "student")}`);
+                    if (typeof row.studentId === "string") setStudentId(row.studentId);
+                  } catch (e) {
+                    setErr(friendlyMessage(e));
+                  }
+                }}
+              />
+            ) : null}
           </Card>
-        ))}
+        ) : null}
         {selected && (user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL") ? (
           <View style={{ gap: 8 }}>
             <Btn label="Publish results" colors={colors} onPress={async () => { await examApi.publish(selected.id); await sessions.reload(); }} />

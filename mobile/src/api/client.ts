@@ -29,7 +29,7 @@ const GET_TIMEOUT_MS = 12_000;
 const REQUEST_TIMEOUT_MS = 45_000;
 
 const CACHEABLE_GET =
-  /^\/api\/v1\/(auth\/me|classes|subjects|sections|campuses|tenants\/me|features|settings|school-settings|notifications(\/unread-count)?|dashboard\/(school|platform)|portals\/(teacher|parent|student|account|principal)|announcements|homework|exams\/sessions|fees\/(me\/challans|children\/challans|proofs\/pending)|reports\/progress\/(me|teacher|children)|parents\/me\/children|teacher\/timetable(\/today)?|timetable\/me|attendance\/me)(\?|$)/;
+  /^\/api\/v1\/(auth\/me|classes|subjects|sections|campuses|tenants\/me|features|settings|school-settings|public\/school|notifications(\/unread-count)?|dashboard\/(school|platform)|portals\/(teacher|parent|student|account|principal)|announcements|homework|exams\/sessions|online-exams(\/mine)?|fees\/(me\/challans|children\/challans|proofs\/pending)|reports\/progress\/(me|teacher|children)|parents\/me\/children|teacher\/timetable(\/today)?|timetable\/me|attendance\/me)(\?|$)/;
 
 export async function hydrateTokens() {
   const [a, r] = await Promise.all([storeGet(ACCESS), storeGet(REFRESH)]);

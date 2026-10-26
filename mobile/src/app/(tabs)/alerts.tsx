@@ -9,6 +9,7 @@ import { router } from "expo-router";
 function hrefFor(entityType?: string) {
   const t = (entityType || "").toLowerCase();
   if (t.includes("fee") || t.includes("challan")) return "/fees";
+  if (t.includes("online")) return "/online-exams";
   if (t.includes("exam") || t.includes("result")) return "/exams";
   if (t.includes("homework")) return "/homework";
   if (t.includes("attendance")) return "/attendance";

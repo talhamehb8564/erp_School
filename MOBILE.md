@@ -80,7 +80,7 @@ Secondary widgets are not required before the first numbers render. Final Term c
 
 Play listing name stays **School ERP** (`com.devzard.schoolerp`). Inside the app, after a school user has signed in at least once:
 
-- Login / splash / hub / home / me show **that school’s name, short code (`GVS Portal`), logo, and colours** from the login/`tenants/me` payload.
+- Login / splash / hub / home / me show **that school’s name, short code (`{code} Portal`), logo, and colours** from the connected API (`GET /public/school`) and then login/`tenants/me`. Cache is keyed by API origin so a previous school is not reused.
 - Logo uses `expo-image` disk cache and falls back to initials if the URL is missing or broken.
 - First launch with no cached school uses a generic “School ERP” state — never a hardcoded school name.
 

@@ -1,17 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { storeDel, storeGet, storeSet } from "./storage";
-import { authApi, tenantApi } from "../api/services";
+import { authApi, publicApi, tenantApi } from "../api/services";
 import { ApiError, clearTokens, getAccessToken, getRefreshToken, hydrateTokens, setTokens } from "../api/client";
 import type { Role, SchoolBrand, Tenant, User } from "./types";
 import { LOCKED_STATUSES } from "./types";
+import { apiOrigin } from "./config";
 
 const USER_KEY = "erp.user";
 const CHILD_KEY = "erp.child";
 const FEATURE_KEY = "erp.features";
 const TENANT_KEY = "erp.tenant";
 const BRAND_KEY = "erp.brand";
+const BRAND_ORIGIN_KEY = "erp.brand.origin";
 
-function toBrand(t: Tenant): SchoolBrand {
+export function toBrand(t: { name: string; code: string; logoUrl?: string; primaryColor?: string; accentColor?: string; secondaryColor?: string; tagline?: string }): SchoolBrand {
   return {
     name: t.name,
     code: t.code,
@@ -34,6 +36,7 @@ interface Session {
   login: (username: string, password: string, expected?: Role) => Promise<User>;
   logout: () => Promise<void>;
   setChildId: (id: string | null) => void;
+  refreshTenant: () => Promise<void>;
   ready: boolean;
 }
 
@@ -66,23 +69,40 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     else await storeDel(USER_KEY);
   };
 
-  const rememberBrand = async (t: Tenant | null) => {
-    if (!t) return;
+  const rememberBrand = async (t: Tenant | SchoolBrand | null) => {
+    if (!t?.name) return;
     const next = toBrand(t);
     setBrand(next);
     await storeSet(BRAND_KEY, JSON.stringify(next));
-    await storeSet(TENANT_KEY, JSON.stringify(t));
+    await storeSet(BRAND_ORIGIN_KEY, apiOrigin() || "");
+    if ("id" in t && t.id) await storeSet(TENANT_KEY, JSON.stringify(t));
+  };
+
+  const loadPublicBrand = async () => {
+    const origin = apiOrigin();
+    if (!origin) return;
+    try {
+      const data = await publicApi.school();
+      const school = data?.school;
+      if (school?.name && school?.code) {
+        await rememberBrand(school);
+      }
+    } catch {
+      /* dedicated-school branding is best-effort; login must not wait */
+    }
   };
 
   useEffect(() => {
     void (async () => {
       await hydrateTokens();
-      const [rawUser, rawChild, rawFeat, rawTenant, rawBrand] = await Promise.all([
+      const origin = apiOrigin() || "";
+      const [rawUser, rawChild, rawFeat, rawTenant, rawBrand, rawOrigin] = await Promise.all([
         storeGet(USER_KEY),
         storeGet(CHILD_KEY),
         storeGet(FEATURE_KEY),
         storeGet(TENANT_KEY),
         storeGet(BRAND_KEY),
+        storeGet(BRAND_ORIGIN_KEY),
       ]);
       setChildIdState(rawChild);
       const cachedUser = parseJson<User>(rawUser);
@@ -93,9 +113,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         memoryFeatures = cachedFeat.flags;
         setFeatures(cachedFeat.flags);
       }
-      if (cachedBrand) setBrand(cachedBrand);
-      else if (cachedTenant) setBrand(toBrand(cachedTenant));
-      if (cachedTenant) {
+      const originOk = rawOrigin === origin;
+      if (originOk && cachedBrand?.name) setBrand(cachedBrand);
+      else if (originOk && cachedTenant?.name) setBrand(toBrand(cachedTenant));
+      else {
+        setBrand(null);
+        if (!originOk) {
+          await Promise.all([storeDel(BRAND_KEY), storeDel(TENANT_KEY), storeDel(BRAND_ORIGIN_KEY)]);
+        }
+      }
+      if (originOk && cachedTenant) {
         setTenant(cachedTenant);
         setForcedLocked(LOCKED_STATUSES.includes(cachedTenant.status));
       }
@@ -103,8 +130,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const token = getAccessToken();
       if (!token) {
         await persistUser(null);
+        setTenant(null);
         setLoading(false);
         setReady(true);
+        void loadPublicBrand();
         return;
       }
 
@@ -118,9 +147,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const me = await authApi.me();
         await persistUser(me);
         if (me.role !== "ERP_OWNER") {
-          if (cachedTenant && cachedTenant.id === me.tenantId) {
-            /* keep cached tenant; refresh in background below */
-          }
           try {
             const t = await tenantApi.me();
             setTenant(t);
@@ -140,6 +166,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         await persistUser(null);
         setTenant(null);
         setForcedLocked(false);
+        void loadPublicBrand();
       } finally {
         setLoading(false);
         setReady(true);
@@ -176,10 +203,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setForcedLocked(false);
       setBrand(null);
       await Promise.all([storeDel(BRAND_KEY), storeDel(TENANT_KEY)]);
-    } else if (payload.tenant) {
-      setTenant(payload.tenant);
-      setForcedLocked(LOCKED_STATUSES.includes(payload.tenant.status));
-      await rememberBrand(payload.tenant);
+    } else {
+      let t = payload.tenant || null;
+      if (!t) {
+        try {
+          t = await tenantApi.me();
+        } catch (e) {
+          if (e instanceof ApiError && e.errorCode === "SUBSCRIPTION_INACTIVE") setForcedLocked(true);
+        }
+      }
+      if (t) {
+        setTenant(t);
+        setForcedLocked(LOCKED_STATUSES.includes(t.status));
+        await rememberBrand(t);
+      }
     }
     setLoading(false);
     return payload.user;
@@ -199,7 +236,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await Promise.all([storeDel(CHILD_KEY), storeDel(FEATURE_KEY), storeDel(TENANT_KEY)]);
     leaving.current = false;
     if (rt) void authApi.logout(rt).catch(() => undefined);
+    void loadPublicBrand();
   }, []);
+
+  const refreshTenant = useCallback(async () => {
+    if (!user || user.role === "ERP_OWNER") return;
+    try {
+      const t = await tenantApi.me();
+      setTenant(t);
+      setForcedLocked(LOCKED_STATUSES.includes(t.status));
+      await rememberBrand(t);
+    } catch {
+      /* keep current */
+    }
+  }, [user]);
 
   const setChildId = useCallback((id: string | null) => {
     setChildIdState(id);
@@ -211,9 +261,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     user && user.role !== "ERP_OWNER" && (forcedLocked || (tenant && LOCKED_STATUSES.includes(tenant.status))),
   );
 
+  const displayBrand = useMemo<SchoolBrand | null>(() => {
+    if (user && user.role !== "ERP_OWNER" && tenant?.name) return toBrand(tenant);
+    return brand;
+  }, [user, tenant, brand]);
+
   const value = useMemo<Session>(
-    () => ({ user, tenant, brand, loading, locked, childId, features, login, logout, setChildId, ready }),
-    [user, tenant, brand, loading, locked, childId, features, login, logout, setChildId, ready],
+    () => ({
+      user,
+      tenant,
+      brand: displayBrand,
+      loading,
+      locked,
+      childId,
+      features,
+      login,
+      logout,
+      setChildId,
+      refreshTenant,
+      ready,
+    }),
+    [user, tenant, displayBrand, loading, locked, childId, features, login, logout, setChildId, refreshTenant, ready],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -224,5 +292,3 @@ export function useSession() {
   if (!ctx) throw new Error("useSession outside provider");
   return ctx;
 }
-
-

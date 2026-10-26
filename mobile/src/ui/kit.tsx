@@ -244,7 +244,8 @@ export function Field({
 export function Empty({ title, hint, colors }: { title: string; hint?: string; colors: Palette }) {
   return (
     <Card colors={colors}>
-      <Text style={[styles.h3, { color: colors.ink }]}>{title}</Text>
+      <Ionicons name="file-tray-outline" size={28} color={colors.muted} />
+      <Text style={[styles.h3, { color: colors.ink, marginTop: 8 }]}>{title}</Text>
       {hint ? <Text style={[styles.sub, { color: colors.muted, marginTop: 6 }]}>{hint}</Text> : null}
     </Card>
   );

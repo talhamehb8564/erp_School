@@ -25,6 +25,13 @@ import type {
 
 const v1 = "/api/v1";
 
+export const publicApi = {
+  school: () =>
+    api.get<{ school?: { name: string; code: string; logoUrl?: string; primaryColor?: string; accentColor?: string; secondaryColor?: string; tagline?: string; id?: string } }>(
+      `${v1}/public/school`,
+    ),
+};
+
 export const authApi = {
   login: (username: string, password: string) =>
     api.post<AuthPayload>(`${v1}/auth/login`, { username, password }),
@@ -179,6 +186,25 @@ export const examApi = {
   myResult: (sessionId: string) => api.get<Record<string, unknown>>(`${v1}/exams/sessions/${sessionId}/mine`),
   studentResult: (sessionId: string, studentId: string) =>
     api.get<Record<string, unknown>>(`${v1}/exams/sessions/${sessionId}/students/${studentId}`),
+  byRoll: (sessionId: string, rollNumber: string) =>
+    api.get<Record<string, unknown>>(`${v1}/exams/sessions/${sessionId}/results/by-roll?rollNumber=${encodeURIComponent(rollNumber)}`),
+  sessionResults: (sessionId: string) => api.get<ExamResult[]>(`${v1}/exams/sessions/${sessionId}/results`),
+};
+
+export const onlineExamApi = {
+  list: () => api.get<Record<string, unknown>[]>(`${v1}/online-exams`),
+  mine: () => api.get<Record<string, unknown>[]>(`${v1}/online-exams/mine`),
+  get: (id: string) => api.get<Record<string, unknown>>(`${v1}/online-exams/${id}`),
+  create: (body: Record<string, unknown>) => api.post<Record<string, unknown>>(`${v1}/online-exams`, body),
+  schedule: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/schedule`),
+  publishResults: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/publish-results`),
+  start: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/start`),
+  saveAnswers: (id: string, body: Record<string, unknown>[]) =>
+    api.put<Record<string, unknown>>(`${v1}/online-exams/${id}/answers`, body),
+  submit: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/submit`),
+  autoSubmit: (id: string) => api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/auto-submit`),
+  result: (id: string) => api.get<Record<string, unknown>>(`${v1}/online-exams/${id}/result`),
+  attempts: (id: string) => api.get<Record<string, unknown>[]>(`${v1}/online-exams/${id}/attempts`),
 };
 
 export const feeApi = {

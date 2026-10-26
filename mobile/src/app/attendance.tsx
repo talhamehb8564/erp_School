@@ -3,13 +3,12 @@ import { Text, View } from "react-native";
 import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, attendanceApi, studentApi } from "../api/services";
-import { Badge, Btn, Card, Empty, QueryState, Screen, Title, useAsync } from "../ui/kit";
+import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, friendlyMessage, useAsync } from "../ui/kit";
 import { dayName, fmtTime, today } from "../lib/format";
 import type { AttendanceStatus } from "../lib/types";
 
 export default function Attendance() {
-  const { user, childId } = useSession();
-  const { colors } = useAppearance();
+  const { user } = useSession();
   if (user?.role === "STUDENT" || user?.role === "PARENT") return <FamilyAtt />;
   return <StaffAtt />;
 }
@@ -29,7 +28,7 @@ function FamilyAtt() {
   return (
     <Screen colors={colors} onRefresh={() => void history.reload()} refreshing={history.loading}>
       <Title title="Attendance" subtitle="Last 30 days from lecture rolls" colors={colors} />
-      <QueryState loading={history.loading} error={history.error} data={history.data} onRetry={() => void history.reload()} colors={colors} empty={<Empty title="No marks" colors={colors} />}>
+      <QueryState loading={history.loading} error={history.error} data={history.data} onRetry={() => void history.reload()} colors={colors} empty={<Empty title="No marks" hint="Attendance appears after teachers save a lecture roll." colors={colors} />}>
         {(history.data || []).map((r) => (
           <Card key={r.id} colors={colors}>
             <Text style={{ color: colors.ink, fontWeight: "700" }}>{r.attendanceDate}</Text>
@@ -46,44 +45,84 @@ function StaffAtt() {
   const { user } = useSession();
   const { colors } = useAppearance();
   const teacher = user?.role === "TEACHER";
-  const slots = useAsync(() => (teacher ? academicApi.teacherTimetable() : academicApi.teacherTimetable().catch(() => [])), [teacher]);
+  const classes = useAsync(() => academicApi.classes(), [], !teacher);
+  const [classId, setClassId] = useState("");
+  const [sectionId, setSectionId] = useState("");
+  const sections = useAsync(() => (classId ? academicApi.sections(classId) : Promise.resolve([])), [classId], Boolean(classId) && !teacher);
+  const teacherSlots = useAsync(() => (teacher ? academicApi.teacherTimetable() : Promise.resolve([])), [teacher], teacher);
+  const classSlots = useAsync(
+    () => (classId && sectionId ? academicApi.timetable(classId, sectionId) : Promise.resolve([])),
+    [classId, sectionId],
+    Boolean(classId && sectionId) && !teacher,
+  );
+  const slots = teacher ? teacherSlots.data || [] : classSlots.data || [];
   const [slotId, setSlotId] = useState("");
   const [date, setDate] = useState(today());
+  const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
   const roster = useAsync(() => (slotId ? attendanceApi.roster(slotId) : Promise.resolve([])), [slotId], Boolean(slotId));
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
   return (
-    <Screen colors={colors}>
-      <Title title="Lecture attendance" subtitle="Mark the roster for a timetable slot" colors={colors} />
-      {(slots.data || []).slice(0, 12).map((s) => (
-        <Text key={s.id} onPress={() => setSlotId(s.id)} style={{ color: slotId === s.id ? colors.brand : colors.ink, marginBottom: 8, fontWeight: slotId === s.id ? "800" : "500" }}>
-          {s.className} · {s.subjectName} · {dayName(s.dayOfWeek)} {fmtTime(s.startTime)}
-        </Text>
+    <Screen colors={colors} onRefresh={() => { void teacherSlots.reload(); void classSlots.reload(); }} refreshing={teacherSlots.loading || classSlots.loading}>
+      <Title title="Lecture attendance" subtitle="Pick a timetable slot, mark the roster, then save. Persists on the server." colors={colors} />
+      {!teacher ? (
+        <>
+          <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>Class</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+            {(classes.data || []).map((c) => (
+              <Chip key={c.id} label={c.name} selected={classId === c.id} onPress={() => { setClassId(c.id); setSectionId(""); setSlotId(""); }} colors={colors} />
+            ))}
+          </View>
+          <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>Section</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+            {(sections.data || []).map((s) => (
+              <Chip key={s.id} label={s.name} selected={sectionId === s.id} onPress={() => { setSectionId(s.id); setSlotId(""); }} colors={colors} />
+            ))}
+          </View>
+        </>
+      ) : null}
+      <Field label="Date (YYYY-MM-DD)" colors={colors} value={date} onChangeText={setDate} />
+      {(slots || []).map((s) => (
+        <Chip
+          key={s.id}
+          label={`${s.className} · ${s.subjectName} · ${dayName(s.dayOfWeek)} ${fmtTime(s.startTime)}`}
+          selected={slotId === s.id}
+          onPress={() => setSlotId(s.id)}
+          colors={colors}
+        />
       ))}
-      <QueryState loading={roster.loading} error={roster.error} data={roster.data} onRetry={() => void roster.reload()} colors={colors} empty={slotId ? <Empty title="Empty roster" colors={colors} /> : <Empty title="Pick a slot" colors={colors} />}>
+      <QueryState loading={roster.loading} error={roster.error} data={roster.data} onRetry={() => void roster.reload()} colors={colors} empty={slotId ? <Empty title="Empty roster" colors={colors} /> : <Empty title="Pick a lecture slot" colors={colors} />}>
         {(roster.data || []).map((st) => {
           const status = marks[st.id] || "PRESENT";
           return (
             <Card key={st.id} colors={colors}>
               <Text style={{ color: colors.ink, fontWeight: "700" }}>{st.fullName || st.rollNumber}</Text>
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                 {(["PRESENT", "ABSENT", "LATE", "LEAVE"] as AttendanceStatus[]).map((s) => (
-                  <Text key={s} onPress={() => setMarks((m) => ({ ...m, [st.id]: s }))} style={{ color: status === s ? colors.brand : colors.muted, fontWeight: "700" }}>
-                    {s}
-                  </Text>
+                  <Chip key={s} label={s} selected={status === s} onPress={() => setMarks((m) => ({ ...m, [st.id]: s }))} colors={colors} />
                 ))}
               </View>
             </Card>
           );
         })}
       </QueryState>
+      {err ? <Text style={{ color: colors.bad, marginBottom: 8 }}>{err}</Text> : null}
+      {msg ? <Text style={{ color: colors.ok, marginBottom: 8 }}>{msg}</Text> : null}
       {slotId ? (
         <Btn
           label={`Save marks for ${date}`}
           colors={colors}
           onPress={async () => {
-            const body = (roster.data || []).map((st) => ({ studentId: st.id, status: marks[st.id] || "PRESENT" }));
-            await attendanceApi.markLecture(slotId, { date, marks: body });
-            await roster.reload();
+            setErr("");
+            setMsg("");
+            try {
+              const body = (roster.data || []).map((st) => ({ studentId: st.id, status: marks[st.id] || "PRESENT" }));
+              await attendanceApi.markLecture(slotId, { date, marks: body });
+              setMsg("Attendance saved.");
+              await roster.reload();
+            } catch (e) {
+              setErr(friendlyMessage(e));
+            }
           }}
         />
       ) : null}
