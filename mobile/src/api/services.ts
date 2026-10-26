@@ -107,6 +107,10 @@ export const academicApi = {
   teacherTimetable: () => api.get<TimetableSlot[]>(`${v1}/teacher/timetable`),
   teacherToday: () => api.get<TimetableSlot[]>(`${v1}/teacher/timetable/today`),
   myTimetable: () => api.get<TimetableSlot[]>(`${v1}/timetable/me`),
+  teacherAssignments: (teacherUserId?: string) =>
+    api.get<{ id: string; teacherUserId?: string; classId: string; sectionId: string; subjectId: string }[]>(
+      `${v1}/teacher-assignments${teacherUserId ? `?teacherUserId=${teacherUserId}` : ""}`,
+    ),
 };
 
 export const studentApi = {
@@ -158,6 +162,10 @@ export const homeworkApi = {
   create: (body: Record<string, unknown>) => api.post<Homework>(`${v1}/homework`, body),
   submit: (id: string, body: { studentId?: string; fileUrl?: string; notes?: string }) =>
     api.post<unknown>(`${v1}/homework/${id}/submissions`, body),
+  submissions: (id: string) =>
+    api.get<{ id: string; studentId?: string; fileUrl?: string; notes?: string; status?: string; submittedAt?: string }[]>(
+      `${v1}/homework/${id}/submissions`,
+    ),
 };
 
 export const examApi = {
@@ -185,6 +193,8 @@ export const feeApi = {
     api.post<unknown>(`${v1}/fees/challans/${id}/proofs`, body),
   reviewProof: (id: string, approve: boolean, remarks?: string) =>
     api.post<unknown>(`${v1}/fees/proofs/${id}/review`, { approve, remarks }),
+  byStatus: (status: string, page = 0) =>
+    api.get<FeeChallan[]>(`${v1}/fees/challans?status=${encodeURIComponent(status)}&page=${page}&size=40`),
 };
 
 export const salaryApi = {

@@ -68,20 +68,23 @@ export interface AuthPayload {
   features?: Record<string, boolean> | null;
 }
 
-export interface Tenant {
-  id: string;
-  code: string;
+export interface SchoolBrand {
   name: string;
-  legalName?: string;
-  email?: string;
-  phone?: string;
-  addressLine?: string;
-  city?: string;
+  code: string;
   logoUrl?: string;
   primaryColor?: string;
   accentColor?: string;
   secondaryColor?: string;
   tagline?: string;
+}
+
+export interface Tenant extends SchoolBrand {
+  id: string;
+  legalName?: string;
+  email?: string;
+  phone?: string;
+  addressLine?: string;
+  city?: string;
   status: TenantStatus;
   academicYear?: string;
   academicSession?: string;

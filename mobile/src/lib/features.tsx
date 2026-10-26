@@ -17,6 +17,7 @@ export function FeatureProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setFlags(features);
+    if (Object.keys(features).length) setLoaded(true);
   }, [features]);
 
   useEffect(() => {
@@ -24,18 +25,25 @@ export function FeatureProvider({ children }: { children: ReactNode }) {
       setLoaded(true);
       return;
     }
-    if (Object.keys(flags).length) setLoaded(true);
-    const t = setTimeout(() => {
-      void featureApi
-        .current()
-        .then((next) => {
-          setFlags(next);
-          setLoaded(true);
-        })
-        .catch(() => setLoaded(true));
-    }, Object.keys(flags).length ? 2500 : 0);
-    return () => clearTimeout(t);
-  }, [user?.id, user?.tenantId]);
+    if (Object.keys(features).length) {
+      setLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    void featureApi
+      .current()
+      .then((next) => {
+        if (cancelled) return;
+        setFlags(next);
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.tenantId, features]);
 
   const value = useMemo<Features>(
     () => ({

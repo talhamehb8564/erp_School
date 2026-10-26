@@ -14,7 +14,12 @@ function metroLanHost() {
 }
 
 /**
- * Spring Boot origin. Never hardcode localhost as a production URL.
+ * Spring Boot origin. Never hardcode localhost or a LAN IP as a production URL.
+ *
+ * Development (Metro on your PC): EXPO_PUBLIC_API_URL unset → Metro LAN host :8080
+ * Production Play Store / EAS: set EXPO_PUBLIC_API_URL=https://your-api.example.com
+ *   (or expo.extra.apiUrl in EAS). Store builds must use HTTPS.
+ *
  * A physical phone's 127.0.0.1 is the phone itself, not your PC.
  */
 export function apiOrigin() {

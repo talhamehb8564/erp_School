@@ -3,6 +3,7 @@ import { AppState, Platform } from "react-native";
 import { requireOptionalNativeModule } from "expo";
 import { notificationApi } from "../api/services";
 import { useSession } from "./session";
+import { portalTitle } from "./format";
 
 /**
  * Do not import the `expo-notifications` package index.
@@ -86,7 +87,7 @@ function loadLocalNotifier(): LocalNotifier | null {
 }
 
 export function NotificationWatcher() {
-  const { user, ready } = useSession();
+  const { user, ready, brand } = useSession();
   const last = useRef<number | null>(null);
 
   useEffect(() => {
@@ -101,7 +102,7 @@ export function NotificationWatcher() {
         if (last.current != null && n > last.current && notifier) {
           await notifier.scheduleNotificationAsync({
             content: {
-              title: "School ERP",
+              title: brand?.name || portalTitle(brand),
               body: n === 1 ? "You have a new notification." : `You have ${n} unread notifications.`,
             },
             trigger: null,
@@ -123,7 +124,7 @@ export function NotificationWatcher() {
       clearInterval(id);
       sub.remove();
     };
-  }, [ready, user?.id]);
+  }, [ready, user?.id, brand?.name]);
 
   return null;
 }

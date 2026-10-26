@@ -28,12 +28,23 @@ export function friendlyMessage(error: unknown, fallback = "Something went wrong
     if (error.status === 0) return error.message;
     if (error.status === 401) return error.message || "Your session expired. Please sign in again.";
     if (error.fields?.length) return error.fields.map((f) => f.message).filter(Boolean).join(" ");
-    if (error.message && !/exception|sql|hibernate/i.test(error.message)) return error.message;
+    const raw = error.message || "";
+    if (/cannot read propert|undefined is not|null is not/i.test(raw)) return fallback;
+    if (raw && !/exception|sql|hibernate|stacktrace/i.test(raw)) {
+      if (error.status === 403) return raw || "You do not have permission to do that.";
+      return raw;
+    }
     if (error.status === 403) return "You do not have permission to do that.";
     if (error.status === 404) return "The requested record was not found.";
+    if (error.status === 409) return "This record already exists or conflicts with another.";
+    if (error.status === 422) return "Please check the form and try again.";
+    if (error.status >= 500) return "The server had a problem. Try again in a moment.";
     return fallback;
   }
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message) {
+    if (/cannot read propert|undefined is not|null is not/i.test(error.message)) return fallback;
+    return error.message;
+  }
   return fallback;
 }
 
@@ -66,6 +77,45 @@ export function Screen({
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+export function Chip({
+  label,
+  selected,
+  onPress,
+  colors,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress?: () => void;
+  colors: Palette;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+      onPress={onPress}
+      style={{
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: selected ? colors.brand : colors.card,
+        borderWidth: 1,
+        borderColor: selected ? colors.brand : colors.line,
+      }}
+    >
+      <Text style={{ color: selected ? "#fff" : colors.ink, fontWeight: "700", fontSize: 13 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export function useDebounced<T>(value: T, ms = 350) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
 }
 
 export function Title({

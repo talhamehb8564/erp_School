@@ -4,18 +4,27 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
-import { SessionProvider } from "../lib/session";
+import { SessionProvider, useSession } from "../lib/session";
 import { FeatureProvider } from "../lib/features";
 import { AppearanceProvider, useAppearance } from "../lib/appearance";
 import { NotificationWatcher } from "../lib/notifications";
 
 void SplashScreen.preventAutoHideAsync();
 
+function SplashHider() {
+  const { ready } = useSession();
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
+  return null;
+}
+
 function ThemedStack() {
   const { scheme, colors } = useAppearance();
   return (
     <>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
+      <SplashHider />
       <NotificationWatcher />
       <Stack
         screenOptions={{
@@ -56,9 +65,6 @@ function ThemedStack() {
 }
 
 export default function RootLayout() {
-  useEffect(() => {
-    void SplashScreen.hideAsync();
-  }, []);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

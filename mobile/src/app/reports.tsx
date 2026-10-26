@@ -2,7 +2,7 @@ import { Text, View } from "react-native";
 import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { reportApi } from "../api/services";
-import { Empty, Screen, Stat, Title, useAsync } from "../ui/kit";
+import { Empty, Screen, Stat, Title, friendlyMessage, useAsync } from "../ui/kit";
 import { num } from "../lib/format";
 
 export default function Reports() {
@@ -21,7 +21,7 @@ export default function Reports() {
         <Stat label="Teachers" value={num(d.data?.teachers)} colors={colors} index={2} />
         <Stat label="Unpaid" value={num(d.data?.unpaidChallans)} colors={colors} index={3} />
       </View>
-      {d.error ? <Text style={{ color: colors.bad, marginTop: 12 }}>{String((d.error as Error).message || d.error)}</Text> : null}
+      {d.error ? <Text style={{ color: colors.bad, marginTop: 12 }}>{friendlyMessage(d.error)}</Text> : null}
     </Screen>
   );
 }

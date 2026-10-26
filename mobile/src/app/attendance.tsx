@@ -4,7 +4,7 @@ import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, attendanceApi, studentApi } from "../api/services";
 import { Badge, Btn, Card, Empty, QueryState, Screen, Title, useAsync } from "../ui/kit";
-import { today } from "../lib/format";
+import { dayName, fmtTime, today } from "../lib/format";
 import type { AttendanceStatus } from "../lib/types";
 
 export default function Attendance() {
@@ -56,7 +56,7 @@ function StaffAtt() {
       <Title title="Lecture attendance" subtitle="Mark the roster for a timetable slot" colors={colors} />
       {(slots.data || []).slice(0, 12).map((s) => (
         <Text key={s.id} onPress={() => setSlotId(s.id)} style={{ color: slotId === s.id ? colors.brand : colors.ink, marginBottom: 8, fontWeight: slotId === s.id ? "800" : "500" }}>
-          {s.className} · {s.subjectName} · {s.id.slice(0, 8)}
+          {s.className} · {s.subjectName} · {dayName(s.dayOfWeek)} {fmtTime(s.startTime)}
         </Text>
       ))}
       <QueryState loading={roster.loading} error={roster.error} data={roster.data} onRetry={() => void roster.reload()} colors={colors} empty={slotId ? <Empty title="Empty roster" colors={colors} /> : <Empty title="Pick a slot" colors={colors} />}>

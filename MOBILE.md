@@ -32,9 +32,9 @@ Last GitHub commit this app was written against: inspect `HEAD` on `arena/01a0ae
 | `/timetable` | school roles | `/timetable/me`, `/teacher/timetable`, `/timetable?classId&sectionId` |
 | `/attendance` | school roles | lecture roster + `POST /attendance/lectures/{slotId}`; family history |
 | `/teacher-attendance` | SCHOOL_ADMIN, PRINCIPAL | `GET /attendance/teachers/day` |
-| `/homework` | school roles | `GET /homework`, `POST /homework/{id}/submissions` + `POST /files` |
+| `/homework` | school roles | list; teacher/admin create with **multiple** `attachments` via `POST /files` then `POST /homework`; family submit is **one** `fileUrl` (backend limit) |
 | `/exams` | school roles | sessions, `/mine`, `/students/{id}`, publish |
-| `/fees` | ACCOUNT_OFFICER, PRINCIPAL, PARENT, STUDENT — **not SCHOOL_ADMIN, not TEACHER** | challans, generate, proofs, review |
+| `/fees` | ACCOUNT_OFFICER, PRINCIPAL, PARENT, STUDENT — **not SCHOOL_ADMIN, not TEACHER** | ACCOUNT_OFFICER generate class/section/student + review proofs; PRINCIPAL views unpaid challans (pending-proofs API is officer-only) |
 | `/salaries` | SCHOOL_ADMIN, ACCOUNT_OFFICER, PRINCIPAL, TEACHER | `/salaries`, generate, pay |
 | `/announcements` | school roles | `GET/POST /announcements` |
 | `/calendar` | school roles | `GET /calendar/events` |
@@ -61,8 +61,8 @@ Secondary widgets are not required before the first numbers render. Final Term c
 
 | Role | Fee UI |
 | --- | --- |
-| ACCOUNT_OFFICER | generate challans, review proofs |
-| PRINCIPAL | view pending proofs (no generate) |
+| ACCOUNT_OFFICER | generate class / section / one-student challans, review proofs |
+| PRINCIPAL | view unpaid challans (no generate, no proof review — backend `ACCOUNT_OFFICER` only) |
 | PARENT / STUDENT | own/child challans + slip upload |
 | SCHOOL_ADMIN | **blocked in the app** (empty state). Backend already rejects challan generate (`ACCOUNT_OFFICER` / `ERP_OWNER` only). |
 | TEACHER | no Fees module in nav |
@@ -73,7 +73,16 @@ Secondary widgets are not required before the first numbers render. Final Term c
 2. Tokens in SecureStore. Native `Authorization: Bearer`. CORS on the server is `*` with `allowCredentials: false`, which matches this (no cookies).
 3. 401 → `POST /api/v1/auth/refresh`. Failure → clear session → login.
 4. Portal chip is **expected role**. Wrong role signs out and shows `WRONG_PORTAL` — it does not keep the other role’s session.
-5. Logout: local tokens cleared first, then `POST /auth/logout`.
+5. Logout: local tokens cleared first, then `POST /auth/logout`. School **name / code / logo / colours stay cached** so login is still branded (same as web logout keeping public branding).
+6. Cold start: cached user + token → tabs immediately, `GET /auth/me` in the background. No token → login immediately. **Do not** call `GET /api/v1/public/school` without a school code (that endpoint returns the first tenant and would show the wrong school).
+
+## Tenant branding (one Play Store app)
+
+Play listing name stays **School ERP** (`com.devzard.schoolerp`). Inside the app, after a school user has signed in at least once:
+
+- Login / splash / hub / home / me show **that school’s name, short code (`GVS Portal`), logo, and colours** from the login/`tenants/me` payload.
+- Logo uses `expo-image` disk cache and falls back to initials if the URL is missing or broken.
+- First launch with no cached school uses a generic “School ERP” state — never a hardcoded school name.
 
 ## API base URL (never hardcode production localhost)
 
@@ -116,14 +125,16 @@ npx expo start
 
 iOS: `npx expo start --ios` (macOS + Xcode). Android: `npx expo start --android` (SDK + emulator or USB).
 
-EAS production:
+EAS production (does **not** depend on Metro, USB, or a laptop IP):
 
 ```bash
 cd mobile
-EXPO_PUBLIC_API_URL=https://YOUR-API-HOST npx eas build --platform android
+EXPO_PUBLIC_API_URL=https://YOUR-API-HOST npx eas build --platform android --profile production
 ```
 
-Set the same extra in EAS secrets / `app.json` `expo.extra.apiUrl`. Store builds must use **HTTPS**. Android cleartext HTTP for LAN Boot is set via the `expo-build-properties` plugin (`android.usesCleartextTraffic` is **not** a valid `app.json` schema field on SDK 58). That plugin applies to prebuild / development / production APKs, not Expo Go (Expo Go already allows HTTP to Metro/LAN in development).
+Set the same extra in EAS secrets / `app.json` `expo.extra.apiUrl`. Store builds must use **HTTPS**. Android cleartext HTTP for LAN Boot is set via the `expo-build-properties` plugin (`android.usesCleartextTraffic` is **not** a valid `app.json` schema field on SDK 58). That plugin applies to prebuild / development / production APKs, not Expo Go (Expo Go already allows HTTP to Metro/LAN in development). For a Play Store build that only talks HTTPS, you can set `usesCleartextTraffic: false` in that profile later.
+
+Play Store remaining (not done here): Expo/EAS `projectId`, Google Play signing keystore, store listing screenshots, privacy policy URL, production HTTPS API on the VPS. Do not publish until those exist.
 
 ### JDK / API in this sandbox
 
@@ -181,8 +192,9 @@ mobile/src/app/{students,users,campuses,academics,timetable,attendance,
 mobile/src/app/school/[id].tsx
 mobile/src/api/{client,services}.ts
 mobile/src/lib/{types,format,config,theme,session,features,appearance,
-  nav,notifications,storage,picker}.ts(x)
-mobile/src/ui/{kit,countdown,gate}.tsx
+  nav,notifications,storage,picker,media}.ts(x)
+mobile/src/ui/{kit,countdown,gate,logo,wheel}.tsx
+mobile/eas.json
 MOBILE.md
 ```
 

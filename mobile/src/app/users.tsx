@@ -3,7 +3,7 @@ import { Text } from "react-native";
 import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { userApi } from "../api/services";
-import { Badge, Btn, Card, Empty, Field, QueryState, Screen, Title, useAsync } from "../ui/kit";
+import { Badge, Btn, Card, Empty, Field, QueryState, Screen, Title, useAsync, useDebounced } from "../ui/kit";
 import { pretty, roleLabel } from "../lib/format";
 import type { Role } from "../lib/types";
 
@@ -11,7 +11,8 @@ export default function Users() {
   const { user } = useSession();
   const { colors } = useAppearance();
   const [q, setQ] = useState("");
-  const list = useAsync(() => userApi.list({ q: q || undefined }), [q]);
+  const dq = useDebounced(q, 350);
+  const list = useAsync(() => userApi.list({ q: dq || undefined }), [dq]);
   if (!user || !["SCHOOL_ADMIN", "PRINCIPAL"].includes(user.role)) {
     return <Screen colors={colors}><Empty title="Not permitted" colors={colors} /></Screen>;
   }

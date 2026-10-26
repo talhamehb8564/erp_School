@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import { useColorScheme } from "react-native";
 import { applyTenantColors, dark, light, type Palette } from "./theme";
 import { useSession } from "./session";
+import { safeHex } from "./media";
 
 interface Appearance {
   scheme: "light" | "dark";
@@ -13,12 +14,17 @@ const Ctx = createContext<Appearance | null>(null);
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const system = useColorScheme();
-  const { tenant } = useSession();
+  const { tenant, brand } = useSession();
   const [override, setOverride] = useState<"light" | "dark" | null>(null);
   const scheme: "light" | "dark" = override || (system === "dark" ? "dark" : "light");
   const colors = useMemo(
-    () => applyTenantColors(scheme === "dark" ? dark : light, tenant?.primaryColor, tenant?.accentColor),
-    [scheme, tenant?.primaryColor, tenant?.accentColor],
+    () =>
+      applyTenantColors(
+        scheme === "dark" ? dark : light,
+        safeHex(tenant?.primaryColor || brand?.primaryColor),
+        safeHex(tenant?.accentColor || brand?.accentColor),
+      ),
+    [scheme, tenant?.primaryColor, tenant?.accentColor, brand?.primaryColor, brand?.accentColor],
   );
   const value = useMemo<Appearance>(
     () => ({

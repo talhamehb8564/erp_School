@@ -8,6 +8,7 @@ export default function TabsLayout() {
   const { user, ready } = useSession();
   if (!ready) return null;
   if (!user) return <Redirect href="/login" />;
+  if (user.mustChangePassword) return <Redirect href="/password" />;
   return (
     <Tabs
       screenOptions={{
@@ -28,7 +29,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="hub"
         options={{
-          title: "Modules",
+          title: "Portal",
           tabBarIcon: ({ color, size }) => <Ionicons name="grid" color={typeof color === "string" ? color : colors.brand} size={size} />,
         }}
       />

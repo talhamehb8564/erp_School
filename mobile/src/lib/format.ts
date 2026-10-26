@@ -1,5 +1,10 @@
-import type { Role } from "./types";
+import type { Role, SchoolBrand } from "./types";
 import { ROLE_LABEL } from "./types";
+
+export function portalTitle(brand?: SchoolBrand | null, fallback = "School ERP") {
+  if (brand?.code) return `${brand.code} Portal`;
+  return fallback;
+}
 
 export function money(n?: number | string | null, currency = "PKR") {
   if (n === undefined || n === null || n === "") return "—";
