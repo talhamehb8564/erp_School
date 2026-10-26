@@ -109,7 +109,7 @@ public class ExamService {
     @Transactional
     public void deleteSession(UUID sessionId) {
         ExamSession session = requireSession(sessionId);
-        if (Boolean.TRUE.equals(session.getPublished())) {
+        if (session.isPublished()) {
             throw new BusinessException("SESSION_PUBLISHED", "Published result sessions cannot be deleted.");
         }
         UUID tenantId = session.getTenantId();
