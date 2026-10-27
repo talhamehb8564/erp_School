@@ -111,13 +111,13 @@ Mobile confirms before calling. There is still **no** online-exam delete API.
 
 This is **not** a school-picker. `mobile/branding/school.json` + `mobile/branding/assets/` are compiled into **this** listing.
 
-This repo’s demo tenant build:
+This checkout is **Devzard School**:
 
-- Native name: **Green Valley School Portal**
+- Native name: **Devzard School Portal**
+- In-app full name: **Devzard School**
+- Short code **DZS** — API lookup (`GET /public/school?code=DZS`) only, never the product title
 - Package stays `com.devzard.schoolerp` unless you change `androidPackage` for another school
-- Launcher / splash: `branding/assets/icon.png` and `splash-icon.png` (school crest, not the Expo caret)
-- In-app name: full school name from baked config, then live `GET /public/school?code=` / `GET /tenants/me`
-- Short code (`GVS`) is an API lookup key only — never the product title
+- Launcher / splash: the provided Devzard logo in `branding/assets/` (not the Expo caret)
 
 Changing a logo in Settings **does not** change an installed launcher icon. Replace `branding/assets`, set `appName` to `{Full name} Portal`, then **rebuild**. See `mobile/branding/README.md`.
 

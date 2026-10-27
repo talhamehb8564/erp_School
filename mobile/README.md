@@ -1,6 +1,6 @@
-# School ERP (Expo)
+# Devzard School Portal (Expo)
 
-Native React Native app for the School ERP. Same Spring `/api/v1` as `web/`.
+Native React Native app for this school's ERP. Same Spring `/api/v1` as `web/`. Native name, icon, and splash come from `branding/school.json` (Devzard School).
 
 See **[MOBILE.md](../MOBILE.md)** at the repo root for roles, endpoints, API URL, setup, and what was (not) tested.
 

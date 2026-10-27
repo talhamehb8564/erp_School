@@ -9,7 +9,9 @@ function loadSchool() {
 module.exports = () => {
   const school = loadSchool();
   const appName = school.appName || `${String(school.name || "School").trim()} Portal`;
-  const color = school.primaryColor || "#1B365D";
+  const color = school.primaryColor || "#111111";
+  const splashBg = school.splashBackgroundColor || "#FFFFFF";
+  const iconBg = school.iconBackgroundColor || splashBg;
   const icon = school.icon || "./branding/assets/icon.png";
   const splash = school.splash || "./branding/assets/splash-icon.png";
   const foreground = school.adaptiveForeground || icon;
@@ -31,7 +33,7 @@ module.exports = () => {
         package: school.androidPackage || "com.devzard.schoolerp",
         versionCode: 1,
         adaptiveIcon: {
-          backgroundColor: color,
+          backgroundColor: iconBg,
           foregroundImage: foreground,
         },
         predictiveBackGestureEnabled: false,
@@ -62,9 +64,9 @@ module.exports = () => {
         [
           "expo-splash-screen",
           {
-            backgroundColor: color,
+            backgroundColor: splashBg,
             image: splash,
-            imageWidth: 180,
+            imageWidth: 220,
           },
         ],
         [

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Green Valley School Portal",
+    "name": "Devzard School Portal",
     "slug": "school-erp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,7 @@
       "package": "com.devzard.schoolerp",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#1B365D",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./branding/assets/adaptive-foreground.png"
       },
       "predictiveBackGestureEnabled": false
@@ -41,21 +41,21 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Green Valley School Portal needs photo access to upload homework and payment slips."
+          "photosPermission": "Devzard School Portal needs photo access to upload homework and payment slips."
         }
       ],
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#1B365D",
+          "backgroundColor": "#FFFFFF",
           "image": "./branding/assets/splash-icon.png",
-          "imageWidth": 180
+          "imageWidth": 220
         }
       ],
       [
         "expo-notifications",
         {
-          "color": "#1B365D"
+          "color": "#111111"
         }
       ]
     ],
@@ -65,11 +65,11 @@
     "extra": {
       "apiUrl": "",
       "school": {
-        "name": "Green Valley School",
-        "appName": "Green Valley School Portal",
-        "code": "GVS",
-        "primaryColor": "#1B365D",
-        "accentColor": "#C4A35A",
+        "name": "Devzard School",
+        "appName": "Devzard School Portal",
+        "code": "DZS",
+        "primaryColor": "#111111",
+        "accentColor": "#00C2E8",
         "tagline": "Portal"
       }
     }
