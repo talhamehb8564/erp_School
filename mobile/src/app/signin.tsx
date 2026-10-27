@@ -7,12 +7,14 @@ import { useAppearance } from "../lib/appearance";
 import { ROLE_LABEL, type Role } from "../lib/types";
 import { Btn, Field, Screen, friendlyMessage } from "../ui/kit";
 import { BrandHeader } from "../ui/logo";
+import { bakedBrand } from "../lib/config";
 
 const ROLES = Object.keys(ROLE_LABEL) as Role[];
 
 export default function SignInScreen() {
   const { login, brand } = useSession();
   const { colors } = useAppearance();
+  const shown = brand || bakedBrand();
   const params = useLocalSearchParams<{ role?: string }>();
   const role: Role = ROLES.includes(params.role as Role) ? (params.role as Role) : "STUDENT";
   const [username, setUsername] = useState("");
@@ -24,10 +26,10 @@ export default function SignInScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <Screen colors={colors}>
         <BrandHeader
-          brand={brand}
+          brand={shown}
           colors={colors}
           kicker={roleLabel(role)}
-          subtitle={brand ? brandSubtitle(brand, "Enter your username and password") : "Enter your username and password"}
+          subtitle={shown ? brandSubtitle(shown, "Enter your username and password") : "Enter your username and password"}
           size={56}
         />
         <Pressable onPress={() => router.replace("/login")} accessibilityRole="button" style={{ marginBottom: 16 }}>

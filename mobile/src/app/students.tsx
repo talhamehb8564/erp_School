@@ -127,7 +127,7 @@ export default function Students() {
         ) : null}
         {err ? <Text style={{ color: colors.bad, marginBottom: 8 }}>{err}</Text> : null}
         {msg ? <Text style={{ color: colors.ok, marginBottom: 8 }}>{msg}</Text> : null}
-        <QueryState loading={list.loading} error={list.error} data={list.data?.content} onRetry={() => void list.reload()} colors={colors} empty={<Empty title="No students" colors={colors} />}>
+        <QueryState loading={list.loading} error={list.error} data={list.data?.content} onRetry={() => void list.reload()} colors={colors} empty={<Empty title="No students found" colors={colors} />}>
           {(list.data?.content || []).map((s) => (
             <Card key={s.id} colors={colors}>
               <Text style={{ color: colors.ink, fontWeight: "800" }}>{s.fullName || `${s.firstName || ""} ${s.lastName || ""}`}</Text>

@@ -48,7 +48,7 @@ function QuickActions({ items }: { items: { label: string; href: string }[] }) {
 function Notices() {
   const { colors } = useAppearance();
   const { on } = useFeatures();
-  const list = useAsync(() => (on("ANNOUNCEMENTS") ? announcementApi.list() : Promise.resolve([])), [], on("ANNOUNCEMENTS"));
+  const list = useAsync(() => announcementApi.list(), [], on("ANNOUNCEMENTS"));
   const unread = useAsync(() => notificationApi.unread());
   if (!on("ANNOUNCEMENTS") && !unread.data) return null;
   return (
@@ -122,9 +122,9 @@ function TeacherHome() {
   const { user, brand } = useSession();
   const { colors } = useAppearance();
   const { on } = useFeatures();
-  const lectures = useAsync(() => (on("TIMETABLE") ? academicApi.teacherToday() : Promise.resolve([])), []);
+  const lectures = useAsync(() => academicApi.teacherToday(), [], on("TIMETABLE"));
   const progress = useAsync(() => reportApi.teacherProgress());
-  const hw = useAsync(() => (on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([])), [], on("HOMEWORK"));
+  const hw = useAsync(() => homeworkApi.list(undefined, undefined, 8), [], on("HOMEWORK"));
   const att = num(progress.data?.attendancePercent);
   const days = num(progress.data?.totalDays);
   return (
@@ -216,7 +216,7 @@ function ParentHome() {
   const { on } = useFeatures();
   const kids = useAsync(() => studentApi.children());
   const progress = useAsync(() => reportApi.childrenProgress());
-  const fees = useAsync(() => (on("FEES") ? feeApi.parentChallanSummaries(20) : Promise.resolve([])), [], on("FEES"));
+  const fees = useAsync(() => feeApi.parentChallanSummaries(20), [], on("FEES"));
   const list = kids.data || [];
   const active = childId || list[0]?.id;
   const p = (active && progress.data?.[active]) || {};
@@ -288,8 +288,8 @@ function StudentHome() {
   const { colors } = useAppearance();
   const { on } = useFeatures();
   const progress = useAsync(() => reportApi.myProgress());
-  const hw = useAsync(() => (on("HOMEWORK") ? homeworkApi.list(undefined, undefined, 8) : Promise.resolve([])), [], on("HOMEWORK"));
-  const fees = useAsync(() => (on("FEES") ? feeApi.myChallanSummaries(20) : Promise.resolve([])), [], on("FEES"));
+  const hw = useAsync(() => homeworkApi.list(undefined, undefined, 8), [], on("HOMEWORK"));
+  const fees = useAsync(() => feeApi.myChallanSummaries(20), [], on("FEES"));
   const p = progress.data || {};
   const lectures = num(p.totalLectures);
   const marks = num(p.totalMarks);

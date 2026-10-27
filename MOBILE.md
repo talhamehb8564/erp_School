@@ -105,20 +105,23 @@ Mobile confirms before calling. There is still **no** online-exam delete API.
 3. 401 → `POST /api/v1/auth/refresh`. Failure → clear session → login.
 4. `/login` is the portal list. Tapping a role opens `/signin?role=…` (username, password, show/hide). The chosen portal is **expected role**. Wrong role signs out and shows `WRONG_PORTAL` — it does not keep the other role’s session.
 5. Logout: local tokens cleared first, then `POST /auth/logout`. School **name / code / logo / colours stay cached** so login is still branded (same as web logout keeping public branding).
-6. Cold start: cached user + token → tabs immediately, `GET /auth/me` in the background. No token → login immediately. **Do not** call `GET /api/v1/public/school` without a school code (that endpoint returns the first tenant and would show the wrong school).
+6. Cold start: native splash (build-time crest) hides on first JS frame. Cached user + token → tabs; `GET /auth/me` in the background. No token → login. Public branding uses `GET /api/v1/public/school?code=` from `branding/school.json` (never the uncoded first-tenant default).
 
-## Tenant branding (one Play Store app)
+## Dedicated school branding (one APK per school)
 
-Play listing name stays **School ERP** (`com.devzard.schoolerp`). Inside the app, after a school user has signed in at least once:
+This is **not** a school-picker. `mobile/branding/school.json` + `mobile/branding/assets/` are compiled into **this** listing.
 
-- Login / splash / hub / home / me show that school’s **full name** and logo (plus tagline when present) from the connected API (`GET /public/school`) and then login/`tenants/me`. The tenant **code is never the headline** (a school whose code is `GVS` must still read as its legal/display name, e.g. Devzard).
-- Cache is keyed by API origin so a previous school is not reused when the API URL changes.
-- Logo uses `expo-image` disk cache and falls back to initials if the URL is missing or broken.
-- First launch with no cached school uses a generic “School ERP” state — never a hardcoded school name.
+This repo’s demo tenant build:
 
-### Launcher / Play icon vs in-app logo
+- Native name: **Green Valley School Portal**
+- Package stays `com.devzard.schoolerp` unless you change `androidPackage` for another school
+- Launcher / splash: `branding/assets/icon.png` and `splash-icon.png` (school crest, not the Expo caret)
+- In-app name: full school name from baked config, then live `GET /public/school?code=` / `GET /tenants/me`
+- Short code (`GVS`) is an API lookup key only — never the product title
 
-The home-screen icon is **build-time only**: `mobile/app.json` `expo.icon` / `android.adaptiveIcon` and files under `mobile/assets/images/`. Changing a school’s logo in the database or on Settings **does not** change the icon of an already-installed APK. A per-school store icon requires a **rebuild** (and typically a distinct package / listing). Do not claim the in-app logo replaces the launcher.
+Changing a logo in Settings **does not** change an installed launcher icon. Replace `branding/assets`, set `appName` to `{Full name} Portal`, then **rebuild**. See `mobile/branding/README.md`.
+
+`useAsync` does not stay in a loading spinner when a request is disabled (class/section not chosen). Pull-to-refresh does not spin on first paint.
 
 ## API base URL (never hardcode production localhost)
 

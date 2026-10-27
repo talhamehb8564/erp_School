@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import { useColorScheme } from "react-native";
 import { applyTenantColors, dark, light, type Palette } from "./theme";
 import { useSession } from "./session";
+import { bakedBrand } from "./config";
 import { safeHex } from "./media";
 
 interface Appearance {
@@ -21,8 +22,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     () =>
       applyTenantColors(
         scheme === "dark" ? dark : light,
-        safeHex(tenant?.primaryColor || brand?.primaryColor),
-        safeHex(tenant?.accentColor || brand?.accentColor),
+        safeHex(tenant?.primaryColor || brand?.primaryColor || bakedBrand()?.primaryColor),
+        safeHex(tenant?.accentColor || brand?.accentColor || bakedBrand()?.accentColor),
       ),
     [scheme, tenant?.primaryColor, tenant?.accentColor, brand?.primaryColor, brand?.accentColor],
   );

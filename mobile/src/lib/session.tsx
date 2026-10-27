@@ -4,7 +4,7 @@ import { authApi, publicApi, tenantApi } from "../api/services";
 import { ApiError, clearTokens, getAccessToken, getRefreshToken, hydrateTokens, setTokens } from "../api/client";
 import type { Role, SchoolBrand, Tenant, User } from "./types";
 import { LOCKED_STATUSES } from "./types";
-import { apiOrigin } from "./config";
+import { apiOrigin, bakedBrand, bakedSchool } from "./config";
 
 const USER_KEY = "erp.user";
 const CHILD_KEY = "erp.child";
@@ -56,7 +56,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [brand, setBrand] = useState<SchoolBrand | null>(null);
+  const [brand, setBrand] = useState<SchoolBrand | null>(() => bakedBrand());
   const [loading, setLoading] = useState(true);
   const [forcedLocked, setForcedLocked] = useState(false);
   const [childId, setChildIdState] = useState<string | null>(null);
@@ -82,13 +82,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const origin = apiOrigin();
     if (!origin) return;
     try {
-      const data = await publicApi.school();
+      const data = await publicApi.school(bakedSchool()?.code);
       const school = data?.school;
-      if (school?.name && school?.code) {
-        await rememberBrand(school);
+      if (school?.name) {
+        await rememberBrand({ ...school, code: school.code || bakedSchool()?.code || "" });
       }
     } catch {
-      /* dedicated-school branding is best-effort; login must not wait */
+      /* native splash already has this school's crest; live logo is best-effort */
     }
   };
 
@@ -117,8 +117,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (originOk && cachedBrand?.name) setBrand(cachedBrand);
       else if (originOk && cachedTenant?.name) setBrand(toBrand(cachedTenant));
       else {
-        setBrand(null);
-        if (!originOk) {
+        setBrand(bakedBrand());
+        if (!originOk && rawOrigin) {
           await Promise.all([storeDel(BRAND_KEY), storeDel(TENANT_KEY), storeDel(BRAND_ORIGIN_KEY)]);
         }
       }
@@ -158,7 +158,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         } else {
           setTenant(null);
           setForcedLocked(false);
-          setBrand(null);
+          setBrand(bakedBrand());
           await Promise.all([storeDel(BRAND_KEY), storeDel(TENANT_KEY)]);
         }
       } catch {
@@ -201,7 +201,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (payload.user.role === "ERP_OWNER") {
       setTenant(null);
       setForcedLocked(false);
-      setBrand(null);
+      setBrand(bakedBrand());
       await Promise.all([storeDel(BRAND_KEY), storeDel(TENANT_KEY)]);
     } else {
       let t = payload.tenant || null;

@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Text, View } from "react-native";
 import { Image } from "expo-image";
 import { mediaUrl } from "../lib/media";
-import { brandSubtitle, initials } from "../lib/format";
+import { brandSubtitle } from "../lib/format";
 import type { SchoolBrand } from "../lib/types";
 import type { Palette } from "../lib/theme";
+
+const localCrest = require("../../assets/images/icon.png");
 
 export function SchoolLogo({
   uri,
@@ -45,7 +47,12 @@ export function SchoolLogo({
           transition={200}
         />
       ) : (
-        <Text style={{ color, fontWeight: "800", fontSize: size * 0.32 }}>{initials(name || "ERP")}</Text>
+        <Image
+          source={localCrest}
+          style={{ width: size, height: size }}
+          contentFit="cover"
+          accessibilityLabel={name ? `${name} logo` : "School logo"}
+        />
       )}
     </View>
   );
@@ -64,7 +71,7 @@ export function BrandHeader({
   subtitle?: string;
   size?: number;
 }) {
-  const title = brand?.name || "School ERP";
+  const title = brand?.name || "School Portal";
   const sub = subtitle ?? (brand ? brandSubtitle(brand) : undefined);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 }}>

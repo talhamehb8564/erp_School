@@ -62,6 +62,10 @@ export function Screen({
   refreshing?: boolean;
   padded?: boolean;
 }) {
+  const [pulling, setPulling] = useState(false);
+  useEffect(() => {
+    if (!refreshing) setPulling(false);
+  }, [refreshing]);
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top", "left", "right"]}>
       <ScrollView
@@ -70,7 +74,14 @@ export function Screen({
         contentContainerStyle={[styles.scroll, padded && { padding: 16, paddingBottom: 40 }]}
         refreshControl={
           onRefresh ? (
-            <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
+            <RefreshControl
+              refreshing={pulling && !!refreshing}
+              onRefresh={() => {
+                setPulling(true);
+                onRefresh();
+              }}
+              tintColor={colors.brand}
+            />
           ) : undefined
         }
       >
@@ -334,7 +345,8 @@ export function QueryState({
 }) {
   const emptyList = Array.isArray(data) && data.length === 0;
   if (loading && (data == null || emptyList)) return <Skeleton colors={colors} />;
-  if (error && data == null) return <ErrorBox error={error} onRetry={onRetry} colors={colors} />;
+  if (error && data == null) return <ErrorBox error={error} onRetry={onRetry} colors={colors} title="Unable to load. Please try again." />;
+  if (data == null && !loading) return empty ? <>{empty}</> : null;
   if (emptyList && empty) return <>{empty}</>;
   return <>{children}</>;
 }
@@ -346,7 +358,7 @@ export function Row({ children }: { children: ReactNode }) {
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], enabled = true) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => enabled);
   const fnRef = useRef(fn);
   fnRef.current = fn;
   const reload = useCallback(async () => {
@@ -363,7 +375,9 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], enabled 
   }, [enabled]);
   useEffect(() => {
     if (!enabled) {
-      if (data == null) setLoading(true);
+      setLoading(false);
+      setError(null);
+      setData(null);
       return;
     }
     let cancelled = false;

@@ -1,25 +1,23 @@
 {
   "expo": {
-    "name": "School ERP",
+    "name": "Green Valley School Portal",
     "slug": "school-erp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./branding/assets/icon.png",
     "scheme": "erpschool",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.devzard.schoolerp",
-      "icon": "./assets/expo.icon"
+      "icon": "./branding/assets/icon.png"
     },
     "android": {
       "package": "com.devzard.schoolerp",
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#1B365D",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./branding/assets/adaptive-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -43,15 +41,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "School ERP needs photo access to upload homework and payment slips."
+          "photosPermission": "Green Valley School Portal needs photo access to upload homework and payment slips."
         }
       ],
       [
         "expo-splash-screen",
         {
           "backgroundColor": "#1B365D",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 96
+          "image": "./branding/assets/splash-icon.png",
+          "imageWidth": 180
         }
       ],
       [
@@ -65,7 +63,15 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiUrl": ""
+      "apiUrl": "",
+      "school": {
+        "name": "Green Valley School",
+        "appName": "Green Valley School Portal",
+        "code": "GVS",
+        "primaryColor": "#1B365D",
+        "accentColor": "#C4A35A",
+        "tagline": "Portal"
+      }
     }
   }
 }

@@ -19,7 +19,7 @@ export default function Me() {
         brand={brand}
         colors={colors}
         kicker={roleLabel(user.role)}
-        subtitle={brand ? brandSubtitle(brand, roleLabel(user.role)) : user.role === "ERP_OWNER" ? "Platform console" : "School ERP"}
+        subtitle={brand ? brandSubtitle(brand, roleLabel(user.role)) : user.role === "ERP_OWNER" ? "Platform console" : "School Portal"}
       />
       <Card colors={colors}>
         <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 18 }}>{user.fullName || user.username}</Text>

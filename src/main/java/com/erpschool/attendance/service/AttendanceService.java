@@ -114,15 +114,24 @@ public class AttendanceService {
     @Transactional(readOnly = true)
     public List<StudentAttendance> lectureSheet(UUID slotId, LocalDate date) {
         UUID tenantId = TenantGuard.requireTenantId(null);
-        academicService.requireSlot(slotId);
+        requireLectureAccess(slotId);
         return studentAttendanceRepository.findByTenantIdAndTimetableSlotIdAndAttendanceDate(tenantId, slotId, date);
     }
 
     @Transactional(readOnly = true)
     public List<Student> lectureRoster(UUID slotId) {
-        TimetableSlot slot = academicService.requireSlot(slotId);
+        TimetableSlot slot = requireLectureAccess(slotId);
         return studentRepository.findByTenantIdAndClassIdAndSectionIdAndStatus(
                 slot.getTenantId(), slot.getClassId(), slot.getSectionId(), StudentStatus.ACTIVE);
+    }
+
+    private TimetableSlot requireLectureAccess(UUID slotId) {
+        TimetableSlot slot = academicService.requireSlot(slotId);
+        if (TenantContext.getRole() == UserRole.TEACHER
+                && !slot.getTeacherUserId().equals(TenantContext.getUserId())) {
+            throw new ForbiddenException("Teachers can only access attendance for their own lectures");
+        }
+        return slot;
     }
 
     @Transactional(readOnly = true)

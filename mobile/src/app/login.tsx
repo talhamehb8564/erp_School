@@ -8,7 +8,7 @@ import { useAppearance } from "../lib/appearance";
 import { ROLE_LABEL, type Role } from "../lib/types";
 import { Screen } from "../ui/kit";
 import { BrandHeader } from "../ui/logo";
-import { apiOrigin } from "../lib/config";
+import { apiOrigin, bakedBrand } from "../lib/config";
 
 export const PORTALS: { role: Role; icon: keyof typeof Ionicons.glyphMap; hint: string }[] = [
   { role: "STUDENT", icon: "school-outline", hint: "Marks, homework, timetable" },
@@ -25,16 +25,17 @@ export default function LoginScreen() {
   const { colors } = useAppearance();
   const reduce = useReducedMotion();
   const origin = apiOrigin();
-  const schoolName = brand?.name;
+  const shown = brand || bakedBrand();
+  const schoolName = shown?.name;
 
   return (
     <Screen colors={colors}>
       <Animated.View entering={reduce ? undefined : FadeInDown.duration(280)}>
         <BrandHeader
-          brand={brand}
+          brand={shown}
           colors={colors}
           kicker="Choose portal"
-          subtitle={brand ? brandSubtitle(brand, "Select your role to continue") : "Select your role to continue"}
+          subtitle={shown ? brandSubtitle(shown, "Select your role to continue") : "Select your role to continue"}
           size={64}
         />
         <Text style={{ color: colors.muted, marginBottom: 16 }}>

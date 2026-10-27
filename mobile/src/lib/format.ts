@@ -1,11 +1,13 @@
 import type { Role, SchoolBrand } from "./types";
 import { ROLE_LABEL } from "./types";
 
-/** In-app identity is the school's full name — never the short code (e.g. GVS). */
-export function portalTitle(brand?: SchoolBrand | null, fallback = "School ERP") {
-  const name = brand?.name?.trim();
+import { bakedBrand, portalAppName } from "./config";
+
+/** In-app identity is the school's full name — never the short code. */
+export function portalTitle(brand?: SchoolBrand | null, fallback?: string) {
+  const name = brand?.name?.trim() || bakedBrand()?.name?.trim();
   if (name) return name;
-  return fallback;
+  return fallback || portalAppName();
 }
 
 export function brandSubtitle(brand?: SchoolBrand | null, fallback = "Portal") {
@@ -59,7 +61,15 @@ export function roleLabel(role?: Role) {
 }
 
 export function today() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** ISO weekday 1=Monday … 7=Sunday, matching backend timetable dayOfWeek. */
+export function isoWeekday(isoDate: string) {
+  const d = new Date(`${isoDate}T12:00:00`);
+  const js = d.getDay();
+  return js === 0 ? 7 : js;
 }
 
 export function monthStart(d = today()) {

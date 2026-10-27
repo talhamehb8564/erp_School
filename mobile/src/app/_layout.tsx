@@ -4,7 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
-import { SessionProvider, useSession } from "../lib/session";
+import { SessionProvider } from "../lib/session";
 import { FeatureProvider } from "../lib/features";
 import { AppearanceProvider, useAppearance } from "../lib/appearance";
 import { NotificationWatcher } from "../lib/notifications";
@@ -12,10 +12,9 @@ import { NotificationWatcher } from "../lib/notifications";
 void SplashScreen.preventAutoHideAsync();
 
 function SplashHider() {
-  const { ready } = useSession();
   useEffect(() => {
-    if (ready) void SplashScreen.hideAsync();
-  }, [ready]);
+    void SplashScreen.hideAsync();
+  }, []);
   return null;
 }
 

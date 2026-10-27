@@ -26,10 +26,12 @@ import type {
 const v1 = "/api/v1";
 
 export const publicApi = {
-  school: () =>
-    api.get<{ school?: { name: string; code: string; logoUrl?: string; primaryColor?: string; accentColor?: string; secondaryColor?: string; tagline?: string; id?: string } }>(
-      `${v1}/public/school`,
-    ),
+  school: (code?: string) => {
+    const q = code ? `?code=${encodeURIComponent(code)}` : "";
+    return api.get<{ school?: { name: string; code: string; logoUrl?: string; primaryColor?: string; accentColor?: string; secondaryColor?: string; tagline?: string; id?: string } }>(
+      `${v1}/public/school${q}`,
+    );
+  },
 };
 
 export const authApi = {

@@ -1,6 +1,43 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
+import type { SchoolBrand } from "./types";
+
+export interface BakedSchool {
+  name: string;
+  appName?: string;
+  code?: string;
+  primaryColor?: string;
+  accentColor?: string;
+  tagline?: string;
+}
+
+export function bakedSchool(): BakedSchool | null {
+  const extra = Constants.expoConfig?.extra as { school?: BakedSchool } | undefined;
+  const school = extra?.school;
+  if (school?.name?.trim()) return school;
+  return null;
+}
+
+/** Build-time identity for splash / first paint. Live tenant overwrites after login. */
+export function bakedBrand(): SchoolBrand | null {
+  const school = bakedSchool();
+  if (!school) return null;
+  return {
+    name: school.name.trim(),
+    code: school.code || "",
+    primaryColor: school.primaryColor,
+    accentColor: school.accentColor,
+    tagline: school.tagline,
+  };
+}
+
+export function portalAppName() {
+  const school = bakedSchool();
+  if (school?.appName?.trim()) return school.appName.trim();
+  if (school?.name?.trim()) return `${school.name.trim()} Portal`;
+  return "School Portal";
+}
 
 function trimSlash(url: string) {
   return url.replace(/\/+$/, "");

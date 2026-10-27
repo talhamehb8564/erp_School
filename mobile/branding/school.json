@@ -1,0 +1,14 @@
+{
+  "name": "Green Valley School",
+  "appName": "Green Valley School Portal",
+  "code": "GVS",
+  "androidPackage": "com.devzard.schoolerp",
+  "iosBundle": "com.devzard.schoolerp",
+  "primaryColor": "#1B365D",
+  "accentColor": "#C4A35A",
+  "tagline": "Portal",
+  "icon": "./branding/assets/icon.png",
+  "adaptiveForeground": "./branding/assets/adaptive-foreground.png",
+  "splash": "./branding/assets/splash-icon.png",
+  "favicon": "./assets/images/favicon.png"
+}
