@@ -65,10 +65,10 @@ function RoleGate({ roles, children }: { roles: Role[]; children: ReactNode }) {
   return <>{children}</>;
 }
 
-function FeatureGate({ feature, children }: { feature: FeatureKey; children: ReactNode }) {
+function FeatureGate({ feature, children, wait }: { feature: FeatureKey; children: ReactNode; wait?: boolean }) {
   const { user } = useSession();
   const { on, loaded } = useFeatures();
-  if (!loaded) return <>{children}</>;
+  if (!loaded) return wait ? <Loading label="Loading…" /> : <>{children}</>;
   if (!on(feature)) return <Navigate to={user ? homeFor(user) : LOGIN_PORTALS} replace />;
   return <>{children}</>;
 }
@@ -86,7 +86,7 @@ export default function App() {
       <Suspense fallback={<Loading label="Loading…" />}>
         <Routes>
           <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
-          <Route path="/preview" element={<Guard roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="WEBSITE"><Welcome preview /></FeatureGate></Guard>} />
+          <Route path="/preview" element={<Guard roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="WEBSITE" wait><Welcome preview /></FeatureGate></Guard>} />
           <Route path="/apply" element={<PublicOnly><ApplyAdmission /></PublicOnly>} />
           <Route path="/portals" element={<PublicOnly><PortalPage /></PublicOnly>} />
           <Route path="/login/:role" element={<PublicOnly><LoginPage /></PublicOnly>} />

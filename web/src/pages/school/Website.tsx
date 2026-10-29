@@ -24,21 +24,10 @@ async function uploadFile(file: File, toast: (k: "ok" | "err" | "info", m: strin
 }
 
 function PreviewWebsiteButton() {
-  const toast = useToast();
   return (
-    <button
-      type="button"
-      className="btn ghost"
-      onClick={() => {
-        const url = `${window.location.origin}/preview`;
-        const tab = window.open(url, "_blank", "noopener,noreferrer");
-        if (!tab) {
-          toast("err", "The browser blocked a new tab. Allow pop-ups for this site, then try Preview website again.");
-        }
-      }}
-    >
+    <a className="btn ghost" href="/preview" target="_blank" rel="noopener noreferrer">
       Preview website
-    </button>
+    </a>
   );
 }
 

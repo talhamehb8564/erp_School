@@ -3,6 +3,7 @@ package com.erpschool.exam.repository;
 import com.erpschool.exam.entity.ExamDateSheetEntry;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,6 +17,9 @@ public interface ExamDateSheetRepository extends JpaRepository<ExamDateSheetEntr
 
     List<ExamDateSheetEntry> findByTenantIdAndDateSheetIdOrderByExamDateAscStartTimeAsc(
             UUID tenantId, UUID dateSheetId);
+
+    List<ExamDateSheetEntry> findByTenantIdAndDateSheetIdInOrderByExamDateAscStartTimeAsc(
+            UUID tenantId, Collection<UUID> dateSheetIds);
 
     void deleteByTenantIdAndExamSessionId(UUID tenantId, UUID examSessionId);
 

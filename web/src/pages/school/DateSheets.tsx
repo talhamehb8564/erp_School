@@ -38,7 +38,6 @@ export default function DateSheetsPage() {
   const canManage = user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL";
   const { classes, sections, className } = useLookups();
   const sessions = useAsync(() => examApi.sessions(), []);
-  const toast = useToast();
   const [sessionId, setSessionId] = useState("");
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
@@ -77,7 +76,7 @@ export default function DateSheetsPage() {
         {canManage ? <Button kind="brass" onClick={openNew}>New date sheet</Button> : null}
       </div>
       <div className="card date-sheet-toolbar" style={{ marginBottom: 16 }}>
-        <div className="grid two">
+        <div className="grid two date-sheet-filters">
           <Field label="Academic session">
             <select value={academicSession} onChange={(e) => setAcademicSession(e.target.value)}>
               <option value="">All</option>
@@ -116,13 +115,16 @@ export default function DateSheetsPage() {
           <Empty title="No date sheets yet" hint={canManage ? "Create a draft for a class, then preview and publish it." : "Published date sheets for your class will appear here."} />
         ) : (
           <Table
-            headers={["Exam", "Class", "Status", "Subjects", ""]}
+            headers={["Exam", "Class", "Status", "Subjects", "Type", ""]}
             rows={(list.data || []).map((sheet) => [
               <span key="e">{sheet.examName || "Exam"}{sheet.academicSession ? ` · ${sheet.academicSession}` : ""}</span>,
               sheet.className || className(sheet.classId),
               sheet.published ? (sheet.historical ? "Published · closed" : "Published") : "Draft",
               String(sheet.entries?.length || 0),
-              <div key="a" className="row">
+              (sheet.entries || []).some((e) => e.examType === "ONLINE")
+                ? ((sheet.entries || []).every((e) => e.examType === "ONLINE") ? "Online" : "Theory + Online")
+                : "Theory",
+              <div key="a" className="row" style={{ flexWrap: "wrap" }}>
                 <Button kind="ghost" onClick={() => setPrintSheet(sheet)}>Preview / print</Button>
                 {canManage && !sheet.historical ? (
                   <Button kind="ghost" onClick={() => setEditor(sheet)}>{sheet.published ? "View" : "Edit"}</Button>
@@ -136,6 +138,7 @@ export default function DateSheetsPage() {
         <DateSheetEditor
           existing={editor === "new" ? null : editor}
           canManage={canManage}
+          examSessions={sessions.data || []}
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); void list.reload(); }}
         />
@@ -150,16 +153,17 @@ export default function DateSheetsPage() {
 function DateSheetEditor({
   existing,
   canManage,
+  examSessions,
   onClose,
   onSaved,
 }: {
   existing: DateSheet | null;
   canManage: boolean;
+  examSessions: { id: string; name: string; academicSession?: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { classes, sections } = useLookups();
-  const sessions = useAsync(() => examApi.sessions(), []);
   const online = useAsync(() => onlineExamApi.list().catch(() => []), []);
   const toast = useToast();
   const locked = Boolean(existing?.published || existing?.historical) || !canManage;
@@ -214,6 +218,14 @@ function DateSheetEditor({
       {locked ? <p className="hint">This date sheet is view-only{existing?.historical ? " because the exam period is closed." : existing?.published ? ". Unpublish it to edit." : "."}</p> : null}
       <Form busyLabel="Saving…" onSubmit={async () => {
         if (locked) return;
+        for (const r of rows) {
+          if (r.startTime && r.endTime && r.endTime <= r.startTime) {
+            throw new Error("End time must be later than start time.");
+          }
+          if (r.examType === "ONLINE" && !r.onlineExamId) {
+            throw new Error("Link an existing online exam, or switch the row back to Theory.");
+          }
+        }
         if (existing) await examApi.updateDateSheet(existing.id, payload());
         else await examApi.createDateSheet(payload());
         toast("ok", "Date sheet saved as draft");
@@ -223,7 +235,7 @@ function DateSheetEditor({
           <Field label="Exam">
             <select value={examSessionId} onChange={(e) => setExamSessionId(e.target.value)} required disabled={locked || Boolean(existing)}>
               <option value="">Select exam</option>
-              {(sessions.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}{s.academicSession ? ` · ${s.academicSession}` : ""}</option>)}
+              {examSessions.map((s) => <option key={s.id} value={s.id}>{s.name}{s.academicSession ? ` · ${s.academicSession}` : ""}</option>)}
             </select>
           </Field>
           <Field label="Class">
@@ -233,6 +245,9 @@ function DateSheetEditor({
             </select>
           </Field>
         </div>
+        {classId && classSubjects.data && !classSubjects.data.length ? (
+          <p className="hint">Assign subjects to this class under Academics before scheduling them.</p>
+        ) : null}
         <Field label="Sections (leave empty for every section)">
           <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
             {classSecs.map((s) => (

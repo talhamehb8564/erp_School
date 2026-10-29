@@ -11,6 +11,10 @@ public interface ExamDateSheetHeaderRepository extends JpaRepository<ExamDateShe
 
     List<ExamDateSheet> findByTenantIdOrderByUpdatedAtDesc(UUID tenantId);
 
+    List<ExamDateSheet> findByTenantIdAndExamSessionIdOrderByUpdatedAtDesc(UUID tenantId, UUID examSessionId);
+
+    List<ExamDateSheet> findByTenantIdAndClassIdOrderByUpdatedAtDesc(UUID tenantId, UUID classId);
+
     Optional<ExamDateSheet> findByIdAndTenantId(UUID id, UUID tenantId);
 
     Optional<ExamDateSheet> findByTenantIdAndExamSessionIdAndClassId(UUID tenantId, UUID examSessionId, UUID classId);

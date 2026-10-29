@@ -15,6 +15,7 @@ import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.util.TenantGuard;
+import com.erpschool.exam.ExamScheduleTimes;
 import com.erpschool.exam.entity.ExamDateSheet;
 import com.erpschool.exam.entity.ExamDateSheetEntry;
 import com.erpschool.exam.entity.ExamSession;
@@ -98,7 +99,17 @@ public class ExamDateSheetService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list(UUID sessionId, UUID classId, UUID sectionId, Boolean published, String academicSession) {
         UUID tenantId = TenantGuard.requireTenantId(null);
-        List<ExamDateSheet> sheets = headerRepository.findByTenantIdOrderByUpdatedAtDesc(tenantId);
+        List<ExamDateSheet> sheets;
+        if (sessionId != null && classId != null) {
+            sheets = headerRepository.findByTenantIdAndExamSessionIdAndClassId(tenantId, sessionId, classId)
+                    .map(List::of).orElseGet(List::of);
+        } else if (sessionId != null) {
+            sheets = headerRepository.findByTenantIdAndExamSessionIdOrderByUpdatedAtDesc(tenantId, sessionId);
+        } else if (classId != null) {
+            sheets = headerRepository.findByTenantIdAndClassIdOrderByUpdatedAtDesc(tenantId, classId);
+        } else {
+            sheets = headerRepository.findByTenantIdOrderByUpdatedAtDesc(tenantId);
+        }
         Set<UUID> allowedClasses = visibleClassIds(tenantId);
         boolean manager = canManage();
         List<ExamDateSheet> filtered = new ArrayList<>();
@@ -124,17 +135,7 @@ public class ExamDateSheetService {
                     })
                     .toList();
         }
-        Map<UUID, List<ExamDateSheetEntry>> entriesBySheet = new HashMap<>();
-        for (ExamDateSheet sheet : filtered) {
-            List<ExamDateSheetEntry> rows = entryRepository
-                    .findByTenantIdAndDateSheetIdOrderByExamDateAscStartTimeAsc(tenantId, sheet.getId());
-            if (sectionId != null) {
-                rows = rows.stream()
-                        .filter(r -> r.getSectionId() == null || sectionId.equals(r.getSectionId()))
-                        .toList();
-            }
-            entriesBySheet.put(sheet.getId(), rows);
-        }
+        Map<UUID, List<ExamDateSheetEntry>> entriesBySheet = loadEntries(tenantId, filtered, sectionId);
         return viewMany(filtered, sessions, entriesBySheet);
     }
 
@@ -294,13 +295,6 @@ public class ExamDateSheetService {
         return saved;
     }
 
-    static boolean timesOverlap(LocalTime a0, LocalTime a1, LocalTime b0, LocalTime b1) {
-        if (a0 == null || a1 == null || b0 == null || b1 == null) {
-            return false;
-        }
-        return a0.isBefore(a1) && b0.isBefore(b1) && a0.isBefore(b1) && b0.isBefore(a1);
-    }
-
     private List<ExamDateSheetEntry> expandAndValidate(UUID tenantId, ExamSession session, SchoolClass schoolClass,
                                                        ExamDateSheet sheet, List<EntryRequest> incoming) {
         if (incoming == null || incoming.isEmpty()) {
@@ -372,7 +366,7 @@ public class ExamDateSheetService {
                 ExamDateSheetEntry b = expanded.get(j);
                 if (!a.getExamDate().equals(b.getExamDate())) continue;
                 if (!sameSectionScope(a.getSectionId(), b.getSectionId())) continue;
-                if (timesOverlap(a.getStartTime(), a.getEndTime(), b.getStartTime(), b.getEndTime())) {
+                if (ExamScheduleTimes.overlap(a.getStartTime(), a.getEndTime(), b.getStartTime(), b.getEndTime())) {
                     throw new BusinessException("DATE_SHEET_OVERLAP",
                             "Two exams overlap for the same class/section on " + a.getExamDate() + ".");
                 }
@@ -401,44 +395,76 @@ public class ExamDateSheetService {
         return row;
     }
 
+    private Map<UUID, List<ExamDateSheetEntry>> loadEntries(UUID tenantId, List<ExamDateSheet> sheets, UUID sectionId) {
+        Map<UUID, List<ExamDateSheetEntry>> entriesBySheet = new HashMap<>();
+        if (sheets.isEmpty()) {
+            return entriesBySheet;
+        }
+        Set<UUID> ids = sheets.stream().map(ExamDateSheet::getId).collect(Collectors.toSet());
+        List<ExamDateSheetEntry> all = entryRepository
+                .findByTenantIdAndDateSheetIdInOrderByExamDateAscStartTimeAsc(tenantId, ids);
+        for (ExamDateSheetEntry row : all) {
+            if (sectionId != null && row.getSectionId() != null && !sectionId.equals(row.getSectionId())) {
+                continue;
+            }
+            entriesBySheet.computeIfAbsent(row.getDateSheetId(), k -> new ArrayList<>()).add(row);
+        }
+        return entriesBySheet;
+    }
+
     private List<Map<String, Object>> viewMany(List<ExamDateSheet> sheets, Map<UUID, ExamSession> sessions,
                                                Map<UUID, List<ExamDateSheetEntry>> entriesBySheet) {
+        Set<UUID> classIds = new HashSet<>();
+        Set<UUID> subjectIds = new HashSet<>();
+        Set<UUID> sectionIds = new HashSet<>();
+        Set<UUID> onlineIds = new HashSet<>();
+        for (ExamDateSheet sheet : sheets) {
+            classIds.add(sheet.getClassId());
+            for (ExamDateSheetEntry row : entriesBySheet.getOrDefault(sheet.getId(), List.of())) {
+                if (row.getSubjectId() != null) subjectIds.add(row.getSubjectId());
+                if (row.getSectionId() != null) sectionIds.add(row.getSectionId());
+                if (row.getOnlineExamId() != null) onlineIds.add(row.getOnlineExamId());
+            }
+        }
+        Map<UUID, String> classNames = new HashMap<>();
+        if (!classIds.isEmpty()) {
+            for (SchoolClass c : classRepository.findAllById(classIds)) {
+                classNames.put(c.getId(), c.getName());
+            }
+        }
+        Map<UUID, String> subjectNames = namesOfSubjects(subjectIds);
+        Map<UUID, String> sectionNames = namesOfSections(sectionIds);
+        Map<UUID, String> onlineTitles = titlesOfOnline(onlineIds);
         List<Map<String, Object>> out = new ArrayList<>();
         for (ExamDateSheet sheet : sheets) {
             out.add(viewOne(sheet, sessions.get(sheet.getExamSessionId()),
-                    entriesBySheet.getOrDefault(sheet.getId(), List.of())));
+                    entriesBySheet.getOrDefault(sheet.getId(), List.of()),
+                    classNames, subjectNames, sectionNames, onlineTitles));
         }
         return out;
     }
 
     private Map<String, Object> viewOne(ExamDateSheet sheet, ExamSession session, List<ExamDateSheetEntry> rows) {
+        Map<UUID, String> classNames = new HashMap<>();
         SchoolClass schoolClass = classRepository.findById(sheet.getClassId()).orElse(null);
-        Map<UUID, String> subjectNames = new HashMap<>();
-        Map<UUID, String> sectionNames = new HashMap<>();
-        Map<UUID, String> onlineTitles = new HashMap<>();
+        if (schoolClass != null) {
+            classNames.put(schoolClass.getId(), schoolClass.getName());
+        }
         Set<UUID> subjectIds = new HashSet<>();
         Set<UUID> sectionIds = new HashSet<>();
         Set<UUID> onlineIds = new HashSet<>();
         for (ExamDateSheetEntry row : rows) {
-            subjectIds.add(row.getSubjectId());
+            if (row.getSubjectId() != null) subjectIds.add(row.getSubjectId());
             if (row.getSectionId() != null) sectionIds.add(row.getSectionId());
             if (row.getOnlineExamId() != null) onlineIds.add(row.getOnlineExamId());
         }
-        if (!subjectIds.isEmpty()) {
-            for (Subject s : subjectRepository.findAllById(subjectIds)) {
-                subjectNames.put(s.getId(), s.getName());
-            }
-        }
-        if (!sectionIds.isEmpty()) {
-            for (Section s : sectionRepository.findAllById(sectionIds)) {
-                sectionNames.put(s.getId(), s.getName());
-            }
-        }
-        if (!onlineIds.isEmpty()) {
-            for (OnlineExam e : onlineExamRepository.findAllById(onlineIds)) {
-                onlineTitles.put(e.getId(), e.getTitle());
-            }
-        }
+        return viewOne(sheet, session, rows, classNames, namesOfSubjects(subjectIds),
+                namesOfSections(sectionIds), titlesOfOnline(onlineIds));
+    }
+
+    private Map<String, Object> viewOne(ExamDateSheet sheet, ExamSession session, List<ExamDateSheetEntry> rows,
+                                        Map<UUID, String> classNames, Map<UUID, String> subjectNames,
+                                        Map<UUID, String> sectionNames, Map<UUID, String> onlineTitles) {
         List<Map<String, Object>> entryViews = new ArrayList<>();
         for (ExamDateSheetEntry row : rows) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -462,7 +488,7 @@ public class ExamDateSheetService {
         out.put("examName", session == null ? null : session.getName());
         out.put("academicSession", session == null ? null : session.getAcademicSession());
         out.put("classId", sheet.getClassId());
-        out.put("className", schoolClass == null ? null : schoolClass.getName());
+        out.put("className", classNames.get(sheet.getClassId()));
         out.put("campusId", sheet.getCampusId());
         out.put("published", sheet.isPublished());
         out.put("publishedAt", sheet.getPublishedAt());
@@ -471,6 +497,33 @@ public class ExamDateSheetService {
         out.put("entries", entryViews);
         out.put("updatedAt", sheet.getUpdatedAt());
         return out;
+    }
+
+    private Map<UUID, String> namesOfSubjects(Set<UUID> ids) {
+        Map<UUID, String> names = new HashMap<>();
+        if (ids.isEmpty()) return names;
+        for (Subject s : subjectRepository.findAllById(ids)) {
+            names.put(s.getId(), s.getName());
+        }
+        return names;
+    }
+
+    private Map<UUID, String> namesOfSections(Set<UUID> ids) {
+        Map<UUID, String> names = new HashMap<>();
+        if (ids.isEmpty()) return names;
+        for (Section s : sectionRepository.findAllById(ids)) {
+            names.put(s.getId(), s.getName());
+        }
+        return names;
+    }
+
+    private Map<UUID, String> titlesOfOnline(Set<UUID> ids) {
+        Map<UUID, String> names = new HashMap<>();
+        if (ids.isEmpty()) return names;
+        for (OnlineExam e : onlineExamRepository.findAllById(ids)) {
+            names.put(e.getId(), e.getTitle());
+        }
+        return names;
     }
 
     private Map<UUID, ExamSession> loadSessions(List<ExamDateSheet> sheets) {
@@ -492,10 +545,9 @@ public class ExamDateSheetService {
     }
 
     private ExamSession requireSession(UUID id) {
-        ExamSession session = sessionRepository.findById(id)
+        UUID tenantId = TenantGuard.requireTenantId(null);
+        return sessionRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam session", id));
-        TenantGuard.assertSameTenant(session.getTenantId());
-        return session;
     }
 
     private void assertCanView(ExamDateSheet sheet) {

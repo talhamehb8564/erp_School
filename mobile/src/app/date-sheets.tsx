@@ -127,6 +127,14 @@ function DateSheetScreen() {
               setErr("");
               setMsg("");
               try {
+                if (startTime && endTime && endTime <= startTime) {
+                  setErr("End time must be later than start time.");
+                  return;
+                }
+                if (examType === "ONLINE" && !onlineExamId) {
+                  setErr("Link an existing online exam, or switch the row back to Theory.");
+                  return;
+                }
                 await examApi.createDateSheet({
                   examSessionId,
                   classId: newClassId,
