@@ -91,6 +91,12 @@ public class AcademicController {
         return ResponseEntity.ok(ApiResponse.ok(academicService.subjects()));
     }
 
+    @GetMapping("/classes/{classId}/subjects")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<Subject>>> classSubjects(@PathVariable UUID classId) {
+        return ResponseEntity.ok(ApiResponse.ok(academicService.subjectsForClass(classId)));
+    }
+
     @PostMapping("/classes/{classId}/subjects/{subjectId}")
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
     public ResponseEntity<ApiResponse<ClassSubject>> classSubject(@PathVariable UUID classId,

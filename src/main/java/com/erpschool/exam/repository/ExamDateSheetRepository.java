@@ -14,5 +14,10 @@ public interface ExamDateSheetRepository extends JpaRepository<ExamDateSheetEntr
     List<ExamDateSheetEntry> findByTenantIdAndExamSessionIdAndClassIdOrderByExamDateAscStartTimeAsc(
             UUID tenantId, UUID examSessionId, UUID classId);
 
+    List<ExamDateSheetEntry> findByTenantIdAndDateSheetIdOrderByExamDateAscStartTimeAsc(
+            UUID tenantId, UUID dateSheetId);
+
     void deleteByTenantIdAndExamSessionId(UUID tenantId, UUID examSessionId);
+
+    void deleteByTenantIdAndDateSheetId(UUID tenantId, UUID dateSheetId);
 }

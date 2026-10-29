@@ -191,6 +191,7 @@ export const academicApi = {
     api.post<Section>(`${v1}/classes/${classId}/sections`, { name }),
   subjects: () => api.get<Subject[]>(`${v1}/subjects`),
   createSubject: (body: { name: string; code: string }) => api.post<Subject>(`${v1}/subjects`, body),
+  classSubjects: (classId: string) => api.get<Subject[]>(`${v1}/classes/${classId}/subjects`),
   assignSubject: (classId: string, subjectId: string) =>
     api.post<unknown>(`${v1}/classes/${classId}/subjects/${subjectId}`),
   assignments: (teacherUserId?: string) =>
@@ -363,6 +364,24 @@ export const examApi = {
     ),
   saveDateSheet: (sessionId: string, entries: Record<string, unknown>[]) =>
     api.post<unknown[]>(`${v1}/exams/sessions/${sessionId}/date-sheet`, entries),
+  dateSheets: (q: { sessionId?: string; classId?: string; sectionId?: string; published?: string; academicSession?: string } = {}) => {
+    const p = new URLSearchParams();
+    if (q.sessionId) p.set("sessionId", q.sessionId);
+    if (q.classId) p.set("classId", q.classId);
+    if (q.sectionId) p.set("sectionId", q.sectionId);
+    if (q.published) p.set("published", q.published);
+    if (q.academicSession) p.set("academicSession", q.academicSession);
+    const qs = p.toString();
+    return api.get<import("../lib/types").DateSheet[]>(`${v1}/exams/date-sheets${qs ? `?${qs}` : ""}`);
+  },
+  getDateSheet: (id: string) => api.get<import("../lib/types").DateSheet>(`${v1}/exams/date-sheets/${id}`),
+  createDateSheet: (body: Record<string, unknown>) =>
+    api.post<import("../lib/types").DateSheet>(`${v1}/exams/date-sheets`, body),
+  updateDateSheet: (id: string, body: Record<string, unknown>) =>
+    api.put<import("../lib/types").DateSheet>(`${v1}/exams/date-sheets/${id}`, body),
+  publishDateSheet: (id: string) => api.post<import("../lib/types").DateSheet>(`${v1}/exams/date-sheets/${id}/publish`),
+  unpublishDateSheet: (id: string) => api.post<import("../lib/types").DateSheet>(`${v1}/exams/date-sheets/${id}/unpublish`),
+  removeDateSheet: (id: string) => api.del<void>(`${v1}/exams/date-sheets/${id}`),
   entryStatus: (sessionId: string) =>
     api.get<{ teacherUserId: string; classId: string; sectionId?: string; subjectId: string; expected: number; entered: number; complete: boolean }[]>(
       `${v1}/exams/sessions/${sessionId}/entry-status`,
@@ -475,6 +494,7 @@ export const portalApi = {
 
 export const websiteApi = {
   get: () => api.get<Record<string, unknown>>(`${v1}/website`),
+  preview: () => api.get<{ school: import("../lib/branding").PublicSchool; campuses: import("../lib/branding").PublicCampus[] }>(`${v1}/website/preview`),
   save: (body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/website`, body),
   savePrincipal: (body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/website/principal`, body),
 };

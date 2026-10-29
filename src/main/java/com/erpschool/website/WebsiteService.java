@@ -32,22 +32,30 @@ public class WebsiteService {
     private final CatalogCache catalogCache;
     private final WebsiteInquiryRepository inquiryRepository;
     private final CampusRepository campusRepository;
+    private final PublicSchoolService publicSchoolService;
 
     public WebsiteService(TenantRepository tenantRepository,
                           SchoolSettingsRepository settingsRepository,
                           CatalogCache catalogCache,
                           WebsiteInquiryRepository inquiryRepository,
-                          CampusRepository campusRepository) {
+                          CampusRepository campusRepository,
+                          PublicSchoolService publicSchoolService) {
         this.tenantRepository = tenantRepository;
         this.settingsRepository = settingsRepository;
         this.catalogCache = catalogCache;
         this.inquiryRepository = inquiryRepository;
         this.campusRepository = campusRepository;
+        this.publicSchoolService = publicSchoolService;
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> get() {
         return view(requireTenant());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> preview() {
+        return publicSchoolService.brandingForTenant(TenantGuard.requireTenantId(null));
     }
 
     @Transactional

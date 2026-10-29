@@ -23,6 +23,25 @@ async function uploadFile(file: File, toast: (k: "ok" | "err" | "info", m: strin
   }
 }
 
+function PreviewWebsiteButton() {
+  const toast = useToast();
+  return (
+    <button
+      type="button"
+      className="btn ghost"
+      onClick={() => {
+        const url = `${window.location.origin}/preview`;
+        const tab = window.open(url, "_blank", "noopener,noreferrer");
+        if (!tab) {
+          toast("err", "The browser blocked a new tab. Allow pop-ups for this site, then try Preview website again.");
+        }
+      }}
+    >
+      Preview website
+    </button>
+  );
+}
+
 export default function WebsitePage() {
   const { user } = useSession();
   if (user?.role === "PRINCIPAL") return <PrincipalWebsite />;
@@ -94,7 +113,7 @@ function PrincipalWebsite() {
           <h1>Principal’s message</h1>
           <p>Each branch has its own Principal. School Admin cannot overwrite this section. Photographs are stored as uploaded files.</p>
         </div>
-        <a className="btn ghost" href="/" target="_blank" rel="noreferrer">Preview website</a>
+        <PreviewWebsiteButton />
       </div>
       <QueryState status={site} label="principal profile">
         <div className="grid two">
@@ -250,7 +269,7 @@ function AdminWebsite() {
           <h1>School website</h1>
           <p>Global name, logo and colours apply to every campus. Heroes and contact are per branch. The Principal owns their message separately.</p>
         </div>
-        <a className="btn ghost" href="/" target="_blank" rel="noreferrer">Preview website</a>
+        <PreviewWebsiteButton />
       </div>
       <QueryState status={site} label="website">
         <div className="card" style={{ marginBottom: 16 }}>

@@ -52,6 +52,7 @@ public class ExamService {
     private final UserRepository userRepository;
     private final ClassSubjectRepository classSubjectRepository;
     private final TeacherAssignmentRepository assignmentRepository;
+    private final ExamDateSheetService examDateSheetService;
 
     public ExamService(
             ExamSessionRepository sessionRepository,
@@ -64,7 +65,8 @@ public class ExamService {
             NotificationService notificationService,
             UserRepository userRepository,
             ClassSubjectRepository classSubjectRepository,
-            TeacherAssignmentRepository assignmentRepository) {
+            TeacherAssignmentRepository assignmentRepository,
+            ExamDateSheetService examDateSheetService) {
 
         this.sessionRepository = sessionRepository;
         this.resultRepository = resultRepository;
@@ -77,6 +79,7 @@ public class ExamService {
         this.userRepository = userRepository;
         this.classSubjectRepository = classSubjectRepository;
         this.assignmentRepository = assignmentRepository;
+        this.examDateSheetService = examDateSheetService;
     }
 
     @Transactional
@@ -120,50 +123,32 @@ public class ExamService {
                     "This session has marks for " + results.size()
                             + " row(s). Deletion is blocked so student records are not lost.");
         }
-        dateSheetRepository.deleteByTenantIdAndExamSessionId(tenantId, sessionId);
+        examDateSheetService.deleteForSession(tenantId, sessionId);
         sessionRepository.delete(session);
     }
 
     @Transactional
     public List<ExamDateSheetEntry> replaceDateSheet(UUID sessionId, List<ExamDateSheetEntry> entries) {
-        ExamSession session = requireSession(sessionId);
-        UUID tenantId = session.getTenantId();
-        dateSheetRepository.deleteByTenantIdAndExamSessionId(tenantId, sessionId);
-        if (entries == null || entries.isEmpty()) {
-            return List.of();
-        }
-        List<ExamDateSheetEntry> saved = new java.util.ArrayList<>();
-        for (ExamDateSheetEntry incoming : entries) {
-            academicService.requireClass(incoming.getClassId());
-            academicService.requireSubject(incoming.getSubjectId());
-            if (incoming.getSectionId() != null) {
-                academicService.requireSection(incoming.getSectionId());
-            }
-            ExamDateSheetEntry row = new ExamDateSheetEntry();
-            row.setTenantId(tenantId);
-            row.setExamSessionId(sessionId);
-            row.setCampusId(incoming.getCampusId());
-            row.setClassId(incoming.getClassId());
-            row.setSectionId(incoming.getSectionId());
-            row.setSubjectId(incoming.getSubjectId());
-            row.setExamDate(incoming.getExamDate());
-            row.setStartTime(incoming.getStartTime());
-            row.setEndTime(incoming.getEndTime());
-            row.setCreatedBy(TenantContext.getUserId());
-            saved.add(dateSheetRepository.save(row));
-        }
-        return saved;
+        return examDateSheetService.replaceSessionEntries(sessionId, entries);
     }
 
     @Transactional(readOnly = true)
     public List<ExamDateSheetEntry> dateSheet(UUID sessionId, UUID classId) {
         ExamSession session = requireSession(sessionId);
+        List<ExamDateSheetEntry> rows;
         if (classId != null) {
-            return dateSheetRepository.findByTenantIdAndExamSessionIdAndClassIdOrderByExamDateAscStartTimeAsc(
+            rows = dateSheetRepository.findByTenantIdAndExamSessionIdAndClassIdOrderByExamDateAscStartTimeAsc(
                     session.getTenantId(), sessionId, classId);
+        } else {
+            rows = dateSheetRepository.findByTenantIdAndExamSessionIdOrderByExamDateAscStartTimeAsc(
+                    session.getTenantId(), sessionId);
         }
-        return dateSheetRepository.findByTenantIdAndExamSessionIdOrderByExamDateAscStartTimeAsc(
-                session.getTenantId(), sessionId);
+        UserRole role = TenantContext.getRole();
+        boolean manager = role == UserRole.ERP_OWNER || role == UserRole.SCHOOL_ADMIN || role == UserRole.PRINCIPAL;
+        if (!manager) {
+            rows = rows.stream().filter(ExamDateSheetEntry::isPublished).toList();
+        }
+        return rows;
     }
 
     @Transactional(readOnly = true)

@@ -44,6 +44,10 @@ export function prefetchRoute(path: string, role?: Role) {
     void examApi.sessions().catch(() => undefined);
     return;
   }
+  if (path === "/app/date-sheets") {
+    void examApi.dateSheets().catch(() => undefined);
+    return;
+  }
   if (path === "/app/fees") {
     if (role === "STUDENT") void feeApi.myChallanSummaries(24).catch(() => undefined);
     else if (role === "PARENT") void feeApi.parentChallanSummaries(20).catch(() => undefined);

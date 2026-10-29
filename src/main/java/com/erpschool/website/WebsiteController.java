@@ -29,6 +29,12 @@ public class WebsiteController {
         return ResponseEntity.ok(ApiResponse.ok(websiteService.get()));
     }
 
+    @GetMapping("/preview")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> preview() {
+        return ResponseEntity.ok(ApiResponse.ok(websiteService.preview()));
+    }
+
     @PutMapping
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> save(@RequestBody Map<String, Object> body) {

@@ -11,6 +11,8 @@ export const can = {
   inactivateStudents: (role?: Role) => role === "SCHOOL_ADMIN" || role === "ERP_OWNER",
   manageExamSessions: (role?: Role) =>
     role === "SCHOOL_ADMIN" || role === "PRINCIPAL" || role === "ERP_OWNER",
+  manageDateSheets: (role?: Role) =>
+    role === "SCHOOL_ADMIN" || role === "PRINCIPAL" || role === "ERP_OWNER",
   enterMarks: (role?: Role) =>
     role === "SCHOOL_ADMIN" || role === "PRINCIPAL" || role === "TEACHER" || role === "ERP_OWNER",
   generateChallans: (role?: Role) => role === "ACCOUNT_OFFICER" || role === "ERP_OWNER",

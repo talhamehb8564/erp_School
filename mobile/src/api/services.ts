@@ -111,6 +111,7 @@ export const academicApi = {
   createSection: (classId: string, name: string) => api.post<Section>(`${v1}/classes/${classId}/sections`, { name }),
   subjects: () => api.get<Subject[]>(`${v1}/subjects`),
   createSubject: (body: { name: string; code: string }) => api.post<Subject>(`${v1}/subjects`, body),
+  classSubjects: (classId: string) => api.get<Subject[]>(`${v1}/classes/${classId}/subjects`),
   timetable: (classId: string, sectionId: string) =>
     api.get<TimetableSlot[]>(`${v1}/timetable?classId=${classId}&sectionId=${sectionId}`),
   teacherTimetable: () => api.get<TimetableSlot[]>(`${v1}/teacher/timetable`),
@@ -204,6 +205,21 @@ export const examApi = {
     api.get<Record<string, unknown>>(`${v1}/exams/sessions/${sessionId}/results/by-roll?rollNumber=${encodeURIComponent(rollNumber)}`),
   sessionResults: (sessionId: string) => api.get<ExamResult[]>(`${v1}/exams/sessions/${sessionId}/results`),
   deleteSession: (sessionId: string) => api.del<void>(`${v1}/exams/sessions/${sessionId}`),
+  dateSheets: (q: { sessionId?: string; classId?: string; published?: string } = {}) => {
+    const p = new URLSearchParams();
+    if (q.sessionId) p.set("sessionId", q.sessionId);
+    if (q.classId) p.set("classId", q.classId);
+    if (q.published) p.set("published", q.published);
+    const qs = p.toString();
+    return api.get<Record<string, unknown>[]>(`${v1}/exams/date-sheets${qs ? `?${qs}` : ""}`);
+  },
+  getDateSheet: (id: string) => api.get<Record<string, unknown>>(`${v1}/exams/date-sheets/${id}`),
+  createDateSheet: (body: Record<string, unknown>) => api.post<Record<string, unknown>>(`${v1}/exams/date-sheets`, body),
+  updateDateSheet: (id: string, body: Record<string, unknown>) =>
+    api.put<Record<string, unknown>>(`${v1}/exams/date-sheets/${id}`, body),
+  publishDateSheet: (id: string) => api.post<Record<string, unknown>>(`${v1}/exams/date-sheets/${id}/publish`),
+  unpublishDateSheet: (id: string) => api.post<Record<string, unknown>>(`${v1}/exams/date-sheets/${id}/unpublish`),
+  removeDateSheet: (id: string) => api.del<void>(`${v1}/exams/date-sheets/${id}`),
 };
 
 export const onlineExamApi = {

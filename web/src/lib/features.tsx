@@ -47,6 +47,7 @@ export const PATH_FEATURE: Record<string, FeatureKey> = {
   "/app/teacher-attendance": "TEACHER_ATTENDANCE",
   "/app/homework": "HOMEWORK",
   "/app/exams": "RESULTS",
+  "/app/date-sheets": "RESULTS",
   "/app/online-exams": "ONLINE_EXAMS",
   "/app/fees": "FEES",
   "/app/salaries": "SALARIES",

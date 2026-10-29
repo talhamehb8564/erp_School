@@ -18,6 +18,7 @@ export const MODULES: NavItem[] = [
   { href: "/teacher-attendance", label: "Staff attendance", icon: "walk", roles: ["SCHOOL_ADMIN", "PRINCIPAL"], feature: "TEACHER_ATTENDANCE" },
   { href: "/homework", label: "Homework", icon: "document-text", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"], feature: "HOMEWORK" },
   { href: "/exams", label: "Marks & results", icon: "ribbon", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"], feature: "RESULTS" },
+  { href: "/date-sheets", label: "Date sheet", icon: "calendar-number-outline", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"], feature: "RESULTS" },
   { href: "/online-exams", label: "Online exams", icon: "desktop-outline", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"], feature: "ONLINE_EXAMS" },
   { href: "/remarks", label: "Remarks", icon: "chatbubble-ellipses-outline", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"] },
   { href: "/fees", label: "Fees", icon: "card", roles: ["ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"], feature: "FEES" },

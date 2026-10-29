@@ -30,6 +30,7 @@ const AdmissionsPage = lazy(() => import("./pages/school/Admissions"));
 const ApplyAdmission = lazy(() => import("./pages/ApplyAdmission"));
 const HomeworkPage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.HomeworkPage })));
 const ExamsPage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.ExamsPage })));
+const DateSheetsPage = lazy(() => import("./pages/school/DateSheets"));
 const OnlineExamsPage = lazy(() => import("./pages/school/OnlineExams"));
 const RemarksPage = lazy(() => import("./pages/school/Remarks"));
 const WebsitePage = lazy(() => import("./pages/school/Website"));
@@ -85,6 +86,7 @@ export default function App() {
       <Suspense fallback={<Loading label="Loading…" />}>
         <Routes>
           <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
+          <Route path="/preview" element={<Guard roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="WEBSITE"><Welcome preview /></FeatureGate></Guard>} />
           <Route path="/apply" element={<PublicOnly><ApplyAdmission /></PublicOnly>} />
           <Route path="/portals" element={<PublicOnly><PortalPage /></PublicOnly>} />
           <Route path="/login/:role" element={<PublicOnly><LoginPage /></PublicOnly>} />
@@ -128,6 +130,7 @@ export default function App() {
             <Route path="teacher-attendance" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="TEACHER_ATTENDANCE"><TeacherAttendancePage /></FeatureGate></RoleGate>} />
             <Route path="homework" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><FeatureGate feature="HOMEWORK"><HomeworkPage /></FeatureGate></RoleGate>} />
             <Route path="exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><FeatureGate feature="RESULTS"><ExamsPage /></FeatureGate></RoleGate>} />
+            <Route path="date-sheets" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><FeatureGate feature="RESULTS"><DateSheetsPage /></FeatureGate></RoleGate>} />
             <Route path="online-exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><FeatureGate feature="ONLINE_EXAMS"><OnlineExamsPage /></FeatureGate></RoleGate>} />
             <Route path="online-exams/:examId" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><FeatureGate feature="ONLINE_EXAMS"><OnlineExamsPage /></FeatureGate></RoleGate>} />
             <Route path="remarks" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><RemarksPage /></RoleGate>} />

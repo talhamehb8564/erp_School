@@ -167,6 +167,17 @@ public class AcademicService {
                 List.copyOf(subjectRepository.findByTenantIdOrderByNameAsc(tenantId)));
     }
 
+    @Transactional(readOnly = true)
+    public List<Subject> subjectsForClass(UUID classId) {
+        requireClass(classId);
+        Set<UUID> ids = classSubjectRepository.findByTenantIdAndClassId(tid(), classId)
+                .stream().map(ClassSubject::getSubjectId).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return subjects().stream().filter(s -> ids.contains(s.getId())).toList();
+    }
+
     @Transactional
     public ClassSubject assignSubjectToClass(UUID classId, UUID subjectId) {
         requireClass(classId);

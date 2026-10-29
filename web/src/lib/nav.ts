@@ -17,6 +17,7 @@ export const SCHOOL_NAV: NavItem[] = [
   { to: "/app/teacher-attendance", label: "Staff attendance", roles: ["SCHOOL_ADMIN", "PRINCIPAL"] },
   { to: "/app/homework", label: "Homework", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"] },
   { to: "/app/exams", label: "Marks & results", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"] },
+  { to: "/app/date-sheets", label: "Date sheet", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"] },
   { to: "/app/online-exams", label: "Online exams", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"] },
   { to: "/app/remarks", label: "Remarks", roles: ["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"] },
   { to: "/app/website", label: "Website", roles: ["SCHOOL_ADMIN", "PRINCIPAL"] },

@@ -22,6 +22,10 @@ import java.util.UUID;
 public class ExamDateSheetEntry extends TenantAwareEntity {
 
     @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "date_sheet_id")
+    private UUID dateSheetId;
+
+    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "exam_session_id", nullable = false)
     private UUID examSessionId;
 
@@ -49,4 +53,17 @@ public class ExamDateSheetEntry extends TenantAwareEntity {
 
     @Column(name = "end_time")
     private LocalTime endTime;
+
+    @Column(name = "exam_type", nullable = false, length = 20)
+    private String examType = "THEORY";
+
+    @Column(columnDefinition = "TEXT")
+    private String notes;
+
+    @JdbcTypeCode(SqlTypes.UUID)
+    @Column(name = "online_exam_id")
+    private UUID onlineExamId;
+
+    @Column(nullable = false)
+    private boolean published = false;
 }

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { publicApi, setupApi } from "../api/services";
-import { useBranding } from "../lib/branding";
+import { publicApi, setupApi, websiteApi } from "../api/services";
+import { useBranding, type PublicCampus, type PublicSchool } from "../lib/branding";
+import { applyBrand } from "../lib/theme";
 import {
   DEFAULT_ABOUT,
   DEFAULT_NOTICE_BODY,
@@ -56,8 +57,52 @@ function Reveal({ children, className }: { children: ReactNode; className?: stri
   return <div ref={ref} className={`reveal ${on ? "on" : ""} ${className || ""}`}>{children}</div>;
 }
 
-export default function Welcome() {
-  const { school, campuses, campus, setCampusId, loading, missing, error, reload } = useBranding();
+export default function Welcome({ preview = false }: { preview?: boolean }) {
+  const branding = useBranding();
+  const [draft, setDraft] = useState<{ school: PublicSchool | null; campuses: PublicCampus[] } | null>(null);
+  const [draftCampusId, setDraftCampusId] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState("");
+  const [draftLoading, setDraftLoading] = useState(preview);
+
+  useEffect(() => {
+    if (!preview) return;
+    let live = true;
+    setDraftLoading(true);
+    websiteApi.preview().then((data) => {
+      if (!live) return;
+      const rawSchool = data.school;
+      const rawCampuses = data.campuses || [];
+      const school: PublicSchool | null = rawSchool
+        ? { ...rawSchool, notice: rawSchool.notice ? { ...rawSchool.notice, published: true } : rawSchool.notice }
+        : null;
+      const campuses = rawCampuses.map((c) => (
+        c.principal ? { ...c, principal: { ...c.principal, published: true } } : c
+      ));
+      setDraft({ school, campuses });
+      setDraftCampusId(campuses[0]?.id || null);
+      applyBrand(school?.primaryColor, school?.accentColor, school?.secondaryColor);
+      if (school?.name) document.title = `${school.name} (preview)`;
+    }).catch((e) => {
+      if (!live) return;
+      setDraftError(e instanceof Error ? e.message : "Unable to load website preview");
+    }).finally(() => {
+      if (live) setDraftLoading(false);
+    });
+    return () => { live = false; };
+  }, [preview]);
+
+  const school = preview ? draft?.school ?? null : branding.school;
+  const campuses = preview ? draft?.campuses ?? [] : branding.campuses;
+  const campus = preview
+    ? campuses.find((c) => c.id === draftCampusId) || campuses[0] || null
+    : branding.campus;
+  const setCampusId = preview
+    ? (id: string) => setDraftCampusId(id)
+    : branding.setCampusId;
+  const loading = preview ? draftLoading : branding.loading;
+  const missing = preview ? false : branding.missing;
+  const error = preview ? draftError : branding.error;
+  const reload = branding.reload;
   const [needsSetup, setNeedsSetup] = useState(false);
   const [schoolName, setSchoolName] = useState("");
   const [b1, setB1] = useState("Main Campus");
@@ -133,7 +178,7 @@ export default function Welcome() {
     );
   }
 
-  if (needsSetup && !created) {
+  if (!preview && needsSetup && !created) {
     return (
       <div className="site-boot">
         <div className="card" style={{ maxWidth: 480 }}>
@@ -225,12 +270,12 @@ export default function Welcome() {
           {SITE_MENU.map((item, i) => (
             <a key={item.href} href={item.href} style={{ "--i": i } as CSSProperties} onClick={closeMenu}>{item.label}</a>
           ))}
-          {school?.admissions?.enabled ? (
+          {school?.admissions?.enabled && !preview ? (
             <Link to="/apply" className="btn brass" style={{ "--i": SITE_MENU.length } as CSSProperties} onClick={closeMenu}>
               {school.admissions.ctaLabel || "Apply for Admission"}
             </Link>
           ) : null}
-          <Link to="/portals" className="btn ghost" style={{ "--i": SITE_MENU.length + 1 } as CSSProperties} onClick={closeMenu}>School Portal</Link>
+          {preview ? null : <Link to="/portals" className="btn ghost" style={{ "--i": SITE_MENU.length + 1 } as CSSProperties} onClick={closeMenu}>School Portal</Link>}
         </nav>
       </div>
     </div>
@@ -247,7 +292,7 @@ export default function Welcome() {
           </div>
         </a>
         <div className="site-nav-tools">
-          {school?.admissions?.enabled ? (
+          {school?.admissions?.enabled && !preview ? (
             <Link to="/apply" className="btn brass sm site-nav-apply">{school.admissions.ctaLabel || "Apply for Admission"}</Link>
           ) : null}
           {campuses.length ? (
@@ -255,7 +300,7 @@ export default function Welcome() {
               {campuses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           ) : null}
-          <Link to="/portals" className="btn ghost sm site-nav-portal">School Portal</Link>
+          {preview ? <span className="kicker">Preview</span> : <Link to="/portals" className="btn ghost sm site-nav-portal">School Portal</Link>}
         </div>
         <div className="burger-slot" aria-hidden="true" />
       </header>
@@ -266,6 +311,15 @@ export default function Welcome() {
         </>,
         document.body,
       )}
+
+      {preview ? (
+        <div className="site-banner live">
+          <div>
+            <p className="kicker">Website preview</p>
+            <strong>This tab shows the school website, including unpublished notice and Principal copy. The admin portal stays open in your other tab.</strong>
+          </div>
+        </div>
+      ) : null}
 
       <section className="site-hero" id="top" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
         <div className="site-hero-media">
@@ -290,7 +344,7 @@ export default function Welcome() {
           <p className="kicker">{campus?.name || "Welcome"}</p>
           <h1>{heroes[slide]?.title || name}</h1>
           {heroes[slide]?.caption || school?.tagline ? <p>{heroes[slide]?.caption || school?.tagline}</p> : null}
-          {school?.admissions?.enabled ? (
+          {school?.admissions?.enabled && !preview ? (
             <div className="row" style={{ marginTop: 16 }}>
               <Link to="/apply" className="btn brass">{school.admissions.ctaLabel || "Apply for Admission"}</Link>
             </div>
@@ -485,8 +539,8 @@ export default function Welcome() {
           <p>Students, parents and staff use the school portal. Public pages stay on this website.</p>
         </div>
         <div className="row">
-          <Link to="/portals" className="btn brass">School Portal</Link>
-          {school?.admissions?.enabled ? (
+          {preview ? null : <Link to="/portals" className="btn brass">School Portal</Link>}
+          {school?.admissions?.enabled && !preview ? (
             <Link to="/apply" className="btn ghost">{school.admissions.ctaLabel || "Apply for Admission"}</Link>
           ) : null}
           <a href="#contact" className="btn ghost">Contact the school</a>
@@ -505,7 +559,7 @@ export default function Welcome() {
           <a href="#about">About</a>
           <a href="#principal">Principal</a>
           <a href="#contact">Contact</a>
-          <Link to="/portals" className="btn brass sm">Login</Link>
+          {preview ? null : <Link to="/portals" className="btn brass sm">Login</Link>}
         </nav>
       </footer>
       <WhatsAppFloat href={contact.whatsapp} />

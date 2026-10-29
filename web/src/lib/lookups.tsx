@@ -22,6 +22,7 @@ const LOOKUP_PREFIXES = [
   "/app/attendance",
   "/app/homework",
   "/app/exams",
+  "/app/date-sheets",
   "/app/online-exams",
   "/app/remarks",
   "/app/fees",

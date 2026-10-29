@@ -37,11 +37,17 @@ public class PublicSchoolService {
     @Transactional(readOnly = true)
     public Map<String, Object> branding(String code) {
         String key = "public:school:" + (code == null || code.isBlank() ? "default" : code.trim().toLowerCase());
-        return catalogCache.get(key, () -> load(code));
+        return catalogCache.get(key, () -> load(resolve(code)));
     }
 
-    private Map<String, Object> load(String code) {
-        Tenant tenant = resolve(code);
+    @Transactional(readOnly = true)
+    public Map<String, Object> brandingForTenant(java.util.UUID tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", tenantId));
+        return load(tenant);
+    }
+
+    private Map<String, Object> load(Tenant tenant) {
         Map<String, Object> school = new LinkedHashMap<>();
         school.put("id", tenant.getId());
         school.put("code", tenant.getCode());

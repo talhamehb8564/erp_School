@@ -304,6 +304,37 @@ export interface ExamSession {
   campusId?: string;
 }
 
+export interface DateSheetEntry {
+  id?: string;
+  sectionId?: string;
+  sectionName?: string;
+  subjectId: string;
+  subjectName?: string;
+  examDate: string;
+  startTime?: string;
+  endTime?: string;
+  examType?: "THEORY" | "ONLINE";
+  notes?: string;
+  onlineExamId?: string;
+  onlineExamTitle?: string;
+}
+
+export interface DateSheet {
+  id: string;
+  examSessionId: string;
+  examName?: string;
+  academicSession?: string;
+  classId: string;
+  className?: string;
+  campusId?: string;
+  published?: boolean;
+  publishedAt?: string;
+  historical?: boolean;
+  notes?: string;
+  entries: DateSheetEntry[];
+  updatedAt?: string;
+}
+
 export interface ExamResult {
   id: string;
   examSessionId: string;

@@ -1259,3 +1259,11 @@ html.menu-open, body.menu-open {
   .wa-float, .burger-x span, .switch-knob, .switch-track { animation: none !important; transition: none !important; }
   .caret { display: none; }
 }
+
+.date-sheet-print table { width: 100%; border-collapse: collapse; }
+.date-sheet-print th, .date-sheet-print td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+@media print {
+  body * { visibility: hidden; }
+  .date-sheet-print, .date-sheet-print * { visibility: visible; }
+  .date-sheet-print { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; }
+}
