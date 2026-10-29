@@ -39,7 +39,7 @@ import java.util.concurrent.Executors;
 @Service
 public class AuthService {
 
-    private static final int MAX_FAILED_ATTEMPTS = 8;
+    private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCK_MINUTES = 15;
     private static final Executor LOGIN_FOLLOW_UP = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "auth-login-followup");
