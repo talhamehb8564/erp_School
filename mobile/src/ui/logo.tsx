@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { Image } from "expo-image";
+import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { mediaUrl } from "../lib/media";
 import { brandSubtitle } from "../lib/format";
 import type { SchoolBrand } from "../lib/types";
@@ -13,23 +14,35 @@ export function SchoolLogo({
   name,
   color,
   size = 56,
+  flip = false,
 }: {
   uri?: string | null;
   name?: string;
   color: string;
   size?: number;
+  flip?: boolean;
 }) {
   const src = mediaUrl(uri);
   const [failed, setFailed] = useState(false);
   const showImage = Boolean(src) && !failed;
-  return (
+  const reduce = useReducedMotion();
+  const spin = useSharedValue(0);
+  useEffect(() => {
+    if (!flip || reduce) return;
+    spin.value = 0;
+    spin.value = withTiming(1, { duration: 680, easing: Easing.out(Easing.cubic) });
+  }, [flip, reduce, spin]);
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ perspective: 800 }, { rotateY: `${spin.value * 360}deg` }],
+  }));
+  const mark = (
     <View
       accessibilityRole="image"
       accessibilityLabel={name ? `${name} logo` : "School logo"}
       style={{
         width: size,
         height: size,
-        borderRadius: size * 0.28,
+        borderRadius: size / 2,
         backgroundColor: color + "22",
         alignItems: "center",
         justifyContent: "center",
@@ -56,6 +69,8 @@ export function SchoolLogo({
       )}
     </View>
   );
+  if (!flip || reduce) return mark;
+  return <Animated.View style={spinStyle}>{mark}</Animated.View>;
 }
 
 export function BrandHeader({
@@ -64,18 +79,20 @@ export function BrandHeader({
   kicker,
   subtitle,
   size = 56,
+  flip = false,
 }: {
   brand: SchoolBrand | null;
   colors: Palette;
   kicker?: string;
   subtitle?: string;
   size?: number;
+  flip?: boolean;
 }) {
   const title = brand?.name || "School Portal";
   const sub = subtitle ?? (brand ? brandSubtitle(brand) : undefined);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 }}>
-      <SchoolLogo uri={brand?.logoUrl} name={brand?.name} color={colors.brand} size={size} />
+      <SchoolLogo uri={brand?.logoUrl} name={brand?.name} color={colors.brand} size={size} flip={flip} />
       <View style={{ flex: 1, minWidth: 0 }}>
         {kicker ? (
           <Text style={{ color: colors.brand, fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>

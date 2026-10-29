@@ -158,6 +158,8 @@ export interface StudentUser {
   campusId?: string;
   campusName?: string;
   status?: StudentStatus;
+  inactiveReason?: string;
+  inactiveNote?: string;
   phone?: string;
   cnic?: string;
 }

@@ -143,10 +143,9 @@ public class AnnouncementService {
                         .stream()
                         .filter(s -> a.getClassId().equals(s.getClassId()))
                         .filter(s -> a.getSectionId() == null || a.getSectionId().equals(s.getSectionId()))
-                        .forEach(s -> parentStudentRepository.findByTenantIdAndStudentId(tenantId, s.getId())
-                                .forEach(link -> notificationService.notifyUser(tenantId, link.getParentUserId(),
-                                        "ANNOUNCEMENT", a.getTitle(), a.getBody(),
-                                        "Announcement", a.getId().toString())));
+                        .forEach(s -> notificationService.notifyParents(tenantId, s.getId(),
+                                "ANNOUNCEMENT", a.getTitle(), a.getBody(),
+                                "Announcement", a.getId().toString()));
             }
         }
     }

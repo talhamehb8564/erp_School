@@ -4,10 +4,10 @@ import { router } from "expo-router";
 import { useSession } from "../lib/session";
 import { useAppearance } from "../lib/appearance";
 import { academicApi, onlineExamApi } from "../api/services";
-import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, friendlyMessage, useAsync } from "../ui/kit";
+import { Badge, Btn, Card, Chip, Empty, Field, QueryState, Screen, Title, confirmAction, friendlyMessage, useAsync } from "../ui/kit";
 import { DateField } from "../ui/dates";
 import { RequireAuth } from "../ui/gate";
-import { pretty } from "../lib/format";
+import { pretty, statusReasonLabel } from "../lib/format";
 
 export default function OnlineExams() {
   const { user } = useSession();
@@ -23,14 +23,23 @@ function StudentExams() {
       <Screen colors={colors} onRefresh={() => void list.reload()} refreshing={list.loading}>
         <Title title="Online exams" subtitle="Start only during the scheduled window. Answers persist on the server." colors={colors} />
         <QueryState loading={list.loading} error={list.error} data={list.data} onRetry={() => void list.reload()} colors={colors} empty={<Empty title="No online exams" hint="When a teacher schedules one for your class, it appears here." colors={colors} />}>
-          {(list.data || []).map((e) => (
-            <Card key={String(e.id)} colors={colors}>
-              <Text style={{ color: colors.ink, fontWeight: "800" }}>{String(e.title)}</Text>
-              <Text style={{ color: colors.muted }}>{String(e.startAt || "")} · {String(e.durationMinutes || "—")} min</Text>
-              <Badge value={String(e.status || "")} colors={colors} />
-              <Btn label="Open" colors={colors} onPress={() => router.push(`/online-exam/${e.id}` as never)} />
-            </Card>
-          ))}
+          {(list.data || []).map((e) => {
+            const excluded = Boolean(e.excluded);
+            return (
+              <Card key={String(e.id)} colors={colors}>
+                <Text style={{ color: colors.ink, fontWeight: "800" }}>{String(e.title)}</Text>
+                <Text style={{ color: colors.muted }}>{String(e.startAt || "")} · {String(e.durationMinutes || "—")} min</Text>
+                <Badge value={excluded ? "EXCLUDED" : String(e.attemptStatus || e.status || "")} colors={colors} />
+                {excluded ? (
+                  <Text style={{ color: colors.muted, marginTop: 6 }}>
+                    {statusReasonLabel(String(e.excludeReason || ""), null) || "You are not assigned this exam."}
+                  </Text>
+                ) : (
+                  <Btn label={e.attemptStatus ? "Open" : "Open"} colors={colors} onPress={() => router.push(`/online-exam/${e.id}` as never)} />
+                )}
+              </Card>
+            );
+          })}
         </QueryState>
       </Screen>
     </RequireAuth>
@@ -114,14 +123,32 @@ function StaffOnline() {
             <Card key={String(e.id)} colors={colors}>
               <Text style={{ color: colors.ink, fontWeight: "800" }}>{String(e.title)}</Text>
               <Text style={{ color: colors.muted }}>{String(e.startAt || "")} · {pretty(String(e.status || ""))}</Text>
+              <Btn label="Open" kind="ghost" colors={colors} onPress={() => router.push(`/online-exam/${e.id}` as never)} />
               {canWrite && String(e.status) === "DRAFT" ? (
                 <Btn
                   label="Schedule"
                   kind="ghost"
                   colors={colors}
                   onPress={async () => {
+                    if (!(await confirmAction("Schedule exam", "Assigned students and parents will be notified."))) return;
                     try {
                       await onlineExamApi.schedule(String(e.id));
+                      await list.reload();
+                    } catch (err) {
+                      setErr(friendlyMessage(err));
+                    }
+                  }}
+                />
+              ) : null}
+              {canWrite && (String(e.status) === "DRAFT" || String(e.status) === "SCHEDULED") ? (
+                <Btn
+                  label="Delete"
+                  kind="ghost"
+                  colors={colors}
+                  onPress={async () => {
+                    if (!(await confirmAction("Delete exam", "This cannot be undone."))) return;
+                    try {
+                      await onlineExamApi.remove(String(e.id));
                       await list.reload();
                     } catch (err) {
                       setErr(friendlyMessage(err));

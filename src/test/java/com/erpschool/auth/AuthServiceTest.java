@@ -9,6 +9,8 @@ import com.erpschool.common.exception.UnauthorizedException;
 import com.erpschool.config.AppProperties;
 import com.erpschool.feature.FeatureService;
 import com.erpschool.security.JwtService;
+import com.erpschool.student.entity.Student;
+import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.entity.TenantStatus;
 import com.erpschool.tenant.repository.TenantRepository;
@@ -48,6 +50,8 @@ class AuthServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private StudentRepository studentRepository;
+    @Mock
     private TenantRepository tenantRepository;
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
@@ -81,7 +85,7 @@ class AuthServiceTest {
             public void rollback(TransactionStatus status) {
             }
         };
-        authService = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
+        authService = new AuthService(userRepository, studentRepository, tenantRepository, refreshTokenRepository,
                 passwordEncoder, jwtService, properties, auditService, featureService, txManager);
         lenient().when(featureService.snapshot(any())).thenReturn(Map.of("ATTENDANCE", true, "RESULTS", true));
 
@@ -131,6 +135,32 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login("GVS-TCH-0001", "ChangeMe@123", null))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("subscription is currently inactive");
+    }
+
+    @Test
+    void inactiveStudentLoginIncludesStoredReason() {
+        User studentUser = new User();
+        studentUser.setId(UUID.randomUUID());
+        studentUser.setTenantId(tenantId);
+        studentUser.setUsername("DZS-STU-0001");
+        studentUser.setPasswordHash(passwordEncoder.encode("ChangeMe@123"));
+        studentUser.setFirstName("Sara");
+        studentUser.setLastName("Khan");
+        studentUser.setRole(UserRole.STUDENT);
+        studentUser.setStatus(UserStatus.INACTIVE);
+        when(userRepository.findLoginCandidates("DZS-STU-0001")).thenReturn(List.of(studentUser));
+        Student profile = new Student();
+        profile.setId(UUID.randomUUID());
+        profile.setTenantId(tenantId);
+        profile.setUserId(studentUser.getId());
+        profile.setInactiveReason("UNPAID_FEES");
+        profile.setInactiveNote("April dues");
+        when(studentRepository.findByTenantIdAndUserId(tenantId, studentUser.getId())).thenReturn(Optional.of(profile));
+
+        assertThatThrownBy(() -> authService.login("DZS-STU-0001", "ChangeMe@123", null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("currently inactive")
+                .hasMessageContaining("Fee not paid");
     }
 
     @Test

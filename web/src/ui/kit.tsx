@@ -271,7 +271,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], enabled 
   }, [enabled]);
   useEffect(() => {
     if (!enabled) {
-      if (dataRef.current == null) setLoading(true);
+      setLoading(false);
       return;
     }
     let cancelled = false;

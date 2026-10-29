@@ -13,6 +13,7 @@ function hrefFor(entityType?: string) {
   if (t.includes("exam") || t.includes("result")) return "/exams";
   if (t.includes("homework")) return "/homework";
   if (t.includes("attendance")) return "/attendance";
+  if (t.includes("remark")) return "/remarks";
   if (t.includes("announc")) return "/announcements";
   return "/(tabs)/alerts";
 }

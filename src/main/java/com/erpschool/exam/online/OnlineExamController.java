@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,6 +59,32 @@ public class OnlineExamController {
     @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> publish(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok("Results published", onlineExamService.publishResults(id)));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
+        onlineExamService.delete(id);
+        return ResponseEntity.ok(ApiResponse.ok("Exam deleted", null));
+    }
+
+    @GetMapping("/{id}/recipients")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> recipients(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(onlineExamService.recipients(id)));
+    }
+
+    @PutMapping("/{id}/recipients")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> replaceRecipients(
+            @PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(ApiResponse.ok("Recipients saved", onlineExamService.replaceRecipients(id, body)));
+    }
+
+    @GetMapping("/{id}/results")
+    @PreAuthorize("hasAnyRole('ERP_OWNER','SCHOOL_ADMIN','PRINCIPAL','TEACHER')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> results(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(onlineExamService.resultsSheet(id)));
     }
 
     @GetMapping

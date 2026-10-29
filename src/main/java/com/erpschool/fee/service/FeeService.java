@@ -372,9 +372,8 @@ public class FeeService {
             String title = approve ? "Fee payment approved" : "Fee payment rejected";
             notificationService.notifyUser(challan.getTenantId(), student.getUserId(), "FEE", title, remarks,
                     "FeeChallan", challan.getId().toString());
-            parentStudentRepository.findByTenantIdAndStudentId(challan.getTenantId(), student.getId())
-                    .forEach(link -> notificationService.notifyUser(challan.getTenantId(), link.getParentUserId(),
-                            "FEE", title, remarks, "FeeChallan", challan.getId().toString()));
+            notificationService.notifyParents(challan.getTenantId(), student.getId(), "FEE", title, remarks,
+                    "FeeChallan", challan.getId().toString());
         }
         return toMap(challan);
     }
@@ -597,12 +596,10 @@ public class FeeService {
                 "Fee challan " + challan.getChallanNumber(),
                 "Amount payable: " + challan.getTotalPayable(),
                 "FeeChallan", challan.getId().toString());
-        for (ParentStudent link : parents) {
-            notificationService.notifyUser(challan.getTenantId(), link.getParentUserId(),
-                    "FEE", "Fee challan " + challan.getChallanNumber(),
-                    "Amount payable: " + challan.getTotalPayable(),
-                    "FeeChallan", challan.getId().toString());
-        }
+        notificationService.notifyParents(challan.getTenantId(), student.getId(), "FEE",
+                "Fee challan " + challan.getChallanNumber(),
+                "Amount payable: " + challan.getTotalPayable(),
+                "FeeChallan", challan.getId().toString());
     }
 
     private Map<String, Object> toSummary(FeeChallan c) {

@@ -37,6 +37,7 @@ export default function LoginScreen() {
           kicker="Choose portal"
           subtitle={shown ? brandSubtitle(shown, "Select your role to continue") : "Select your role to continue"}
           size={64}
+          flip
         />
         <Text style={{ color: colors.muted, marginBottom: 16 }}>
           {schoolName

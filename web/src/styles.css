@@ -125,7 +125,27 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
   padding: 32px; box-shadow: var(--shadow);
   animation: rise .42s ease both;
 }
-.auth-card h1 { margin: 8px 0 6px; font-size: clamp(26px, 7vw, 34px); }
+.auth-card h1 { margin: 8px 0 6px; font-size: clamp(26px, 7vw, 34px); animation: rise .36s .18s ease both; }
+.auth-fields { animation: rise .36s .28s ease both; }
+.coin {
+  width: 72px; height: 72px; perspective: 720px;
+}
+.coin-face {
+  width: 72px; height: 72px; border-radius: 50%;
+  overflow: hidden; transform-style: preserve-3d;
+  background: var(--btn); color: #fff;
+  display: grid; place-items: center;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--btn) 35%, transparent);
+  animation: coin-flip .7s cubic-bezier(.2,.7,.2,1) both;
+}
+.coin-face img { width: 100%; height: 100%; object-fit: cover; }
+@keyframes coin-flip {
+  from { transform: rotateY(-180deg) scale(.72); opacity: 0; }
+  to { transform: rotateY(0) scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coin-face, .auth-card, .auth-card h1, .auth-fields { animation: none; }
+}
 @keyframes rise {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: none; }

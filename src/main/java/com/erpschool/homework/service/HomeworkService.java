@@ -104,10 +104,9 @@ public class HomeworkService {
                     notificationService.notifyUser(tenantId, st.getUserId(), "HOMEWORK",
                             "New homework: " + homeworkTitle, homeworkBody,
                             "Homework", homeworkId.toString());
-                    parentStudentRepository.findByTenantIdAndStudentId(tenantId, st.getId())
-                            .forEach(link -> notificationService.notifyUser(tenantId, link.getParentUserId(),
-                                    "HOMEWORK", "Homework for your child: " + homeworkTitle,
-                                    homeworkBody, "Homework", homeworkId.toString()));
+                    notificationService.notifyParents(tenantId, st.getId(), "HOMEWORK",
+                            "New homework — " + homeworkTitle, homeworkBody,
+                            "Homework", homeworkId.toString());
                 });
         return toMap(saved);
     }

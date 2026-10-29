@@ -7,7 +7,7 @@ import { Btn, Card, Chip, QueryState, Screen, Stat, useAsync } from "../../ui/ki
 import { BrandHeader } from "../../ui/logo";
 import { ProgressWheel } from "../../ui/wheel";
 import { academicApi, announcementApi, examApi, feeApi, homeworkApi, notificationApi, reportApi, studentApi, tenantApi } from "../../api/services";
-import { brandSubtitle, money, num, pretty, roleLabel } from "../../lib/format";
+import { brandSubtitle, money, num, pretty, roleLabel, statusReasonLabel } from "../../lib/format";
 import ResultCountdown, { isUpcomingExam, pickResultSession } from "../../ui/countdown";
 
 export default function Home() {
@@ -109,7 +109,8 @@ function StaffHome() {
         items={[
           { label: "Users", href: "/users" },
           { label: "Students", href: "/students" },
-          { label: "Admissions", href: "/admissions" },
+          { label: "Online exams", href: "/online-exams" },
+          { label: "Remarks", href: "/remarks" },
           { label: "Settings", href: "/settings" },
         ]}
       />
@@ -175,6 +176,7 @@ function TeacherHome() {
           { label: "Homework", href: "/homework" },
           { label: "Results", href: "/exams" },
           { label: "Online exams", href: "/online-exams" },
+          { label: "Remarks", href: "/remarks" },
         ]}
       />
       <Notices />
@@ -230,13 +232,23 @@ function ParentHome() {
         {list.map((k) => (
           <Chip
             key={k.id}
-            label={k.fullName || k.rollNumber || "Child"}
+            label={`${k.fullName || k.rollNumber || "Child"}${k.status && k.status !== "ACTIVE" ? " · inactive" : ""}`}
             selected={k.id === active}
             onPress={() => setChildId(k.id)}
             colors={colors}
           />
         ))}
       </View>
+      {(() => {
+        const kid = list.find((k) => k.id === active);
+        if (!kid || !kid.status || kid.status === "ACTIVE") return null;
+        const reason = statusReasonLabel(kid.inactiveReason, kid.inactiveNote);
+        return (
+          <Text style={{ color: colors.bad, marginBottom: 12 }}>
+            {kid.fullName || "This child"} is inactive{reason ? ` — ${reason}` : ""}. Other children still work.
+          </Text>
+        );
+      })()}
       <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-around", marginBottom: 8 }}>
         {on("ATTENDANCE") ? (
           <ProgressWheel
@@ -344,6 +356,7 @@ function StudentHome() {
           { label: "Homework", href: "/homework" },
           { label: "Results", href: "/exams" },
           { label: "Online exams", href: "/online-exams" },
+          { label: "Remarks", href: "/remarks" },
           { label: "Fees", href: "/fees" },
         ]}
       />

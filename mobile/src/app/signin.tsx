@@ -30,7 +30,8 @@ export default function SignInScreen() {
           colors={colors}
           kicker={roleLabel(role)}
           subtitle={shown ? brandSubtitle(shown, "Enter your username and password") : "Enter your username and password"}
-          size={56}
+          size={64}
+          flip
         />
         <Pressable onPress={() => router.replace("/login")} accessibilityRole="button" style={{ marginBottom: 16 }}>
           <Text style={{ color: colors.brand, fontWeight: "700" }}>← Change portal</Text>

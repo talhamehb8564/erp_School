@@ -112,6 +112,7 @@ public final class StudentDtos {
         private StudentStatus status;
         private String inactiveReason;
         private String inactiveNote;
+        private String fullName;
         private String cnic;
         private String address;
         private String guardianName;
@@ -179,6 +180,7 @@ public final class StudentDtos {
                 .status(s.getStatus())
                 .inactiveReason(s.getInactiveReason())
                 .inactiveNote(s.getInactiveNote())
+                .fullName(user != null ? user.getFullName() : null)
                 .address(s.getAddress())
                 .guardianName(s.getGuardianName())
                 .guardianPhone(s.getGuardianPhone())

@@ -94,6 +94,7 @@ public class AttendanceService {
                     .findByTenantIdAndTimetableSlotIdAndStudentIdAndAttendanceDate(
                             tenantId, slotId, item.studentId(), date)
                     .orElseGet(StudentAttendance::new);
+            AttendanceStatus previous = row.getId() == null ? null : row.getStatus();
             row.setTenantId(tenantId);
             row.setTimetableSlotId(slotId);
             row.setStudentId(item.studentId());
@@ -106,7 +107,22 @@ public class AttendanceService {
             } else {
                 row.setUpdatedBy(TenantContext.getUserId());
             }
-            saved.add(studentAttendanceRepository.save(row));
+            StudentAttendance stored = studentAttendanceRepository.save(row);
+            saved.add(stored);
+            if (item.status() != previous && (item.status() == AttendanceStatus.ABSENT
+                    || item.status() == AttendanceStatus.LATE
+                    || item.status() == AttendanceStatus.PRESENT)) {
+                String statusLabel = item.status().name().charAt(0)
+                        + item.status().name().substring(1).toLowerCase();
+                notificationService.notifyParents(
+                        tenantId,
+                        student.getId(),
+                        "ATTENDANCE",
+                        "Attendance — " + statusLabel,
+                        "Marked " + statusLabel.toLowerCase() + " on " + date + ".",
+                        "StudentAttendance",
+                        stored.getId().toString());
+            }
         }
         return saved;
     }

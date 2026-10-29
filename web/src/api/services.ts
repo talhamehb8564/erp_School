@@ -500,6 +500,26 @@ export const onlineExamApi = {
     api.get<Record<string, unknown>>(`${v1}/online-exams/${id}/attempts/${attemptId}`),
   grade: (id: string, attemptId: string, body: Record<string, unknown>[]) =>
     api.post<Record<string, unknown>>(`${v1}/online-exams/${id}/attempts/${attemptId}/grade`, body),
+  recipients: (id: string) => api.get<Record<string, unknown>>(`${v1}/online-exams/${id}/recipients`),
+  saveRecipients: (id: string, body: Record<string, unknown>) =>
+    api.put<Record<string, unknown>>(`${v1}/online-exams/${id}/recipients`, body),
+  results: (id: string) => api.get<Record<string, unknown>[]>(`${v1}/online-exams/${id}/results`),
+  remove: (id: string) => api.del<unknown>(`${v1}/online-exams/${id}`),
+};
+
+export const remarkApi = {
+  list: (q: { studentId?: string; classId?: string; sectionId?: string; from?: string; to?: string; page?: number } = {}) => {
+    const p = new URLSearchParams({ size: "40", page: String(q.page || 0) });
+    if (q.studentId) p.set("studentId", q.studentId);
+    if (q.classId) p.set("classId", q.classId);
+    if (q.sectionId) p.set("sectionId", q.sectionId);
+    if (q.from) p.set("from", q.from);
+    if (q.to) p.set("to", q.to);
+    return api.get<Page<Record<string, unknown>>>(`${v1}/remarks?${p}`);
+  },
+  create: (body: Record<string, unknown>) => api.post<Record<string, unknown>[]>(`${v1}/remarks`, body),
+  update: (id: string, body: Record<string, unknown>) => api.put<Record<string, unknown>>(`${v1}/remarks/${id}`, body),
+  remove: (id: string) => api.del<unknown>(`${v1}/remarks/${id}`),
 };
 
 export const healthApi = {

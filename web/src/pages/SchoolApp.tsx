@@ -19,7 +19,7 @@ import ErrorBoundary from "../ui/ErrorBoundary";
 const NAV_GROUPS: { label: string; tos: string[] }[] = [
   { label: "Home", tos: ["/app", "/app/notifications", "/app/password"] },
   { label: "People", tos: ["/app/students", "/app/users", "/app/campuses"] },
-  { label: "Academics", tos: ["/app/academics", "/app/timetable", "/app/attendance", "/app/teacher-attendance", "/app/homework", "/app/exams", "/app/online-exams"] },
+  { label: "Academics", tos: ["/app/academics", "/app/timetable", "/app/attendance", "/app/teacher-attendance", "/app/homework", "/app/exams", "/app/online-exams", "/app/remarks"] },
   { label: "Finance", tos: ["/app/fees", "/app/salaries", "/app/reports", "/app/billing"] },
   { label: "School", tos: ["/app/website", "/app/admissions", "/app/announcements", "/app/calendar", "/app/settings"] },
 ];

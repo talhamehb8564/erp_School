@@ -4,6 +4,7 @@ import { ApiError } from "../../api/client";
 import { academicApi, onlineExamApi } from "../../api/services";
 import { useLookups } from "../../lib/lookups";
 import { useSession } from "../../lib/session";
+import { EXCLUDE_REASONS, statusReasonLabel } from "../../lib/status";
 import { useToast } from "../../lib/toast";
 import type { Section } from "../../lib/types";
 import { Badge, Button, Empty, Field, Form, QueryState, Table, useAsync } from "../../ui/kit";
@@ -205,8 +206,10 @@ function StudentList() {
               const id = str(e.id);
               const status = str(e.status);
               const attempt = str(e.attemptStatus);
+              const excluded = Boolean(e.excluded);
               let action = <span className="hint">—</span>;
-              if (attempt === "IN_PROGRESS" || status === "LIVE") action = <Link to={`/app/online-exams/${id}`} className="btn sm brass">Open</Link>;
+              if (excluded) action = <span className="hint">{statusReasonLabel(str(e.excludeReason), null) || "Excluded"}</span>;
+              else if (attempt === "IN_PROGRESS" || status === "LIVE") action = <Link to={`/app/online-exams/${id}`} className="btn sm brass">Open</Link>;
               else if (status === "SCHEDULED") action = <Link to={`/app/online-exams/${id}`} className="btn sm ghost">Waiting</Link>;
               else if (attempt) action = <Link to={`/app/online-exams/${id}`} className="btn sm ghost">Result</Link>;
               const grade = e.grade != null ? ` · ${str(e.obtainedMarks)}/${str(e.totalMarks)} ${str(e.grade)}` : "";
@@ -215,7 +218,7 @@ function StudentList() {
                 subjectName(str(e.subjectId)) + " · " + className(str(e.classId)),
                 e.startAt ? new Date(str(e.startAt)).toLocaleString() : "—",
                 `${num(e.durationMinutes)} min`,
-                <Badge key={id} value={(attempt || status) + grade} />,
+                <Badge key={id} value={excluded ? "EXCLUDED" : (attempt || status) + grade} />,
                 action,
               ];
             })}
@@ -234,10 +237,11 @@ function StudentTake({ examId }: { examId: string }) {
       return await onlineExamApi.start(examId);
     } catch (e) {
       const code = e instanceof ApiError ? e.errorCode : "";
-      if (code === "EXAM_NOT_STARTED") {
+      if (code === "EXAM_NOT_STARTED" || code === "EXAM_EXCLUDED") {
         const mine = await onlineExamApi.mine();
         const row = mine.find((x) => str(x.id) === examId);
-        if (row) return row;
+        if (row) return { ...row, blocked: code };
+        if (code === "EXAM_EXCLUDED") throw e;
       }
       try {
         return await onlineExamApi.result(examId);
@@ -311,6 +315,12 @@ function StudentTake({ examId }: { examId: string }) {
       </div>
       <QueryState status={paper} label="exam">
         {!data ? <Empty title="Exam unavailable" /> : null}
+        {data && (data.excluded || str(data.attemptStatus) === "EXCLUDED") ? (
+          <div className="card">
+            <Badge value="EXCLUDED" />
+            <p>You are not assigned this exam.{data.excludeReason ? ` Reason: ${statusReasonLabel(str(data.excludeReason), null)}.` : ""}</p>
+          </div>
+        ) : null}
         {data && str(data.status) === "SCHEDULED" && !inProgress ? (
           <div className="card"><p>This exam has not started. Starts {new Date(str(data.startAt)).toLocaleString()}.</p></div>
         ) : null}
@@ -362,7 +372,7 @@ function StudentTake({ examId }: { examId: string }) {
             ))}
             <Button type="submit" kind="brass" loadingText="Submitting…">Submit paper</Button>
           </Form>
-        ) : data && str(data.attemptStatus) && str(data.attemptStatus) !== "IN_PROGRESS" ? (
+        ) : data && str(data.attemptStatus) && str(data.attemptStatus) !== "IN_PROGRESS" && str(data.attemptStatus) !== "EXCLUDED" && !data.excluded ? (
           <div className="card">
             <Badge value={str(data.attemptStatus)} />
             <p>{str(data.message, "Your attempt is recorded.")}</p>
@@ -479,8 +489,10 @@ function StaffList() {
 
 function StaffExam({ examId }: { examId: string }) {
   const toast = useToast();
+  const nav = useNavigate();
   const exam = useAsync(() => onlineExamApi.get(examId), [examId]);
-  const attempts = useAsync(() => onlineExamApi.attempts(examId), [examId]);
+  const attempts = useAsync(() => onlineExamApi.results(examId), [examId]);
+  const recipients = useAsync(() => onlineExamApi.recipients(examId), [examId]);
   const data = exam.data;
   const [meta, setMeta] = useState({
     title: "", description: "", classId: "", subjectId: "",
@@ -565,6 +577,7 @@ function StaffExam({ examId }: { examId: string }) {
         <div className="row">
           {status === "DRAFT" ? (
             <Button kind="brass" loadingText="Scheduling…" onClick={async () => {
+              if (!window.confirm("Schedule this exam? Assigned students and parents will be notified.")) return;
               await onlineExamApi.schedule(examId);
               toast("ok", "Scheduled");
               await exam.reload();
@@ -572,10 +585,20 @@ function StaffExam({ examId }: { examId: string }) {
           ) : null}
           {status === "CLOSED" ? (
             <Button kind="ok" loadingText="Publishing…" onClick={async () => {
+              if (!window.confirm("Publish results? Eligible students who did not attempt will receive 0. Excluded students stay excluded.")) return;
               await onlineExamApi.publishResults(examId);
               toast("ok", "Results published");
               await exam.reload();
+              await attempts.reload();
             }}>Publish results</Button>
+          ) : null}
+          {status === "DRAFT" || status === "SCHEDULED" ? (
+            <Button kind="danger" loadingText="Deleting…" onClick={async () => {
+              if (!window.confirm("Delete this exam? This cannot be undone.")) return;
+              await onlineExamApi.remove(examId);
+              toast("ok", "Exam deleted");
+              nav("/app/online-exams");
+            }}>Delete</Button>
           ) : null}
         </div>
       </div>
@@ -697,20 +720,24 @@ function StaffExam({ examId }: { examId: string }) {
           </div>
         ) : null}
       </QueryState>
+      <RecipientsPanel examId={examId} status={recipients} onSaved={() => { void recipients.reload(); void attempts.reload(); }} />
       <div className="card" style={{ marginTop: 16 }}>
-        <h3>Attempts</h3>
-        <QueryState status={attempts} label="attempts">
+        <h3>Results</h3>
+        <p className="hint">Eligible students who do not attempt receive 0 after publish. Excluded students are not scored.</p>
+        <QueryState status={attempts} label="results">
           <Table
             headers={["Student", "Roll", "Status", "Marks", "Grade", ""]}
             rows={(attempts.data || []).map((a) => {
               const id = str(a.id);
+              const excluded = Boolean(a.excluded);
+              const canGrade = Boolean(id) && !excluded;
               return [
                 str(a.studentName),
                 str(a.rollNumber, "—"),
-                <Badge key={id} value={str(a.status)} />,
-                a.obtainedMarks == null ? "—" : `${str(a.obtainedMarks)} / ${str(a.totalMarks)}`,
-                str(a.grade, "—"),
-                <Button key={`${id}-g`} kind="ghost" onClick={() => setGrading(id)}>Grade</Button>,
+                <Badge key={str(a.studentId)} value={excluded ? `EXCLUDED ${statusReasonLabel(str(a.excludeReason), null)}` : str(a.status)} />,
+                excluded ? "—" : (a.obtainedMarks == null ? "—" : `${str(a.obtainedMarks)} / ${str(a.totalMarks)}`),
+                excluded ? "—" : str(a.grade, "—"),
+                canGrade ? <Button key={`${id}-g`} kind="ghost" onClick={() => setGrading(id)}>Grade</Button> : "",
               ];
             })}
           />
@@ -751,5 +778,120 @@ function StaffExam({ examId }: { examId: string }) {
         ) : null}
       </div>
     </>
+  );
+}
+
+type RecipientRow = {
+  studentId: string;
+  studentName?: string;
+  rollNumber?: string;
+  assigned?: boolean;
+  excluded?: boolean;
+  excludeReason?: string;
+  excludeNote?: string;
+};
+
+function RecipientsPanel({
+  examId,
+  status,
+  onSaved,
+}: {
+  examId: string;
+  status: { data: Record<string, unknown> | null; error: unknown; loading: boolean; reload: () => void };
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const rows = ((status.data?.students as RecipientRow[]) || []);
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const [exclusions, setExclusions] = useState<Record<string, { reason: string; note: string }>>({});
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!rows.length) return;
+    const next: Record<string, boolean> = {};
+    const ex: Record<string, { reason: string; note: string }> = {};
+    rows.forEach((r) => {
+      next[r.studentId] = Boolean(r.assigned) && !r.excluded;
+      if (r.excluded) ex[r.studentId] = { reason: r.excludeReason || "OTHER", note: r.excludeNote || "" };
+    });
+    setPicked(next);
+    setExclusions(ex);
+    setReady(true);
+  }, [status.data]);
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3>Recipients</h3>
+      <p className="hint">Select students in the assigned class/sections. Exclude with a stored reason — the API blocks excluded students from starting.</p>
+      <QueryState status={status} label="recipients">
+        {!rows.length ? <Empty title="No students in these sections" /> : (
+          <Form
+            busyLabel="Saving recipients…"
+            onSubmit={async () => {
+              const selected = Object.entries(picked).filter(([id, v]) => v && !exclusions[id]).map(([id]) => id);
+              await onlineExamApi.saveRecipients(examId, {
+                restrictToSelected: true,
+                studentIds: selected,
+                exclusions: Object.entries(exclusions).map(([studentId, x]) => ({ studentId, reason: x.reason, note: x.note || undefined })),
+              });
+              toast("ok", "Recipients saved");
+              onSaved();
+            }}
+          >
+            <div className="row" style={{ marginBottom: 8 }}>
+              <Button type="button" kind="ghost" onClick={() => {
+                const next: Record<string, boolean> = {};
+                rows.forEach((r) => { next[r.studentId] = !exclusions[r.studentId]; });
+                setPicked(next);
+              }}>Select all</Button>
+              <Button type="button" kind="ghost" onClick={() => setPicked({})}>Deselect all</Button>
+            </div>
+            <Table
+              headers={["Student", "Roll", "Assigned", "Exclude"]}
+              rows={rows.map((r) => {
+                const id = r.studentId;
+                const ex = exclusions[id];
+                return [
+                  r.studentName || "—",
+                  r.rollNumber || "—",
+                  <input
+                    key={`${id}-a`}
+                    type="checkbox"
+                    checked={Boolean(picked[id]) && !ex}
+                    disabled={Boolean(ex)}
+                    onChange={(e) => setPicked((cur) => ({ ...cur, [id]: e.target.checked }))}
+                  />,
+                  <div key={`${id}-x`} className="row">
+                    <select
+                      value={ex?.reason || ""}
+                      onChange={(e) => {
+                        const reason = e.target.value;
+                        setExclusions((cur) => {
+                          const next = { ...cur };
+                          if (!reason) delete next[id];
+                          else next[id] = { reason, note: next[id]?.note || "" };
+                          return next;
+                        });
+                        if (reason) setPicked((cur) => ({ ...cur, [id]: false }));
+                      }}
+                    >
+                      <option value="">Not excluded</option>
+                      {EXCLUDE_REASONS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                    </select>
+                    {ex ? (
+                      <input
+                        placeholder="Note"
+                        value={ex.note}
+                        onChange={(e) => setExclusions((cur) => ({ ...cur, [id]: { ...ex, note: e.target.value } }))}
+                      />
+                    ) : null}
+                  </div>,
+                ];
+              })}
+            />
+            {ready ? <Button type="submit" kind="brass" loadingText="Saving recipients…">Save recipients</Button> : null}
+          </Form>
+        )}
+      </QueryState>
+    </div>
   );
 }

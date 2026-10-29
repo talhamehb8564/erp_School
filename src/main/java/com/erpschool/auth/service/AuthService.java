@@ -12,6 +12,9 @@ import com.erpschool.config.AppProperties;
 import com.erpschool.feature.FeatureService;
 import com.erpschool.security.JwtService;
 import com.erpschool.tenant.dto.TenantResponse;
+import com.erpschool.common.util.StatusCopy;
+import com.erpschool.student.entity.Student;
+import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.repository.TenantRepository;
 import com.erpschool.user.dto.UserResponse;
@@ -45,6 +48,7 @@ public class AuthService {
     });
 
     private final UserRepository userRepository;
+    private final StudentRepository studentRepository;
     private final TenantRepository tenantRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -56,6 +60,7 @@ public class AuthService {
     private final TransactionTemplate writeTx;
 
     public AuthService(UserRepository userRepository,
+                       StudentRepository studentRepository,
                        TenantRepository tenantRepository,
                        RefreshTokenRepository refreshTokenRepository,
                        PasswordEncoder passwordEncoder,
@@ -65,6 +70,7 @@ public class AuthService {
                        FeatureService featureService,
                        PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
+        this.studentRepository = studentRepository;
         this.tenantRepository = tenantRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
@@ -118,7 +124,7 @@ public class AuthService {
             }
         }
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new UnauthorizedException("Account is inactive");
+            throw new UnauthorizedException(inactiveLoginMessage(user));
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             writeTx.executeWithoutResult(status -> {
@@ -352,6 +358,18 @@ public class AuthService {
         }
         throw new UnauthorizedException(
                 "Your school's ERP subscription is currently inactive. Please complete the payment and submit the payment proof to reactivate your account.");
+    }
+
+    private String inactiveLoginMessage(User user) {
+        if (user.getRole() != UserRole.STUDENT || user.getTenantId() == null) {
+            return "Your account is currently inactive.";
+        }
+        Student student = readTx.execute(status ->
+                studentRepository.findByTenantIdAndUserId(user.getTenantId(), user.getId()).orElse(null));
+        if (student == null) {
+            return "Your account is currently inactive.";
+        }
+        return StatusCopy.loginInactiveMessage(student.getInactiveReason(), student.getInactiveNote());
     }
 
     private record LoginRow(User user, Tenant tenant) {

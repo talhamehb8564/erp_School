@@ -8,8 +8,11 @@ import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.util.GradeCalculator;
 import com.erpschool.common.util.Instants;
+import com.erpschool.common.util.StatusCopy;
 import com.erpschool.common.util.TenantGuard;
+import com.erpschool.notification.service.NotificationService;
 import com.erpschool.student.entity.Student;
+import com.erpschool.student.entity.StudentStatus;
 import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.student.service.StudentAccessService;
 import com.erpschool.tenant.context.CampusScope;
@@ -50,6 +53,8 @@ public class OnlineExamService {
     private final StudentRepository studentRepository;
     private final StudentAccessService studentAccessService;
     private final UserRepository userRepository;
+    private final OnlineExamRecipientRepository recipientRepository;
+    private final NotificationService notificationService;
 
     public OnlineExamService(OnlineExamRepository examRepository,
                              OnlineExamQuestionRepository questionRepository,
@@ -60,7 +65,9 @@ public class OnlineExamService {
                              AcademicService academicService,
                              StudentRepository studentRepository,
                              StudentAccessService studentAccessService,
-                             UserRepository userRepository) {
+                             UserRepository userRepository,
+                             OnlineExamRecipientRepository recipientRepository,
+                             NotificationService notificationService) {
         this.examRepository = examRepository;
         this.questionRepository = questionRepository;
         this.attemptRepository = attemptRepository;
@@ -71,6 +78,8 @@ public class OnlineExamService {
         this.studentRepository = studentRepository;
         this.studentAccessService = studentAccessService;
         this.userRepository = userRepository;
+        this.recipientRepository = recipientRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -205,7 +214,10 @@ public class OnlineExamService {
         }
         exam.setStatus(computeStatus(exam, "SCHEDULED"));
         exam.setUpdatedBy(TenantContext.getUserId());
-        return toStaffExam(examRepository.save(exam), questions(exam));
+        OnlineExam saved = examRepository.save(exam);
+        notifyEligibleFamilies(saved, "EXAM", "Online exam scheduled — " + saved.getTitle(),
+                "Starts at " + saved.getStartAt());
+        return toStaffExam(saved, questions(saved));
     }
 
     @Transactional
@@ -215,7 +227,192 @@ public class OnlineExamService {
         exam.setStatus("RESULTS_PUBLISHED");
         exam.setPublishedAt(Instant.now());
         exam.setUpdatedBy(TenantContext.getUserId());
-        return toStaffExam(examRepository.save(exam), questions(exam));
+        OnlineExam saved = examRepository.save(exam);
+        notifyEligibleFamilies(saved, "RESULT", "Online exam results — " + saved.getTitle(),
+                "Results are now available.");
+        return toStaffExam(saved, questions(saved));
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        OnlineExam exam = requireExam(id);
+        assertCanManage(exam);
+        String status = exam.getStatus();
+        if ("RESULTS_PUBLISHED".equals(status) || "LIVE".equals(status)) {
+            throw new BusinessException("Published or live exams cannot be deleted");
+        }
+        if (attemptRepository.existsByTenantIdAndExamId(exam.getTenantId(), exam.getId())
+                && !"DRAFT".equals(status)) {
+            throw new BusinessException("This exam has student attempts and cannot be deleted");
+        }
+        recipientRepository.deleteByTenantIdAndExamId(exam.getTenantId(), exam.getId());
+        examRepository.delete(exam);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> recipients(UUID id) {
+        OnlineExam exam = requireExam(id);
+        assertCanViewStaff(exam);
+        List<Student> pool = sectionStudents(exam);
+        Map<UUID, String> names = studentNames(pool);
+        List<OnlineExamRecipient> rows = recipientRepository.findByTenantIdAndExamId(exam.getTenantId(), exam.getId());
+        Map<UUID, OnlineExamRecipient> byStudent = rows.stream()
+                .collect(Collectors.toMap(OnlineExamRecipient::getStudentId, r -> r, (a, b) -> a));
+        boolean whitelist = rows.stream().anyMatch(r -> !r.isExcluded());
+        List<Map<String, Object>> students = new ArrayList<>();
+        for (Student s : pool) {
+            OnlineExamRecipient rec = byStudent.get(s.getId());
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("studentId", s.getId());
+            m.put("studentName", names.getOrDefault(s.getId(), "—"));
+            m.put("rollNumber", s.getRollNumber());
+            m.put("sectionId", s.getSectionId());
+            boolean excluded = rec != null && rec.isExcluded();
+            boolean included = rec != null && !rec.isExcluded();
+            boolean assigned = rows.isEmpty() || (whitelist ? included : !excluded);
+            m.put("assigned", assigned);
+            m.put("excluded", excluded);
+            m.put("excludeReason", rec == null ? null : rec.getExcludeReason());
+            m.put("excludeNote", rec == null ? null : rec.getExcludeNote());
+            students.add(m);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("examId", exam.getId());
+        out.put("restrictToSelected", whitelist);
+        out.put("students", students);
+        return out;
+    }
+
+    @Transactional
+    public Map<String, Object> replaceRecipients(UUID id, Map<String, Object> body) {
+        OnlineExam exam = requireExam(id);
+        assertCanManage(exam);
+        if ("RESULTS_PUBLISHED".equals(exam.getStatus())) {
+            throw new BusinessException("Recipients cannot change after results are published");
+        }
+        List<UUID> selected = uuidList(body.get("studentIds"));
+        boolean restrict = body.containsKey("restrictToSelected")
+                ? truthy(body.get("restrictToSelected"))
+                : body.containsKey("studentIds");
+        Map<UUID, Map<String, Object>> exclusions = new LinkedHashMap<>();
+        Object rawEx = body.get("exclusions");
+        if (rawEx instanceof List<?> list) {
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> row)) continue;
+                UUID sid = uuid(row.get("studentId"));
+                if (sid == null) continue;
+                Map<String, Object> ex = new LinkedHashMap<>();
+                String reason = str(row.get("reason"), "OTHER").toUpperCase();
+                if (!List.of("ABSENT", "UNPAID_FEES", "INACTIVE", "MEDICAL", "DISCIPLINARY", "OTHER").contains(reason)) {
+                    throw new BusinessException("Unknown exclusion reason");
+                }
+                ex.put("reason", reason);
+                ex.put("note", str(row.get("note"), null));
+                exclusions.put(sid, ex);
+            }
+        }
+        Set<UUID> pool = sectionStudents(exam).stream().map(Student::getId).collect(Collectors.toCollection(LinkedHashSet::new));
+        for (UUID sid : selected) {
+            if (!pool.contains(sid)) {
+                throw new BusinessException("A selected student is not in this exam's class/sections");
+            }
+        }
+        for (UUID sid : exclusions.keySet()) {
+            if (!pool.contains(sid)) {
+                throw new BusinessException("An excluded student is not in this exam's class/sections");
+            }
+        }
+        recipientRepository.deleteByTenantIdAndExamId(exam.getTenantId(), exam.getId());
+        UUID actor = TenantContext.getUserId();
+        if (restrict) {
+            for (UUID sid : selected) {
+                if (exclusions.containsKey(sid)) continue;
+                OnlineExamRecipient rec = new OnlineExamRecipient();
+                rec.setTenantId(exam.getTenantId());
+                rec.setExamId(exam.getId());
+                rec.setStudentId(sid);
+                rec.setExcluded(false);
+                rec.setCreatedBy(actor);
+                recipientRepository.save(rec);
+            }
+        }
+        for (Map.Entry<UUID, Map<String, Object>> e : exclusions.entrySet()) {
+            OnlineExamRecipient rec = new OnlineExamRecipient();
+            rec.setTenantId(exam.getTenantId());
+            rec.setExamId(exam.getId());
+            rec.setStudentId(e.getKey());
+            rec.setExcluded(true);
+            rec.setExcludeReason((String) e.getValue().get("reason"));
+            rec.setExcludeNote((String) e.getValue().get("note"));
+            rec.setCreatedBy(actor);
+            recipientRepository.save(rec);
+            String reason = StatusCopy.examExcludeReason(rec.getExcludeReason(), rec.getExcludeNote());
+            notificationService.notifyParents(exam.getTenantId(), rec.getStudentId(), "EXAM",
+                    "Excluded from " + exam.getTitle(),
+                    reason == null ? "This student is not assigned this exam." : reason,
+                    "OnlineExam", exam.getId().toString());
+        }
+        return recipients(exam.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> resultsSheet(UUID id) {
+        OnlineExam exam = requireExam(id);
+        assertCanViewStaff(exam);
+        List<Student> pool = sectionStudents(exam);
+        Map<UUID, String> names = studentNames(pool);
+        Map<UUID, OnlineExamAttempt> attempts = attemptRepository
+                .findByTenantIdAndExamIdOrderBySubmittedAtDesc(exam.getTenantId(), exam.getId())
+                .stream().collect(Collectors.toMap(OnlineExamAttempt::getStudentId, a -> a, (a, b) -> a));
+        List<OnlineExamRecipient> recs = recipientRepository.findByTenantIdAndExamId(exam.getTenantId(), exam.getId());
+        Map<UUID, OnlineExamRecipient> byStudent = recs.stream()
+                .collect(Collectors.toMap(OnlineExamRecipient::getStudentId, r -> r, (a, b) -> a));
+        boolean published = "RESULTS_PUBLISHED".equals(exam.getStatus());
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Student s : pool) {
+            Eligibility el = eligibility(exam, s, recs, byStudent.get(s.getId()));
+            if (!el.assigned() && !el.excluded()) {
+                continue;
+            }
+            OnlineExamAttempt a = attempts.get(s.getId());
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("studentId", s.getId());
+            m.put("studentName", names.getOrDefault(s.getId(), "—"));
+            m.put("rollNumber", s.getRollNumber());
+            m.put("excluded", el.excluded());
+            m.put("excludeReason", el.reason());
+            m.put("assigned", el.assigned());
+            if (el.excluded()) {
+                m.put("status", "EXCLUDED");
+                m.put("obtainedMarks", null);
+                m.put("totalMarks", exam.getTotalMarks());
+                m.put("unattempted", false);
+            } else if (a != null) {
+                m.put("id", a.getId());
+                m.put("status", a.getStatus());
+                m.put("submittedAt", a.getSubmittedAt());
+                m.put("obtainedMarks", a.getObtainedMarks());
+                m.put("totalMarks", a.getTotalMarks());
+                m.put("percentage", a.getPercentage());
+                m.put("grade", a.getGrade());
+                m.put("unattempted", false);
+            } else if (published) {
+                m.put("status", "NOT_ATTEMPTED");
+                m.put("obtainedMarks", BigDecimal.ZERO);
+                m.put("totalMarks", exam.getTotalMarks());
+                m.put("percentage", BigDecimal.ZERO);
+                m.put("grade", GradeCalculator.grade(BigDecimal.ZERO));
+                m.put("passStatus", "FAIL");
+                m.put("unattempted", true);
+            } else {
+                m.put("status", "NOT_STARTED");
+                m.put("obtainedMarks", null);
+                m.put("totalMarks", exam.getTotalMarks());
+                m.put("unattempted", true);
+            }
+            out.add(m);
+        }
+        return out;
     }
 
     @Transactional(readOnly = true)
@@ -275,19 +472,42 @@ public class OnlineExamService {
         }
         Map<UUID, List<OnlineExamQuestion>> qMap = questionsByExam;
         Map<UUID, Map<UUID, OnlineExamAnswer>> aMap = answersByAttempt;
-        return rows.stream()
-                .map(e -> {
-                    Map<String, Object> m = toStudentSummary(e, sectionMap.getOrDefault(e.getId(), fallbackSections(e)));
-                    OnlineExamAttempt a = attempts.get(e.getId());
-                    if (a != null) {
-                        m.put("attemptStatus", a.getStatus());
-                        attachReleasedGrade(m, e, a,
-                                qMap.getOrDefault(e.getId(), List.of()),
-                                aMap.getOrDefault(a.getId(), Map.of()));
-                    }
-                    return m;
-                })
-                .toList();
+        Map<UUID, List<OnlineExamRecipient>> recByExam = rows.isEmpty() ? Map.of()
+                : recipientRepository.findByTenantIdAndExamIdIn(tenantId, rows.stream().map(OnlineExam::getId).toList())
+                .stream().collect(Collectors.groupingBy(OnlineExamRecipient::getExamId));
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (OnlineExam e : rows) {
+            List<OnlineExamRecipient> recs = recByExam.getOrDefault(e.getId(), List.of());
+            OnlineExamRecipient mine = recs.stream()
+                    .filter(r -> me.getId().equals(r.getStudentId())).findFirst().orElse(null);
+            Eligibility el = eligibility(e, me, recs, mine);
+            if (!el.assigned() && !el.excluded()) {
+                continue;
+            }
+            Map<String, Object> m = toStudentSummary(e, sectionMap.getOrDefault(e.getId(), fallbackSections(e)));
+            m.put("excluded", el.excluded());
+            m.put("excludeReason", el.reason());
+            m.put("canAttempt", el.assigned() && !el.excluded());
+            OnlineExamAttempt a = attempts.get(e.getId());
+            if (el.excluded()) {
+                m.put("attemptStatus", "EXCLUDED");
+            } else if (a != null) {
+                m.put("attemptStatus", a.getStatus());
+                attachReleasedGrade(m, e, a,
+                        qMap.getOrDefault(e.getId(), List.of()),
+                        aMap.getOrDefault(a.getId(), Map.of()));
+            } else if ("RESULTS_PUBLISHED".equals(e.getStatus())) {
+                m.put("attemptStatus", "NOT_ATTEMPTED");
+                m.put("obtainedMarks", BigDecimal.ZERO);
+                m.put("totalMarks", e.getTotalMarks());
+                m.put("percentage", BigDecimal.ZERO);
+                m.put("grade", GradeCalculator.grade(BigDecimal.ZERO));
+                m.put("passStatus", "FAIL");
+                m.put("unattempted", true);
+            }
+            out.add(m);
+        }
+        return out;
     }
 
     @Transactional
@@ -295,6 +515,7 @@ public class OnlineExamService {
         Student me = requireMeStudent();
         OnlineExam exam = requireExam(id);
         assertStudentAssigned(exam, me);
+        assertStudentEligible(exam, me);
         Instant now = Instant.now();
         Instant end = examEnd(exam);
         if (now.isBefore(exam.getStartAt())) {
@@ -379,7 +600,26 @@ public class OnlineExamService {
     public Map<String, Object> studentResult(UUID id) {
         Student me = requireMeStudent();
         OnlineExam exam = requireExam(id);
-        OnlineExamAttempt attempt = requireOwnAttempt(exam, me);
+        assertStudentAssigned(exam, me);
+        Eligibility el = eligibility(exam, me);
+        if (el.excluded()) {
+            throw new BusinessException("EXAM_EXCLUDED",
+                    el.reason() == null
+                            ? "You were excluded from this exam."
+                            : "You were excluded from this exam. Reason: " + el.reason());
+        }
+        if (!el.assigned()) {
+            throw new ForbiddenException("This exam is not assigned to you");
+        }
+        OnlineExamAttempt attempt = attemptRepository
+                .findByTenantIdAndExamIdAndStudentId(exam.getTenantId(), exam.getId(), me.getId())
+                .orElse(null);
+        if (attempt == null) {
+            if ("RESULTS_PUBLISHED".equals(exam.getStatus())) {
+                return zeroResult(exam, me);
+            }
+            throw new ResourceNotFoundException("Attempt", id);
+        }
         return studentResult(exam, attempt, me, false);
     }
 
@@ -648,6 +888,101 @@ public class OnlineExamService {
         if (exam.getCampusId() != null && me.getCampusId() != null && !exam.getCampusId().equals(me.getCampusId())) {
             throw new ForbiddenException("This exam is not assigned to your campus");
         }
+    }
+
+    private void assertStudentEligible(OnlineExam exam, Student me) {
+        Eligibility el = eligibility(exam, me);
+        if (el.excluded()) {
+            throw new BusinessException("EXAM_EXCLUDED",
+                    el.reason() == null
+                            ? "You were excluded from this exam."
+                            : "You were excluded from this exam. Reason: " + el.reason());
+        }
+        if (!el.assigned()) {
+            throw new ForbiddenException("This exam is not assigned to you");
+        }
+    }
+
+    private Eligibility eligibility(OnlineExam exam, Student me) {
+        List<OnlineExamRecipient> recs = recipientRepository.findByTenantIdAndExamId(exam.getTenantId(), exam.getId());
+        OnlineExamRecipient mine = recs.stream()
+                .filter(r -> me.getId().equals(r.getStudentId())).findFirst().orElse(null);
+        return eligibility(exam, me, recs, mine);
+    }
+
+    private Eligibility eligibility(OnlineExam exam, Student me, List<OnlineExamRecipient> recs, OnlineExamRecipient mine) {
+        boolean excluded = mine != null && mine.isExcluded();
+        String reason = excluded ? StatusCopy.examExcludeReason(mine.getExcludeReason(), mine.getExcludeNote()) : null;
+        if (recs == null || recs.isEmpty()) {
+            return new Eligibility(true, false, null);
+        }
+        boolean whitelist = recs.stream().anyMatch(r -> !r.isExcluded());
+        if (excluded) {
+            return new Eligibility(false, true, reason);
+        }
+        if (whitelist) {
+            boolean included = mine != null && !mine.isExcluded();
+            return new Eligibility(included, false, null);
+        }
+        return new Eligibility(true, false, null);
+    }
+
+    private List<Student> sectionStudents(OnlineExam exam) {
+        List<Student> all = new ArrayList<>();
+        for (UUID sectionId : sectionsOf(exam)) {
+            all.addAll(studentRepository.findByTenantIdAndClassIdAndSectionIdAndStatus(
+                    exam.getTenantId(), exam.getClassId(), sectionId, StudentStatus.ACTIVE));
+        }
+        return all;
+    }
+
+    private Map<UUID, String> studentNames(List<Student> students) {
+        Map<UUID, String> names = new HashMap<>();
+        List<UUID> userIds = students.stream().map(Student::getUserId).filter(id -> id != null).toList();
+        Map<UUID, String> byUser = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            for (User u : userRepository.findAllById(userIds)) {
+                byUser.put(u.getId(), u.getFullName());
+            }
+        }
+        for (Student s : students) {
+            names.put(s.getId(), byUser.getOrDefault(s.getUserId(), s.getAdmissionNumber()));
+        }
+        return names;
+    }
+
+    private void notifyEligibleFamilies(OnlineExam exam, String type, String title, String body) {
+        List<OnlineExamRecipient> recs = recipientRepository.findByTenantIdAndExamId(exam.getTenantId(), exam.getId());
+        Map<UUID, OnlineExamRecipient> byStudent = recs.stream()
+                .collect(Collectors.toMap(OnlineExamRecipient::getStudentId, r -> r, (a, b) -> a));
+        for (Student s : sectionStudents(exam)) {
+            Eligibility el = eligibility(exam, s, recs, byStudent.get(s.getId()));
+            if (!el.assigned() || el.excluded()) {
+                continue;
+            }
+            notificationService.notifyUser(exam.getTenantId(), s.getUserId(), type, title, body,
+                    "OnlineExam", exam.getId().toString());
+            notificationService.notifyParents(exam.getTenantId(), s.getId(), type, title, body,
+                    "OnlineExam", exam.getId().toString());
+        }
+    }
+
+    private Map<String, Object> zeroResult(OnlineExam exam, Student me) {
+        Map<String, Object> m = toStudentSummary(exam);
+        m.put("attemptStatus", "NOT_ATTEMPTED");
+        m.put("studentId", me.getId());
+        m.put("rollNumber", me.getRollNumber());
+        m.put("obtainedMarks", BigDecimal.ZERO);
+        m.put("totalMarks", exam.getTotalMarks());
+        m.put("percentage", BigDecimal.ZERO);
+        m.put("grade", GradeCalculator.grade(BigDecimal.ZERO));
+        m.put("passStatus", "FAIL");
+        m.put("unattempted", true);
+        m.put("message", "You did not attempt this exam. Score recorded as 0.");
+        return m;
+    }
+
+    private record Eligibility(boolean assigned, boolean excluded, String reason) {
     }
 
     private void assertStaffWrite() {

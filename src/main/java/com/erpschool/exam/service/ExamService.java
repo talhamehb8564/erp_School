@@ -331,23 +331,15 @@ public class ExamService {
                                 examSessionId.toString()
                         );
 
-                        parentStudentRepository
-                                .findByTenantIdAndStudentId(
-                                        tenantId,
-                                        student.getId()
-                                )
-                                .forEach(link ->
-                                        notificationService.notifyUser(
-                                                tenantId,
-                                                link.getParentUserId(),
-                                                "RESULT",
-                                                "Result published: "
-                                                        + sessionName,
-                                                "Your child's result is available.",
-                                                "ExamSession",
-                                                examSessionId.toString()
-                                        )
-                                );
+                        notificationService.notifyParents(
+                                tenantId,
+                                student.getId(),
+                                "RESULT",
+                                "Result published — " + sessionName,
+                                "Grade " + result.getGrade() + " (" + result.getPercentage() + "%).",
+                                "ExamSession",
+                                examSessionId.toString()
+                        );
                     }
                 });
 

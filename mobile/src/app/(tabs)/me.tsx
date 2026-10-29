@@ -5,7 +5,7 @@ import { useAppearance } from "../../lib/appearance";
 import { studentApi } from "../../api/services";
 import { Btn, Card, Chip, Screen, useAsync } from "../../ui/kit";
 import { BrandHeader } from "../../ui/logo";
-import { brandSubtitle, roleLabel } from "../../lib/format";
+import { brandSubtitle, roleLabel, statusReasonLabel } from "../../lib/format";
 import { apiOrigin } from "../../lib/config";
 
 export default function Me() {
@@ -34,13 +34,18 @@ export default function Me() {
             {(kids.data || []).map((k) => (
               <Chip
                 key={k.id}
-                label={k.fullName || k.rollNumber || k.id.slice(0, 8)}
+                label={`${k.fullName || k.rollNumber || k.id.slice(0, 8)}${k.status && k.status !== "ACTIVE" ? " · inactive" : ""}`}
                 selected={k.id === childId}
                 onPress={() => setChildId(k.id)}
                 colors={colors}
               />
             ))}
           </View>
+          {(kids.data || []).filter((k) => k.status && k.status !== "ACTIVE").map((k) => (
+            <Text key={`${k.id}-r`} style={{ color: colors.muted, marginTop: 8 }}>
+              {k.fullName || "Child"} is inactive{statusReasonLabel(k.inactiveReason, k.inactiveNote) ? ` — ${statusReasonLabel(k.inactiveReason, k.inactiveNote)}` : ""}.
+            </Text>
+          ))}
         </Card>
       ) : null}
       <View style={{ gap: 10 }}>

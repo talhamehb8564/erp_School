@@ -50,7 +50,13 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
       <div className="auth-card">
         <Link to={owner ? "/" : "/portals"} className="back-link">← {owner ? "Home" : "All portals"}</Link>
         <div className="site-brand" style={{ margin: "12px 0 8px" }}>
-          {school?.logoUrl && !owner ? <img src={school.logoUrl} alt="" style={{ width: 42, height: 42, objectFit: "cover", borderRadius: 12 }} /> : <div className="mark">{letter}</div>}
+          <div className="coin" aria-hidden>
+            <div className="coin-face">
+              {school?.logoUrl && !owner
+                ? <img src={school.logoUrl} alt="" />
+                : <span style={{ fontWeight: 800, fontSize: 28 }}>{letter}</span>}
+            </div>
+          </div>
           <div>
             <strong>{owner ? "Platform console" : name}</strong>
             <div className="hint">{owner ? "ERP Owner" : `${ROLE_LABEL[expected]} portal`}</div>
@@ -63,6 +69,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
             ? "Sign in with your platform owner account."
             : `Sign in to ${name}. Use your generated username or email.`}
         </p>
+        <div className="auth-fields">
         <Form
           busyLabel="Signing in…"
           onSubmit={async () => {
@@ -84,6 +91,7 @@ export default function LoginPage({ owner = false }: { owner?: boolean }) {
             </Button>
           </div>
         </Form>
+        </div>
       </div>
     </div>
   );

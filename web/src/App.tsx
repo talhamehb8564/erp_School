@@ -31,6 +31,7 @@ const ApplyAdmission = lazy(() => import("./pages/ApplyAdmission"));
 const HomeworkPage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.HomeworkPage })));
 const ExamsPage = lazy(() => import("./pages/school/Teaching").then((m) => ({ default: m.ExamsPage })));
 const OnlineExamsPage = lazy(() => import("./pages/school/OnlineExams"));
+const RemarksPage = lazy(() => import("./pages/school/Remarks"));
 const WebsitePage = lazy(() => import("./pages/school/Website"));
 const FeesPage = lazy(() => import("./pages/school/Finance").then((m) => ({ default: m.FeesPage })));
 const SalariesPage = lazy(() => import("./pages/school/Finance").then((m) => ({ default: m.SalariesPage })));
@@ -129,6 +130,7 @@ export default function App() {
             <Route path="exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><FeatureGate feature="RESULTS"><ExamsPage /></FeatureGate></RoleGate>} />
             <Route path="online-exams" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><FeatureGate feature="ONLINE_EXAMS"><OnlineExamsPage /></FeatureGate></RoleGate>} />
             <Route path="online-exams/:examId" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "STUDENT"]}><FeatureGate feature="ONLINE_EXAMS"><OnlineExamsPage /></FeatureGate></RoleGate>} />
+            <Route path="remarks" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL", "TEACHER", "PARENT", "STUDENT"]}><RemarksPage /></RoleGate>} />
             <Route path="website" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="WEBSITE"><WebsitePage /></FeatureGate></RoleGate>} />
             <Route path="admissions" element={<RoleGate roles={["SCHOOL_ADMIN", "PRINCIPAL"]}><FeatureGate feature="ADMISSIONS"><AdmissionsPage /></FeatureGate></RoleGate>} />
             <Route path="fees" element={<RoleGate roles={["ACCOUNT_OFFICER", "PRINCIPAL", "PARENT", "STUDENT"]}><FeatureGate feature="FEES"><FeesPage /></FeatureGate></RoleGate>} />

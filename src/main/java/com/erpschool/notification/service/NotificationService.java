@@ -5,7 +5,12 @@ import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.notification.entity.AppNotification;
 import com.erpschool.notification.repository.AppNotificationRepository;
+import com.erpschool.student.entity.Student;
+import com.erpschool.student.repository.ParentStudentRepository;
+import com.erpschool.student.repository.StudentRepository;
 import com.erpschool.tenant.context.TenantContext;
+import com.erpschool.user.entity.User;
+import com.erpschool.user.repository.UserRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +24,18 @@ import java.util.UUID;
 public class NotificationService {
 
     private final AppNotificationRepository repository;
+    private final ParentStudentRepository parentStudentRepository;
+    private final StudentRepository studentRepository;
+    private final UserRepository userRepository;
 
-    public NotificationService(AppNotificationRepository repository) {
+    public NotificationService(AppNotificationRepository repository,
+                               ParentStudentRepository parentStudentRepository,
+                               StudentRepository studentRepository,
+                               UserRepository userRepository) {
         this.repository = repository;
+        this.parentStudentRepository = parentStudentRepository;
+        this.studentRepository = studentRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -40,6 +54,37 @@ public class NotificationService {
         n.setEntityId(entityId);
         n.setCreatedBy(TenantContext.getUserId());
         repository.save(n);
+    }
+
+    /** Parent in-app titles always include the child name so multi-child accounts can tell them apart. */
+    @Transactional
+    public void notifyParents(UUID tenantId, UUID studentId,
+                              String type, String eventTitle, String body,
+                              String entityType, String entityId) {
+        if (studentId == null) {
+            return;
+        }
+        String who = childName(studentId);
+        String title = who + ": " + eventTitle;
+        parentStudentRepository.findByTenantIdAndStudentId(tenantId, studentId)
+                .forEach(link -> notifyUser(tenantId, link.getParentUserId(), type, title, body, entityType, entityId));
+    }
+
+    private String childName(UUID studentId) {
+        Student student = studentRepository.findById(studentId).orElse(null);
+        if (student == null) {
+            return "your child";
+        }
+        if (student.getUserId() != null) {
+            String name = userRepository.findById(student.getUserId()).map(User::getFullName).orElse(null);
+            if (name != null && !name.isBlank()) {
+                return name.trim();
+            }
+        }
+        if (student.getAdmissionNumber() != null && !student.getAdmissionNumber().isBlank()) {
+            return student.getAdmissionNumber();
+        }
+        return "your child";
     }
 
     @Transactional(readOnly = true)
