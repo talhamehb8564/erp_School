@@ -3,6 +3,7 @@ package com.erpschool.exam.online;
 import com.erpschool.academic.entity.Section;
 import com.erpschool.academic.repository.SectionRepository;
 import com.erpschool.academic.service.AcademicService;
+import com.erpschool.audit.service.AuditService;
 import com.erpschool.common.exception.BusinessException;
 import com.erpschool.common.exception.ForbiddenException;
 import com.erpschool.common.exception.ResourceNotFoundException;
@@ -55,6 +56,7 @@ public class OnlineExamService {
     private final UserRepository userRepository;
     private final OnlineExamRecipientRepository recipientRepository;
     private final NotificationService notificationService;
+    private final AuditService auditService;
 
     public OnlineExamService(OnlineExamRepository examRepository,
                              OnlineExamQuestionRepository questionRepository,
@@ -67,7 +69,8 @@ public class OnlineExamService {
                              StudentAccessService studentAccessService,
                              UserRepository userRepository,
                              OnlineExamRecipientRepository recipientRepository,
-                             NotificationService notificationService) {
+                             NotificationService notificationService,
+                             AuditService auditService) {
         this.examRepository = examRepository;
         this.questionRepository = questionRepository;
         this.attemptRepository = attemptRepository;
@@ -80,6 +83,7 @@ public class OnlineExamService {
         this.userRepository = userRepository;
         this.recipientRepository = recipientRepository;
         this.notificationService = notificationService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -237,16 +241,20 @@ public class OnlineExamService {
     public void delete(UUID id) {
         OnlineExam exam = requireExam(id);
         assertCanManage(exam);
-        String status = exam.getStatus();
-        if ("RESULTS_PUBLISHED".equals(status) || "LIVE".equals(status)) {
-            throw new BusinessException("Published or live exams cannot be deleted");
+        String status = computeStatus(exam, exam.getStatus());
+        if ("LIVE".equals(status)) {
+            throw new BusinessException("LIVE_EXAM",
+                    "This exam is live. Wait until the window ends, then you can delete it.");
         }
-        if (attemptRepository.existsByTenantIdAndExamId(exam.getTenantId(), exam.getId())
-                && !"DRAFT".equals(status)) {
-            throw new BusinessException("This exam has student attempts and cannot be deleted");
-        }
+        long attempts = attemptRepository.countByTenantIdAndExamId(exam.getTenantId(), exam.getId());
+        String title = exam.getTitle();
         recipientRepository.deleteByTenantIdAndExamId(exam.getTenantId(), exam.getId());
         examRepository.delete(exam);
+        auditService.record(AuditService.EXAM_DELETED, "OnlineExam", id.toString(), Map.of(
+                "title", title == null ? "" : title,
+                "status", status,
+                "attemptCount", attempts
+        ));
     }
 
     @Transactional(readOnly = true)

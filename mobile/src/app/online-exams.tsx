@@ -18,12 +18,19 @@ export default function OnlineExams() {
 function StudentExams() {
   const { colors } = useAppearance();
   const list = useAsync(() => onlineExamApi.mine());
+  const [query, setQuery] = useState("");
+  const rows = (list.data || []).filter((e) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return String(e.title || "").toLowerCase().includes(q) || String(e.status || "").toLowerCase().includes(q);
+  });
   return (
     <RequireAuth roles={["STUDENT"]}>
       <Screen colors={colors} onRefresh={() => void list.reload()} refreshing={list.loading}>
         <Title title="Online exams" subtitle="Start only during the scheduled window. Answers persist on the server." colors={colors} />
+        <Field label="Search" colors={colors} value={query} onChangeText={setQuery} />
         <QueryState loading={list.loading} error={list.error} data={list.data} onRetry={() => void list.reload()} colors={colors} empty={<Empty title="No online exams" hint="When a teacher schedules one for your class, it appears here." colors={colors} />}>
-          {(list.data || []).map((e) => {
+          {rows.map((e) => {
             const excluded = Boolean(e.excluded);
             return (
               <Card key={String(e.id)} colors={colors}>
@@ -60,6 +67,7 @@ function StaffOnline() {
   const [duration, setDuration] = useState("40");
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
+  const [query, setQuery] = useState("");
   const sections = useAsync(() => (classId ? academicApi.sections(classId) : Promise.resolve([])), [classId], Boolean(classId));
   const canWrite = user?.role === "TEACHER" || user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL";
   return (
@@ -118,8 +126,13 @@ function StaffOnline() {
             />
           </Card>
         ) : null}
+        <Field label="Search exams" colors={colors} value={query} onChangeText={setQuery} />
         <QueryState loading={list.loading} error={list.error} data={list.data} onRetry={() => void list.reload()} colors={colors} empty={<Empty title="No online exams" colors={colors} />}>
-          {(list.data || []).map((e) => (
+          {(list.data || []).filter((e) => {
+            const q = query.trim().toLowerCase();
+            if (!q) return true;
+            return String(e.title || "").toLowerCase().includes(q) || String(e.status || "").toLowerCase().includes(q);
+          }).map((e) => (
             <Card key={String(e.id)} colors={colors}>
               <Text style={{ color: colors.ink, fontWeight: "800" }}>{String(e.title)}</Text>
               <Text style={{ color: colors.muted }}>{String(e.startAt || "")} · {pretty(String(e.status || ""))}</Text>
@@ -140,13 +153,17 @@ function StaffOnline() {
                   }}
                 />
               ) : null}
-              {canWrite && (String(e.status) === "DRAFT" || String(e.status) === "SCHEDULED") ? (
+              {canWrite && String(e.status) !== "LIVE" ? (
                 <Btn
                   label="Delete"
                   kind="ghost"
                   colors={colors}
                   onPress={async () => {
-                    if (!(await confirmAction("Delete exam", "This cannot be undone."))) return;
+                    const st = String(e.status || "");
+                    const msg = st === "RESULTS_PUBLISHED" || Number(e.attemptCount || 0) > 0
+                      ? `Delete “${e.title}”? This permanently removes the exam, student attempts, and published results.`
+                      : `Delete “${e.title}”? This cannot be undone.`;
+                    if (!(await confirmAction("Delete exam", msg))) return;
                     try {
                       await onlineExamApi.remove(String(e.id));
                       await list.reload();

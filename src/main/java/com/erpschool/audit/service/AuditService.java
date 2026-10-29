@@ -29,6 +29,7 @@ public class AuditService {
     public static final String TENANT_CREATED = "TENANT_CREATED";
     public static final String TENANT_UPDATED = "TENANT_UPDATED";
     public static final String TENANT_STATUS_CHANGED = "TENANT_STATUS_CHANGED";
+    public static final String EXAM_DELETED = "EXAM_DELETED";
 
     private final AuditLogRepository auditLogRepository;
 

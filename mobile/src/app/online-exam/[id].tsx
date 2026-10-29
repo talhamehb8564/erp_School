@@ -236,13 +236,17 @@ function StaffExam() {
             }}
           />
         ) : null}
-        {status === "DRAFT" || status === "SCHEDULED" ? (
+        {status && status !== "LIVE" ? (
           <Btn
             label="Delete exam"
             kind="danger"
             colors={colors}
             onPress={async () => {
-              if (!(await confirmAction("Delete exam", "This cannot be undone."))) return;
+              const attempts = Number(exam.data?.attemptCount || 0);
+              const msg = status === "RESULTS_PUBLISHED" || attempts > 0
+                ? `Delete “${exam.data?.title || "this exam"}”? This permanently removes the exam, student attempts, and published results.`
+                : `Delete “${exam.data?.title || "this exam"}”? This cannot be undone.`;
+              if (!(await confirmAction("Delete exam", msg))) return;
               try {
                 await onlineExamApi.remove(id!);
                 router.back();

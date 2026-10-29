@@ -44,8 +44,10 @@ public class FileController {
             return ResponseEntity.notFound().build();
         }
         String contentType = Files.probeContentType(path);
+        String safe = name == null ? "file" : name.replaceAll("[^a-zA-Z0-9._-]", "_");
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + name + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + safe + "\"")
+                .header(HttpHeaders.X_CONTENT_TYPE_OPTIONS, "nosniff")
                 .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
                 .contentType(MediaType.parseMediaType(contentType == null ? "application/octet-stream" : contentType))
                 .body(new FileSystemResource(path));

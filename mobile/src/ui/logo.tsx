@@ -15,12 +15,15 @@ export function SchoolLogo({
   color,
   size = 56,
   flip = false,
+  variant = "crest",
 }: {
   uri?: string | null;
   name?: string;
   color: string;
   size?: number;
   flip?: boolean;
+  /** `mark` = rounded square, no colored ring (used inside the experimental coin login). */
+  variant?: "crest" | "mark";
 }) {
   const src = mediaUrl(uri);
   const [failed, setFailed] = useState(false);
@@ -35,6 +38,7 @@ export function SchoolLogo({
   const spinStyle = useAnimatedStyle(() => ({
     transform: [{ perspective: 800 }, { rotateY: `${spin.value * 360}deg` }],
   }));
+  const radius = variant === "mark" ? Math.round(size * 0.22) : size * 0.28;
   const mark = (
     <View
       accessibilityRole="image"
@@ -42,8 +46,8 @@ export function SchoolLogo({
       style={{
         width: size,
         height: size,
-        borderRadius: size / 2,
-        backgroundColor: color + "22",
+        borderRadius: radius,
+        backgroundColor: variant === "mark" ? "transparent" : color + "22",
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
@@ -53,7 +57,7 @@ export function SchoolLogo({
         <Image
           source={{ uri: src }}
           style={{ width: size, height: size }}
-          contentFit="cover"
+          contentFit={variant === "mark" ? "contain" : "cover"}
           cachePolicy="memory-disk"
           recyclingKey={src}
           onError={() => setFailed(true)}

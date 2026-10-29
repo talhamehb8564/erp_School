@@ -71,6 +71,11 @@ public class FileStorageService {
                     video ? "Maximum video size is 25MB" : "Maximum upload size is 10MB");
         }
         try {
+            assertMagic(contentType, file.getInputStream().readNBytes(16));
+        } catch (IOException e) {
+            throw new BusinessException("FILE_TYPE", "Could not read the uploaded file");
+        }
+        try {
             Path dir = root.resolve(tenantId.toString());
             Files.createDirectories(dir);
             String storedName = UUID.randomUUID() + "-" + original;
@@ -147,5 +152,41 @@ public class FileStorageService {
             return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         }
         return "application/octet-stream";
+    }
+
+    private static void assertMagic(String contentType, byte[] head) {
+        if (head == null || head.length < 4) {
+            throw new BusinessException("FILE_TYPE", "File content could not be verified");
+        }
+        if (contentType.startsWith("image/jpeg") && unsigned(head[0]) == 0xFF && unsigned(head[1]) == 0xD8) {
+            return;
+        }
+        if ("image/png".equals(contentType) && unsigned(head[0]) == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G') {
+            return;
+        }
+        if ("image/gif".equals(contentType) && head[0] == 'G' && head[1] == 'I' && head[2] == 'F') {
+            return;
+        }
+        if ("image/webp".equals(contentType) && head[0] == 'R' && head[1] == 'I' && head[2] == 'F' && head[3] == 'F') {
+            return;
+        }
+        if ("application/pdf".equals(contentType) && head[0] == '%' && head[1] == 'P' && head[2] == 'D' && head[3] == 'F') {
+            return;
+        }
+        if (contentType.startsWith("video/") && head.length >= 8 && (
+                (head[4] == 'f' && head[5] == 't' && head[6] == 'y' && head[7] == 'p')
+                        || (unsigned(head[0]) == 0x1A && unsigned(head[1]) == 0x45)
+                        || (head[0] == 'R' && head[1] == 'I' && head[2] == 'F' && head[3] == 'F'))) {
+            return;
+        }
+        if ((contentType.contains("wordprocessingml") || "application/msword".equals(contentType))
+                && ((head[0] == 'P' && head[1] == 'K') || unsigned(head[0]) == 0xD0)) {
+            return;
+        }
+        throw new BusinessException("FILE_TYPE", "File content does not match the declared type");
+    }
+
+    private static int unsigned(byte b) {
+        return b & 0xFF;
     }
 }

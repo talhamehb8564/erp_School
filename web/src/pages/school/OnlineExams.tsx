@@ -190,6 +190,12 @@ export default function OnlineExamsPage() {
 function StudentList() {
   const list = useAsync(() => onlineExamApi.mine());
   const { className, subjectName } = useLookups();
+  const [query, setQuery] = useState("");
+  const rows = (list.data || []).filter((e) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return str(e.title).toLowerCase().includes(q) || str(e.status).toLowerCase().includes(q);
+  });
   return (
     <>
       <div className="page-title">
@@ -198,11 +204,12 @@ function StudentList() {
           <p>Timed papers. The clock starts from the server deadline when you open a live exam.</p>
         </div>
       </div>
+      <Field label="Search"><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title or status" /></Field>
       <QueryState status={list} label="online exams">
-        {!(list.data || []).length ? <Empty title="No online exams" hint="Scheduled papers for your class appear here." /> : (
+        {!rows.length ? <Empty title="No online exams" hint="Scheduled papers for your class appear here." /> : (
           <Table
             headers={["Exam", "Subject", "Starts", "Duration", "Status", ""]}
-            rows={(list.data || []).map((e) => {
+            rows={rows.map((e) => {
               const id = str(e.id);
               const status = str(e.status);
               const attempt = str(e.attemptStatus);
@@ -387,12 +394,26 @@ function StudentTake({ examId }: { examId: string }) {
   );
 }
 
+function canDeleteExam(status: string) {
+  return status !== "LIVE";
+}
+
+function deleteExamPrompt(title: string, status: string, attempts?: unknown) {
+  const n = num(attempts);
+  if (status === "RESULTS_PUBLISHED" || n > 0) {
+    return `Delete “${title}”? This permanently removes the exam, ${n || "its"} student attempt(s), and any published results. This cannot be undone.`;
+  }
+  return `Delete “${title}”? This cannot be undone.`;
+}
+
 function StaffList() {
   const list = useAsync(() => onlineExamApi.list());
   const { className, subjectName, sections, classes, subjects } = useLookups();
   const { user } = useSession();
   const toast = useToast();
   const nav = useNavigate();
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const assigns = useAsync(() => (user?.role === "TEACHER" ? academicApi.assignments() : Promise.resolve([])), [user?.role]);
   const teacher = user?.role === "TEACHER";
   const allowedClassIds = teacher ? new Set((assigns.data || []).map((a) => a.classId)) : null;
@@ -416,11 +437,31 @@ function StaffList() {
         <div><h1>Online exams</h1><p>Timed MCQ, short and long papers. Assign one exam to several sections. Answer keys never go to students.</p></div>
         <Button kind="brass" onClick={() => setOpen(true)}>New exam</Button>
       </div>
+      <div className="row" style={{ marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <Field label="Search">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title" />
+        </Field>
+        <Field label="Status">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All</option>
+            {["DRAFT", "SCHEDULED", "LIVE", "CLOSED", "RESULTS_PUBLISHED"].map((s) => (
+              <option key={s} value={s}>{s.replaceAll("_", " ")}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
       <QueryState status={list} label="online exams">
         <Table
           headers={["Exam", "Class", "Starts", "Duration", "Status", ""]}
-          rows={(list.data || []).map((e) => {
+          rows={(list.data || []).filter((e) => {
+            const title = str(e.title).toLowerCase();
+            const st = str(e.status);
+            if (query.trim() && !title.includes(query.trim().toLowerCase())) return false;
+            if (statusFilter && st !== statusFilter) return false;
+            return true;
+          }).map((e) => {
             const id = str(e.id);
+            const st = str(e.status);
             const secIds = idsOf(e.sectionIds);
             const secNames = (sections[str(e.classId)] || []).filter((s) => secIds.includes(s.id)).map((s) => s.name).join(", ");
             return [
@@ -428,8 +469,18 @@ function StaffList() {
               `${className(str(e.classId))}${secNames ? ` · ${secNames}` : ""} · ${subjectName(str(e.subjectId))}`,
               e.startAt ? new Date(str(e.startAt)).toLocaleString() : "—",
               `${num(e.durationMinutes)} min`,
-              <Badge key={id} value={str(e.status)} />,
-              <Link key={`${id}-open`} to={`/app/online-exams/${id}`} className="btn sm ghost">Open</Link>,
+              <Badge key={id} value={st} />,
+              <span key={`${id}-actions`} className="row">
+                <Link to={`/app/online-exams/${id}`} className="btn sm ghost">Open</Link>
+                {canDeleteExam(st) ? (
+                  <Button kind="ghost" onClick={async () => {
+                    if (!window.confirm(deleteExamPrompt(str(e.title), st, e.attemptCount))) return;
+                    await onlineExamApi.remove(id);
+                    toast("ok", "Exam deleted");
+                    await list.reload();
+                  }}>Delete</Button>
+                ) : null}
+              </span>,
             ];
           })}
         />
@@ -592,9 +643,9 @@ function StaffExam({ examId }: { examId: string }) {
               await attempts.reload();
             }}>Publish results</Button>
           ) : null}
-          {status === "DRAFT" || status === "SCHEDULED" ? (
+          {data && canDeleteExam(status) ? (
             <Button kind="danger" loadingText="Deleting…" onClick={async () => {
-              if (!window.confirm("Delete this exam? This cannot be undone.")) return;
+              if (!window.confirm(deleteExamPrompt(str(data?.title, "this exam"), status, data?.attemptCount))) return;
               await onlineExamApi.remove(examId);
               toast("ok", "Exam deleted");
               nav("/app/online-exams");
