@@ -218,6 +218,46 @@ h1, h2, h3, .serif { font-family: Fraunces, Georgia, serif; font-weight: 650; le
 }
 .coin-login .btn { width: 100%; border-radius: 999px; }
 .coin-login .row { justify-content: stretch; }
+/* Mobile web: same flip, previous rounded-rectangle card. Desktop coin rules above stay unchanged. */
+@media (max-width: 820px) {
+  .coin-login {
+    width: min(460px, 100%);
+    aspect-ratio: auto;
+    height: auto;
+    max-height: calc(100dvh - 32px);
+    border-radius: 28px;
+    padding: 28px 22px 22px;
+    display: block;
+    overflow: auto;
+  }
+  .coin-login-inner {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    align-items: stretch;
+  }
+  .coin-login-logo {
+    align-self: center;
+  }
+  .coin-login-school,
+  .coin-login-role,
+  .coin-login-hint {
+    text-align: center;
+  }
+  .coin-login .field { margin-bottom: 14px; }
+  .coin-login .field span { font-size: 13px; }
+  .coin-login input {
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .coin-login .btn { border-radius: 14px; }
+}
+@media (max-width: 430px) {
+  .coin-login {
+    padding: 20px 16px;
+    border-radius: 22px;
+  }
+}
 @keyframes coin-flip-in {
   from { transform: rotateY(-180deg) scale(.82); opacity: 0; }
   to { transform: rotateY(0) scale(1); opacity: 1; }

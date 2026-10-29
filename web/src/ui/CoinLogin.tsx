@@ -1,11 +1,7 @@
 /**
- * EXPERIMENTAL coin-shaped login (web).
- *
- * The whole form — logo, role, username, password, submit — lives inside a
- * circular coin that flips into view. Not a circular logo on a rectangular card.
- *
- * To revert: render LoginPage with the previous `.auth-card` layout and stop
- * importing this component. Authentication is unchanged.
+ * Login shell (web). Desktop/laptop: circular coin that flips in.
+ * Mobile-width viewports: same flip on the previous rounded-rectangle card
+ * (see styles.css @media max-width 820px). Authentication is unchanged.
  */
 import type { ReactNode } from "react";
 
