@@ -1,0 +1,16 @@
+{
+  "name": "Devzard School",
+  "appName": "Devzard School Portal",
+  "code": "DZS",
+  "androidPackage": "com.devzard.schoolerp",
+  "iosBundle": "com.devzard.schoolerp",
+  "primaryColor": "#111111",
+  "accentColor": "#00C2E8",
+  "splashBackgroundColor": "#FFFFFF",
+  "iconBackgroundColor": "#FFFFFF",
+  "tagline": "Portal",
+  "icon": "./branding/assets/icon.png",
+  "adaptiveForeground": "./branding/assets/adaptive-foreground.png",
+  "splash": "./branding/assets/splash-icon.png",
+  "favicon": "./assets/images/favicon.png"
+}
