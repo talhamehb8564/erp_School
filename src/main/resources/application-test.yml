@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/erp_school_test
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+  autoconfigure:
+    exclude: []
+
+app:
+  seed:
+    enabled: false
+  jwt:
+    secret: FAKESECRET_k4l5m6n7o8p9q0r1s2t3
+
+logging:
+  level:
+    com.erpschool: DEBUG

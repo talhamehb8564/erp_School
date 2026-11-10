@@ -1,0 +1,137 @@
+### ERP School — Phase 1 API tests
+### Run the Spring Boot app first: mvn spring-boot:run
+@base = http://localhost:8080
+@accessToken =
+@refreshToken =
+@tenantId =
+@userId =
+
+### Health (public)
+GET {{base}}/api/v1/health
+
+### Login as ERP Owner
+# @name ownerLogin
+POST {{base}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "erp.owner",
+  "password": "Owner@12345"
+}
+
+### Login as Green Valley School Admin
+# @name adminLogin
+POST {{base}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "GVS-ADM-0001",
+  "password": "ChangeMe@123"
+}
+
+### Current user
+GET {{base}}/api/v1/auth/me
+Authorization: Bearer {{accessToken}}
+
+### Change password (demo users must change after first login)
+POST {{base}}/api/v1/auth/change-password
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "currentPassword": "ChangeMe@123",
+  "newPassword": "NewPass@1234"
+}
+
+### Refresh tokens
+POST {{base}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### Logout
+POST {{base}}/api/v1/auth/logout
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### List schools (ERP Owner)
+GET {{base}}/api/v1/tenants?size=20
+Authorization: Bearer {{accessToken}}
+
+### Create a school with first admin
+POST {{base}}/api/v1/tenants
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "code": "NPS",
+  "name": "North Public School",
+  "email": "info@nps.school",
+  "phone": "+92-321-1111111",
+  "city": "Karachi",
+  "adminFirstName": "Sana",
+  "adminLastName": "Ahmed",
+  "adminEmail": "admin@nps.school"
+}
+
+### Get current school (school users)
+GET {{base}}/api/v1/tenants/me
+Authorization: Bearer {{accessToken}}
+
+### Suspend a school (ERP Owner)
+PATCH {{base}}/api/v1/tenants/{{tenantId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "SUSPENDED",
+  "reason": "Subscription unpaid"
+}
+
+### Activate a school (ERP Owner)
+PATCH {{base}}/api/v1/tenants/{{tenantId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE",
+  "reason": "Restored"
+}
+
+### List users in a school
+GET {{base}}/api/v1/users?tenantId={{tenantId}}&size=50
+Authorization: Bearer {{accessToken}}
+
+### Create a teacher (school admin). Username + temp password are generated.
+POST {{base}}/api/v1/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "firstName": "Sara",
+  "lastName": "Iqbal",
+  "email": "sara.iqbal@greenvalley.school",
+  "role": "TEACHER"
+}
+
+### Reset a user's password
+POST {{base}}/api/v1/users/{{userId}}/reset-password
+Authorization: Bearer {{accessToken}}
+
+### Deactivate a user
+PATCH {{base}}/api/v1/users/{{userId}}/deactivate
+Authorization: Bearer {{accessToken}}
+
+### Activate a user
+PATCH {{base}}/api/v1/users/{{userId}}/activate
+Authorization: Bearer {{accessToken}}
+
+### Audit logs
+GET {{base}}/api/v1/audit-logs?size=50
+Authorization: Bearer {{accessToken}}

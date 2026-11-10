@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Devzard School Portal",
+    "slug": "school-erp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./branding/assets/icon.png",
+    "scheme": "erpschool",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.devzard.schoolerp",
+      "icon": "./branding/assets/icon.png"
+    },
+    "android": {
+      "package": "com.devzard.schoolerp",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./branding/assets/adaptive-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "./plugins/withCmakeObjectPathMax.js",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "cmakeVersion": "3.31.6"
+          }
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Devzard School Portal needs photo access to upload homework and payment slips."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./branding/assets/splash-icon.png",
+          "imageWidth": 220
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#111111"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "",
+      "school": {
+        "name": "Devzard School",
+        "appName": "Devzard School Portal",
+        "code": "DZS",
+        "primaryColor": "#111111",
+        "accentColor": "#00C2E8",
+        "tagline": "Portal"
+      }
+    }
+  }
+}

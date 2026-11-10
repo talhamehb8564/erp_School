@@ -1,0 +1,5 @@
+ALTER TABLE tenants
+    ADD COLUMN IF NOT EXISTS ui_font VARCHAR(40);
+
+ALTER TABLE school_settings
+    ADD COLUMN IF NOT EXISTS ui_font VARCHAR(40);
