@@ -113,6 +113,10 @@ app:
   cors:
     allowed-origins: ${CORS_ORIGINS:*}
 
+  security:
+    max-login-attempts: ${APP_SECURITY_MAX_LOGIN_ATTEMPTS:5}
+    lockout-duration-minutes: ${APP_SECURITY_LOCKOUT_DURATION_MINUTES:15}
+
   seed:
     enabled: ${SEED_DEMO_DATA:true}
     erp-owner-username: erp.owner

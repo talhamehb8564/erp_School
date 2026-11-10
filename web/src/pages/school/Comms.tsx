@@ -1,24 +1,76 @@
 import { useState } from "react";
-import { announcementApi, calendarApi, notificationApi, reportApi } from "../../api/services";
+import { announcementApi, calendarApi, fileApi, notificationApi, reportApi } from "../../api/services";
+import { ApiError } from "../../api/client";
+import { useBranding } from "../../lib/branding";
 import { useLookups } from "../../lib/lookups";
 import { fmtDate, monthStart, pretty } from "../../lib/format";
 import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
-import { Badge, Bars, Button, Empty, Field, Form, QueryState, Table, useAsync } from "../../ui/kit";
+import type { NoticeAttachment } from "../../lib/types";
+import { Badge, Bars, Button, Empty, Field, Form, NoticeAttachments, QueryState, Table, useAsync } from "../../ui/kit";
 
 export function AnnouncementsPage() {
   const { user } = useSession();
   const { classes } = useLookups();
+  const { reload: reloadBrand } = useBranding();
   const list = useAsync(() => announcementApi.list());
   const toast = useToast();
   const staff = user?.role === "SCHOOL_ADMIN" || user?.role === "PRINCIPAL";
   const [form, setForm] = useState({ title: "", body: "", audience: "ALL", classId: "" });
+  const [attachments, setAttachments] = useState<NoticeAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUploadFiles = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    setUploading(true);
+    try {
+      const next: NoticeAttachment[] = [];
+      for (const file of Array.from(files)) {
+        const uploaded = await fileApi.upload(file);
+        if (uploaded?.url) {
+          next.push({
+            id: uploaded.id,
+            fileName: uploaded.fileName || file.name,
+            fileUrl: uploaded.url,
+            contentType: uploaded.contentType || file.type,
+          });
+        }
+      }
+      if (next.length) {
+        setAttachments((prev) => [...prev, ...next]);
+        toast("ok", next.length === 1 ? "Attachment uploaded" : `${next.length} attachments uploaded`);
+      }
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Upload failed";
+      toast("err", msg);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <>
       <div className="page-title"><div><h1>Announcements</h1><p>Visible according to audience and class</p></div></div>
       {staff ? (
         <div className="card" style={{ marginBottom: 16 }}>
-          <Form busyLabel="Publishing…" onSubmit={async () => { await announcementApi.create(form); toast("ok", "Published"); void list.reload(); }}>
+          <Form
+            busyLabel="Publishing…"
+            onSubmit={async () => {
+              await announcementApi.create({
+                title: form.title,
+                body: form.body,
+                audience: form.audience,
+                ...(form.audience === "CLASS" && form.classId ? { classId: form.classId } : {}),
+                ...(attachments[0]?.fileUrl ? { attachmentUrl: attachments[0].fileUrl } : {}),
+                attachments,
+              });
+              setForm({ title: "", body: "", audience: "ALL", classId: "" });
+              setAttachments([]);
+              toast("ok", "Published");
+              void list.reload();
+              void reloadBrand();
+            }}
+          >
             <Field label="Title"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></Field>
             <Field label="Body"><textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required /></Field>
             <div className="row">
@@ -36,7 +88,27 @@ export function AnnouncementsPage() {
                 </Field>
               ) : null}
             </div>
-            <Button type="submit" kind="brass" loadingText="Publishing…">Publish</Button>
+            <Field label="Attachments (images, videos, PDF, or Word)">
+              <input
+                type="file"
+                multiple
+                disabled={uploading}
+                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf,.pdf,.doc,.docx"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  void handleUploadFiles(files);
+                  e.target.value = "";
+                }}
+              />
+            </Field>
+            {attachments.length > 0 ? (
+              <NoticeAttachments
+                attachments={attachments}
+                compact
+                onRemove={(fileUrl) => setAttachments((prev) => prev.filter((a) => a.fileUrl !== fileUrl))}
+              />
+            ) : null}
+            <Button type="submit" kind="brass" disabled={uploading} loadingText="Publishing…">Publish</Button>
           </Form>
         </div>
       ) : null}
@@ -48,6 +120,7 @@ export function AnnouncementsPage() {
               <div className="kicker">{pretty(a.audience)} · {fmtDate(a.publishDate)}</div>
               <h3>{a.title}</h3>
               <p>{a.body}</p>
+              <NoticeAttachments attachments={a.attachments} attachmentUrl={a.attachmentUrl} />
             </article>
           ))}
         </div>

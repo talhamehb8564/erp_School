@@ -1,8 +1,10 @@
 package com.erpschool.file.controller;
 
 import com.erpschool.common.dto.ApiResponse;
+import com.erpschool.file.entity.StoredFile;
 import com.erpschool.file.service.FileStorageService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -21,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -39,7 +42,7 @@ public class FileController {
         return ResponseEntity.ok(ApiResponse.ok("File uploaded", fileStorageService.store(file)));
     }
 
-    @GetMapping("/{tenantId}/{name}")
+    @GetMapping("/{tenantId}/{name:.+}")
     public ResponseEntity<Resource> download(@PathVariable UUID tenantId, @PathVariable String name) throws Exception {
         if (name == null || name.isBlank()) {
             return ResponseEntity.notFound().build();
@@ -50,14 +53,42 @@ public class FileController {
         } catch (InvalidPathException ex) {
             return ResponseEntity.notFound().build();
         }
-        if (namePath.getNameCount() != 1 || namePath.isAbsolute()) {
+        if (namePath.getNameCount() != 1 || namePath.isAbsolute() || name.contains("..")) {
             return ResponseEntity.notFound().build();
         }
         Path path = fileStorageService.resolvePublic(tenantId, name);
-        if (!Files.exists(path) || !Files.isRegularFile(path)) {
+        Optional<StoredFile> storedRecord = fileStorageService.findStoredFile(tenantId, name);
+        Resource resource = null;
+        if (Files.exists(path) && Files.isRegularFile(path)) {
+            resource = new FileSystemResource(path);
+        } else if (storedRecord.isPresent()
+                && storedRecord.get().getFileData() != null
+                && storedRecord.get().getFileData().length > 0) {
+            byte[] bytes = storedRecord.get().getFileData();
+            try {
+                Files.createDirectories(path.getParent());
+                Files.write(path, bytes);
+                resource = new FileSystemResource(path);
+            } catch (Exception ignored) {
+                resource = new ByteArrayResource(bytes);
+            }
+        }
+        if (resource == null) {
             return ResponseEntity.notFound().build();
         }
-        String contentType = Files.probeContentType(path);
+        String contentType = storedRecord
+                .map(StoredFile::getContentType)
+                .filter(ct -> !ct.isBlank() && !"application/octet-stream".equalsIgnoreCase(ct))
+                .orElse(null);
+        if (contentType == null) {
+            String inferred = FileStorageService.inferFromName(name);
+            if (!"application/octet-stream".equals(inferred)) {
+                contentType = inferred;
+            }
+        }
+        if (contentType == null && Files.exists(path)) {
+            contentType = Files.probeContentType(path);
+        }
         MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
         if (contentType != null && !contentType.isBlank()) {
             try {
@@ -73,8 +104,9 @@ public class FileController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + safe + "\"")
                 .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
                 .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
                 .contentType(mediaType)
-                .body(new FileSystemResource(path));
+                .body(resource);
     }
 }

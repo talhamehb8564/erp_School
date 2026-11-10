@@ -511,3 +511,239 @@ export function Donut({ value, max, label }: { value: number; max: number; label
     </div>
   );
 }
+
+export interface AttachmentItem {
+  id?: string;
+  fileName?: string;
+  fileUrl: string;
+  contentType?: string;
+}
+
+export function resolveAttachmentUrl(rawUrl?: string | null): string {
+  if (!rawUrl) return "";
+  const trimmed = String(rawUrl).trim();
+  if (!trimmed) return "";
+  const localMatch = trimmed.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/api\/v1\/files\/.+)$/i);
+  if (localMatch) {
+    return localMatch[1];
+  }
+  return trimmed;
+}
+
+function youtubeEmbedId(url?: string): string | null {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{6,})/);
+  return m ? m[1] : null;
+}
+
+function cleanFileName(url: string, fallback = "Attachment"): string {
+  const noQuery = url.split("?")[0];
+  const seg = noQuery.split("/").pop() || "";
+  const stripped = seg.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "");
+  try {
+    return decodeURIComponent(stripped) || fallback;
+  } catch {
+    return stripped || fallback;
+  }
+}
+
+export function classifyAttachment(att: AttachmentItem): "image" | "video" | "youtube" | "file" {
+  const url = resolveAttachmentUrl(att.fileUrl);
+  if (youtubeEmbedId(url)) return "youtube";
+  const ct = (att.contentType || "").toLowerCase();
+  const target = `${att.fileName || ""} ${url.split("?")[0]}`.toLowerCase();
+  if (ct.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|svg)(\b|$)/i.test(target)) {
+    return "image";
+  }
+  if (ct.startsWith("video/") || /\.(mp4|webm|mov|m4v|ogg)(\b|$)/i.test(target)) {
+    return "video";
+  }
+  return "file";
+}
+
+function inferVideoMime(att: AttachmentItem): string | undefined {
+  const ct = (att.contentType || "").toLowerCase();
+  if (ct.startsWith("video/")) return ct;
+  const target = `${att.fileName || ""} ${att.fileUrl.split("?")[0]}`.toLowerCase();
+  if (target.endsWith(".mp4") || target.includes(".mp4 ")) return "video/mp4";
+  if (target.endsWith(".webm") || target.includes(".webm ")) return "video/webm";
+  if (target.endsWith(".mov") || target.includes(".mov ")) return "video/quicktime";
+  return undefined;
+}
+
+function fileBadgeLabel(att: AttachmentItem): string {
+  const ct = (att.contentType || "").toLowerCase();
+  const target = `${att.fileName || ""} ${att.fileUrl.split("?")[0]}`.toLowerCase();
+  if (ct.includes("pdf") || target.includes(".pdf")) return "PDF";
+  if (ct.includes("word") || target.includes(".docx") || target.includes(".doc")) return "DOC";
+  return "FILE";
+}
+
+export function collectNoticeAttachments(source?: {
+  attachments?: AttachmentItem[] | null;
+  attachmentUrl?: string | null;
+  posterUrl?: string | null;
+  videoUrl?: string | null;
+} | null): AttachmentItem[] {
+  if (!source) return [];
+  const out: AttachmentItem[] = [];
+  const seen = new Set<string>();
+  const add = (item?: Partial<AttachmentItem> | null) => {
+    if (!item?.fileUrl) return;
+    const fileUrl = resolveAttachmentUrl(item.fileUrl);
+    if (!fileUrl || seen.has(fileUrl)) return;
+    seen.add(fileUrl);
+    out.push({
+      id: item.id,
+      fileUrl,
+      fileName: item.fileName || cleanFileName(fileUrl),
+      contentType: item.contentType,
+    });
+  };
+  if (Array.isArray(source.attachments)) {
+    for (const a of source.attachments) add(a);
+  }
+  if (source.attachmentUrl) {
+    add({ fileUrl: source.attachmentUrl });
+  }
+  if (source.posterUrl) {
+    add({ fileUrl: source.posterUrl, contentType: "image/*" });
+  }
+  if (source.videoUrl) {
+    add({ fileUrl: source.videoUrl, contentType: youtubeEmbedId(source.videoUrl) ? undefined : "video/*" });
+  }
+  return out;
+}
+
+export function NoticeAttachments({
+  attachments,
+  attachmentUrl,
+  posterUrl,
+  videoUrl,
+  onRemove,
+  compact = false,
+}: {
+  attachments?: AttachmentItem[] | null;
+  attachmentUrl?: string | null;
+  posterUrl?: string | null;
+  videoUrl?: string | null;
+  onRemove?: (fileUrl: string) => void;
+  compact?: boolean;
+}) {
+  const list = collectNoticeAttachments({ attachments, attachmentUrl, posterUrl, videoUrl });
+  if (!list.length) return null;
+
+  const images = list.filter((a) => classifyAttachment(a) === "image");
+  const videos = list.filter((a) => {
+    const k = classifyAttachment(a);
+    return k === "video" || k === "youtube";
+  });
+  const files = list.filter((a) => classifyAttachment(a) === "file");
+  const resolvedPoster = resolveAttachmentUrl(posterUrl) || images[0]?.fileUrl || undefined;
+
+  return (
+    <div className={`notice-attachments ${compact ? "compact" : ""}`.trim()}>
+      {images.length > 0 ? (
+        <div className="notice-att-grid">
+          {images.map((img, i) => {
+            const url = resolveAttachmentUrl(img.fileUrl);
+            const label = img.fileName || cleanFileName(url, `Image ${i + 1}`);
+            return (
+              <div key={url + i} className="notice-att-card image">
+                <a href={url} target="_blank" rel="noopener noreferrer" className="notice-att-img-link" title={`View ${label}`}>
+                  <img src={url} alt={label} loading="lazy" />
+                </a>
+                <div className="notice-att-meta">
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="notice-att-name">
+                    {label}
+                  </a>
+                  {onRemove ? (
+                    <Button type="button" kind="ghost" onClick={() => onRemove(img.fileUrl)}>
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {videos.length > 0 ? (
+        <div className="notice-att-videos">
+          {videos.map((vid, i) => {
+            const url = resolveAttachmentUrl(vid.fileUrl);
+            const yt = youtubeEmbedId(url);
+            const label = vid.fileName || cleanFileName(url, `Video ${i + 1}`);
+            const mime = inferVideoMime(vid);
+            return (
+              <div key={url + i} className="notice-att-card video">
+                {yt ? (
+                  <div className="notice-att-video-frame">
+                    <iframe
+                      title={label}
+                      src={`https://www.youtube.com/embed/${yt}`}
+                      allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <video
+                    controls
+                    preload="metadata"
+                    playsInline
+                    poster={resolvedPoster}
+                    src={url}
+                    className="notice-att-video-player"
+                  >
+                    <source src={url} {...(mime ? { type: mime } : {})} />
+                  </video>
+                )}
+                <div className="notice-att-meta">
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="notice-att-name">
+                    {label}
+                  </a>
+                  {onRemove ? (
+                    <Button type="button" kind="ghost" onClick={() => onRemove(vid.fileUrl)}>
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {files.length > 0 ? (
+        <div className="notice-att-files">
+          {files.map((doc, i) => {
+            const url = resolveAttachmentUrl(doc.fileUrl);
+            const label = doc.fileName || cleanFileName(url, `Document ${i + 1}`);
+            const badge = fileBadgeLabel(doc);
+            return (
+              <div key={url + i} className="notice-att-file-row">
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download={doc.fileName || undefined}
+                  className="btn ghost sm notice-att-file-link"
+                >
+                  <span className="badge info">{badge}</span>
+                  <span>{label}</span>
+                  <span aria-hidden="true">↗</span>
+                </a>
+                {onRemove ? (
+                  <Button type="button" kind="ghost" onClick={() => onRemove(doc.fileUrl)}>
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}

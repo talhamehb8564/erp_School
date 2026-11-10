@@ -23,6 +23,8 @@ import com.erpschool.user.entity.UserRole;
 import com.erpschool.user.entity.UserStatus;
 import com.erpschool.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -39,8 +41,9 @@ import java.util.concurrent.Executors;
 @Service
 public class AuthService {
 
-    private static final int MAX_FAILED_ATTEMPTS = 5;
-    private static final int LOCK_MINUTES = 15;
+    public static final String GENERIC_AUTH_ERROR = "Incorrect username or password.";
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final Executor LOGIN_FOLLOW_UP = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "auth-login-followup");
         t.setDaemon(true);
@@ -83,19 +86,30 @@ public class AuthService {
         this.writeTx = new TransactionTemplate(transactionManager);
     }
 
+    public AuthResponse login(String username, String password, HttpServletRequest request) {
+        return login(username, password, null, request);
+    }
+
     /**
      * BCrypt runs outside the write transaction so Neon/PgBouncer is not left
      * idle-in-transaction. User+tenant load share one read connection; last login,
      * refresh token, and audit share one write connection (no extra Hikari checkout).
      */
-    public AuthResponse login(String username, String password, HttpServletRequest request) {
+    public AuthResponse login(String username, String password, UserRole expectedRole, HttpServletRequest request) {
         String identifier = username == null ? "" : username.trim();
         LoginRow loaded = readTx.execute(status -> {
             User found = null;
             if (!identifier.isEmpty()) {
                 java.util.List<User> matches = userRepository.findLoginCandidates(identifier);
                 if (matches != null && !matches.isEmpty()) {
-                    found = matches.get(0);
+                    if (matches.size() > 1 && expectedRole != null) {
+                        found = matches.stream()
+                                .filter(u -> u.getRole() == expectedRole)
+                                .findFirst()
+                                .orElse(matches.get(0));
+                    } else {
+                        found = matches.get(0);
+                    }
                 }
             }
             if (found == null) {
@@ -109,31 +123,65 @@ public class AuthService {
         });
         User user = loaded == null ? null : loaded.user();
         if (user == null) {
+            log.warn("Authentication failed: unknown username/identifier={}", identifier);
             writeTx.executeWithoutResult(status -> auditService.recordSameTransaction(
                     null, null, identifier, null, AuditService.LOGIN_FAILED,
                     "User", null, Map.of("reason", "unknown_user")));
-            throw new UnauthorizedException("Invalid username or password");
+            throw new UnauthorizedException(GENERIC_AUTH_ERROR);
         }
-        if (user.getStatus() == UserStatus.LOCKED) {
-            if (user.getLockedUntil() != null && user.getLockedUntil().isBefore(Instant.now())) {
-                user.setStatus(UserStatus.ACTIVE);
-                user.setLockedUntil(null);
-                user.setFailedLoginAttempts(0);
-            } else {
-                throw new UnauthorizedException("Account is locked. Try again later or contact administration.");
+        if (user.getStatus() == UserStatus.LOCKED || user.getLockedUntil() != null) {
+            if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) {
+                log.warn("Authentication rejected: user={} is temporarily locked until {}",
+                        user.getUsername(), user.getLockedUntil());
+                User lockedUser = user;
+                writeTx.executeWithoutResult(status -> auditService.recordSameTransaction(
+                        lockedUser.getTenantId(), lockedUser.getId(), lockedUser.getUsername(),
+                        lockedUser.getRole().name(), AuditService.LOGIN_FAILED, "User",
+                        lockedUser.getId().toString(), Map.of("reason", "account_locked")));
+                throw new UnauthorizedException(GENERIC_AUTH_ERROR);
             }
+            User unlockedUser = user;
+            writeTx.executeWithoutResult(status -> {
+                User persistent = userRepository.findById(unlockedUser.getId()).orElse(unlockedUser);
+                if (persistent.getStatus() == UserStatus.LOCKED) {
+                    persistent.setStatus(UserStatus.ACTIVE);
+                }
+                persistent.setLockedUntil(null);
+                persistent.setFailedLoginAttempts(0);
+                userRepository.saveAndFlush(persistent);
+            });
+            if (user.getStatus() == UserStatus.LOCKED) {
+                user.setStatus(UserStatus.ACTIVE);
+            }
+            user.setLockedUntil(null);
+            user.setFailedLoginAttempts(0);
+        }
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            User targetUser = user;
+            writeTx.executeWithoutResult(status -> {
+                registerFailure(targetUser);
+                auditService.recordSameTransaction(targetUser.getTenantId(), targetUser.getId(), targetUser.getUsername(),
+                        targetUser.getRole().name(), AuditService.LOGIN_FAILED, "User", targetUser.getId().toString(),
+                        Map.of("reason", "bad_password"));
+            });
+            log.warn("Authentication failed: invalid password for user={} failedAttempts={}",
+                    user.getUsername(), user.getFailedLoginAttempts());
+            throw new UnauthorizedException(GENERIC_AUTH_ERROR);
+        }
+        if (expectedRole != null && user.getRole() != expectedRole) {
+            User targetUser = user;
+            writeTx.executeWithoutResult(status -> {
+                registerFailure(targetUser);
+                auditService.recordSameTransaction(targetUser.getTenantId(), targetUser.getId(), targetUser.getUsername(),
+                        targetUser.getRole().name(), AuditService.LOGIN_FAILED, "User", targetUser.getId().toString(),
+                        Map.of("reason", "role_mismatch", "expectedRole", expectedRole.name()));
+            });
+            log.warn("Authentication failed: portal role mismatch for user={} actualRole={} expectedRole={} failedAttempts={}",
+                    user.getUsername(), user.getRole(), expectedRole, user.getFailedLoginAttempts());
+            throw new UnauthorizedException(GENERIC_AUTH_ERROR);
         }
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new UnauthorizedException(inactiveLoginMessage(user));
-        }
-        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            writeTx.executeWithoutResult(status -> {
-                registerFailure(user);
-                auditService.recordSameTransaction(user.getTenantId(), user.getId(), user.getUsername(),
-                        user.getRole().name(), AuditService.LOGIN_FAILED, "User", user.getId().toString(),
-                        Map.of("reason", "bad_password"));
-            });
-            throw new UnauthorizedException("Invalid username or password");
         }
         Tenant tenant = loaded != null ? loaded.tenant() : null;
         if (user.getRole() != UserRole.ERP_OWNER && tenant == null) {
@@ -149,10 +197,21 @@ public class AuthService {
         UUID tenantId = user.getTenantId();
         String accountUsername = user.getUsername();
         String role = user.getRole().name();
+        boolean hadFailures = user.getFailedLoginAttempts() > 0 || user.getLockedUntil() != null;
+        User authUser = user;
         /* Tokens first so the HTTP response is not blocked on users.last_login_at
            (the Neon write that previously stalled login for several seconds).
            last_login and LOGIN_SUCCESS audit still run; they just follow the response. */
-        AuthResponse response = writeTx.execute(status -> issueTokens(user, request, tenant, features));
+        AuthResponse response = writeTx.execute(status -> {
+            if (hadFailures) {
+                User persistent = userRepository.findById(authUser.getId()).orElse(authUser);
+                persistent.setFailedLoginAttempts(0);
+                persistent.setLockedUntil(null);
+                persistent.setStatus(UserStatus.ACTIVE);
+                userRepository.saveAndFlush(persistent);
+            }
+            return issueTokens(authUser, request, tenant, features);
+        });
         if (response == null) {
             throw new UnauthorizedException("Unable to complete login");
         }
@@ -319,12 +378,17 @@ public class AuthService {
     }
 
     private void registerFailure(User user) {
+        int maxAttempts = Math.max(1, appProperties.getSecurity().getMaxLoginAttempts());
+        int lockMinutes = Math.max(1, appProperties.getSecurity().getLockoutDurationMinutes());
         User persistent = userRepository.findById(user.getId()).orElse(user);
         int attempts = persistent.getFailedLoginAttempts() + 1;
         persistent.setFailedLoginAttempts(attempts);
-        if (attempts >= MAX_FAILED_ATTEMPTS) {
+        if (attempts >= maxAttempts) {
+            Instant lockedUntil = Instant.now().plus(lockMinutes, ChronoUnit.MINUTES);
             persistent.setStatus(UserStatus.LOCKED);
-            persistent.setLockedUntil(Instant.now().plus(LOCK_MINUTES, ChronoUnit.MINUTES));
+            persistent.setLockedUntil(lockedUntil);
+            log.warn("Account temporarily locked after {} failed attempts: user={} lockedUntil={}",
+                    attempts, persistent.getUsername(), lockedUntil);
         }
         userRepository.saveAndFlush(persistent);
         user.setFailedLoginAttempts(persistent.getFailedLoginAttempts());

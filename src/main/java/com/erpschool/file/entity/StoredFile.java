@@ -1,8 +1,11 @@
 package com.erpschool.file.entity;
 
 import com.erpschool.common.entity.TenantAwareEntity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -26,4 +29,9 @@ public class StoredFile extends TenantAwareEntity {
 
     @Column(name = "size_bytes")
     private Long sizeBytes;
+
+    @JsonIgnore
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "file_data")
+    private byte[] fileData;
 }

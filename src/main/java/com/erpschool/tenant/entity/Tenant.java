@@ -134,6 +134,9 @@ public class Tenant extends BaseEntity {
     @Column(name = "notice_poster_url", length = 500)
     private String noticePosterUrl;
 
+    @Column(name = "notice_attachments_json", columnDefinition = "TEXT")
+    private String noticeAttachmentsJson;
+
     @Column(name = "notice_published", nullable = false)
     private boolean noticePublished = false;
 

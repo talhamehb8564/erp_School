@@ -23,7 +23,7 @@ import {
   highlightsFor,
   youtubeId,
 } from "../lib/site";
-import { Button, Field, Form } from "../ui/kit";
+import { Button, Field, Form, NoticeAttachments, collectNoticeAttachments, resolveAttachmentUrl } from "../ui/kit";
 import { SocialLink, WhatsAppFloat } from "../ui/CampusContact";
 import TypeLine from "../ui/TypeLine";
 import { useToast } from "../lib/toast";
@@ -223,10 +223,32 @@ export default function Welcome({ preview = false }: { preview?: boolean }) {
   const principalMessage = principal?.message || DEFAULT_PRINCIPAL_MESSAGE;
   const principalDefault = Boolean(principal?.isDefault) || !principal?.message;
   const showPrincipal = principal?.published !== false;
-  const noticeCustom = Boolean(school?.notice?.published && school.notice.title);
-  const noticeTitle = noticeCustom ? school?.notice?.title : DEFAULT_NOTICE_TITLE;
-  const noticeBody = noticeCustom ? school?.notice?.body : DEFAULT_NOTICE_BODY;
-  const videoUrl = noticeCustom ? school?.notice?.videoUrl : "";
+  const rawNotice = school?.notice;
+  const rawNoticeAttachments = collectNoticeAttachments(rawNotice);
+  const hasSiteNoticeContent = Boolean(
+    rawNotice?.title || rawNotice?.body || rawNotice?.videoUrl || rawNotice?.posterUrl || rawNoticeAttachments.length,
+  );
+  const siteNoticeActive = Boolean(hasSiteNoticeContent && (rawNotice?.published || preview));
+  const publicAnnouncements = Array.isArray(school?.announcements) ? school.announcements : [];
+  const leadAnnouncement = !siteNoticeActive && publicAnnouncements.length > 0 ? publicAnnouncements[0] : null;
+  const extraAnnouncements = siteNoticeActive ? publicAnnouncements : publicAnnouncements.slice(1);
+  const noticeCustom = Boolean(siteNoticeActive || leadAnnouncement);
+  const noticeTitle = siteNoticeActive
+    ? (rawNotice?.title || "Announcement")
+    : leadAnnouncement
+      ? leadAnnouncement.title
+      : DEFAULT_NOTICE_TITLE;
+  const noticeBody = siteNoticeActive
+    ? (rawNotice?.body || "")
+    : leadAnnouncement
+      ? leadAnnouncement.body
+      : DEFAULT_NOTICE_BODY;
+  const noticeAttachments = siteNoticeActive
+    ? rawNoticeAttachments
+    : leadAnnouncement
+      ? collectNoticeAttachments(leadAnnouncement)
+      : [];
+  const videoUrl = siteNoticeActive ? resolveAttachmentUrl(rawNotice?.videoUrl) : "";
   const yt = youtubeId(videoUrl);
   const geo = mapOf(campus, school);
   const lat = geo.lat != null && geo.lat !== "" ? Number(geo.lat) : NaN;
@@ -362,7 +384,24 @@ export default function Welcome({ preview = false }: { preview?: boolean }) {
         <div>
           <p className="kicker">{noticeCustom ? "Announcement" : "Sample notice"}</p>
           <strong>{noticeTitle}</strong>
-          <p>{noticeBody}</p>
+          {noticeBody ? <p>{noticeBody}</p> : null}
+          {noticeAttachments.length > 0 ? (
+            <NoticeAttachments
+              attachments={noticeAttachments}
+              posterUrl={siteNoticeActive ? rawNotice?.posterUrl : undefined}
+            />
+          ) : null}
+          {extraAnnouncements.length > 0 ? (
+            <div className="site-extra-notices">
+              {extraAnnouncements.map((a) => (
+                <div key={a.id} className="site-extra-notice-item">
+                  <strong>{a.title}</strong>
+                  {a.body ? <p>{a.body}</p> : null}
+                  <NoticeAttachments attachments={a.attachments} attachmentUrl={a.attachmentUrl} />
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 

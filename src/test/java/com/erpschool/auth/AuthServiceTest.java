@@ -214,8 +214,136 @@ class AuthServiceTest {
         when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThatThrownBy(() -> authService.login("GVS-TCH-0001", "wrong", null))
-                .isInstanceOf(UnauthorizedException.class);
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Incorrect username or password.");
         assertThat(teacher.getFailedLoginAttempts()).isEqualTo(1);
+    }
+
+    @Test
+    void unknownUsernameReturnsGenericErrorMessage() {
+        when(userRepository.findLoginCandidates("no.such.user")).thenReturn(List.of());
+
+        assertThatThrownBy(() -> authService.login("no.such.user", "ChangeMe@123", UserRole.SCHOOL_ADMIN, null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Incorrect username or password.");
+    }
+
+    @Test
+    void principalCredentialsOnAdminPortalReturnsGenericMessageWithoutRevealingRole() {
+        User principal = new User();
+        principal.setId(UUID.randomUUID());
+        principal.setTenantId(tenantId);
+        principal.setUsername("GVS-PRN-0001");
+        principal.setPasswordHash(passwordEncoder.encode("ChangeMe@123"));
+        principal.setFirstName("Ayesha");
+        principal.setLastName("Malik");
+        principal.setRole(UserRole.PRINCIPAL);
+        principal.setStatus(UserStatus.ACTIVE);
+
+        when(userRepository.findLoginCandidates("GVS-PRN-0001")).thenReturn(List.of(principal));
+        Tenant tenant = new Tenant();
+        tenant.setId(tenantId);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.findById(principal.getId())).thenReturn(Optional.of(principal));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatThrownBy(() -> authService.login("GVS-PRN-0001", "ChangeMe@123", UserRole.SCHOOL_ADMIN, null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Incorrect username or password.")
+                .satisfies(ex -> assertThat(ex.getMessage().toLowerCase()).doesNotContain("principal", "admin", "portal"));
+        assertThat(principal.getFailedLoginAttempts()).isEqualTo(1);
+    }
+
+    @Test
+    void adminCredentialsOnPrincipalPortalReturnsGenericMessageWithoutRevealingRole() {
+        User admin = new User();
+        admin.setId(UUID.randomUUID());
+        admin.setTenantId(tenantId);
+        admin.setUsername("GVS-ADM-0001");
+        admin.setPasswordHash(passwordEncoder.encode("ChangeMe@123"));
+        admin.setFirstName("School");
+        admin.setLastName("Admin");
+        admin.setRole(UserRole.SCHOOL_ADMIN);
+        admin.setStatus(UserStatus.ACTIVE);
+
+        when(userRepository.findLoginCandidates("GVS-ADM-0001")).thenReturn(List.of(admin));
+        Tenant tenant = new Tenant();
+        tenant.setId(tenantId);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatThrownBy(() -> authService.login("GVS-ADM-0001", "ChangeMe@123", UserRole.PRINCIPAL, null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Incorrect username or password.")
+                .satisfies(ex -> assertThat(ex.getMessage().toLowerCase()).doesNotContain("principal", "admin", "portal"));
+        assertThat(admin.getFailedLoginAttempts()).isEqualTo(1);
+    }
+
+    @Test
+    void fiveConsecutiveFailedAttemptsTemporarilyLockAccountAndRejectDuringLockoutThenUnlockAfterExpiry() {
+        when(userRepository.findLoginCandidates("GVS-TCH-0001")).thenReturn(List.of(teacher));
+        Tenant tenant = new Tenant();
+        tenant.setId(tenantId);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        lenient().when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Attempts 1..4 fail but do not lock the account yet
+        for (int i = 1; i <= 4; i++) {
+            assertThatThrownBy(() -> authService.login("GVS-TCH-0001", "WrongPass", UserRole.TEACHER, null))
+                    .isInstanceOf(UnauthorizedException.class)
+                    .hasMessage("Incorrect username or password.");
+            assertThat(teacher.getFailedLoginAttempts()).isEqualTo(i);
+            assertThat(teacher.getStatus()).isEqualTo(UserStatus.ACTIVE);
+            assertThat(teacher.getLockedUntil()).isNull();
+        }
+
+        // 5th consecutive failure temporarily locks the account
+        assertThatThrownBy(() -> authService.login("GVS-TCH-0001", "WrongPass", UserRole.TEACHER, null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Incorrect username or password.");
+        assertThat(teacher.getFailedLoginAttempts()).isEqualTo(5);
+        assertThat(teacher.getStatus()).isEqualTo(UserStatus.LOCKED);
+        assertThat(teacher.getLockedUntil()).isAfter(java.time.Instant.now());
+
+        // Attempt during temporary lockout is rejected even with valid password and generic message
+        assertThatThrownBy(() -> authService.login("GVS-TCH-0001", "ChangeMe@123", UserRole.TEACHER, null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Incorrect username or password.")
+                .satisfies(ex -> assertThat(ex.getMessage().toLowerCase()).doesNotContain("lock"));
+
+        // Simulate lockout expiration
+        teacher.setLockedUntil(java.time.Instant.now().minusSeconds(5));
+
+        AuthResponse response = authService.login("GVS-TCH-0001", "ChangeMe@123", UserRole.TEACHER, null);
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(teacher.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(teacher.getFailedLoginAttempts()).isZero();
+        assertThat(teacher.getLockedUntil()).isNull();
+    }
+
+    @Test
+    void successfulLoginResetsFailedLoginAttemptCounter() {
+        teacher.setFailedLoginAttempts(3);
+        when(userRepository.findLoginCandidates("GVS-TCH-0001")).thenReturn(List.of(teacher));
+        Tenant tenant = new Tenant();
+        tenant.setId(tenantId);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AuthResponse response = authService.login("GVS-TCH-0001", "ChangeMe@123", UserRole.TEACHER, null);
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(teacher.getFailedLoginAttempts()).isZero();
+        assertThat(teacher.getLockedUntil()).isNull();
     }
 
     @Test

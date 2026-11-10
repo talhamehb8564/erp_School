@@ -1305,3 +1305,125 @@ html.menu-open, body.menu-open {
   .date-sheet-print, .date-sheet-print * { visibility: visible; }
   .date-sheet-print { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; }
 }
+
+.site-banner:hover,
+.site-banner:focus-within,
+.site-banner:has(.notice-attachments) {
+  animation: none;
+}
+
+.notice-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.notice-att-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.notice-attachments.compact .notice-att-grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.notice-att-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.notice-att-img-link {
+  display: block;
+  overflow: hidden;
+  max-height: 240px;
+  background: color-mix(in srgb, var(--line) 35%, transparent);
+}
+
+.notice-att-img-link img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+
+.notice-att-videos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.notice-att-video-player {
+  width: 100%;
+  max-height: 360px;
+  background: #000;
+  display: block;
+}
+
+.notice-att-video-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.notice-att-video-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.notice-att-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.notice-att-name {
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice-att-name:hover {
+  text-decoration: underline;
+}
+
+.notice-att-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notice-att-file-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notice-att-file-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.site-extra-notices {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+

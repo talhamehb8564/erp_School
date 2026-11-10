@@ -87,8 +87,30 @@ public class WebsiteService {
         if (body.containsKey("mapPlace")) tenant.setMapPlace(str(body, "mapPlace"));
         if (body.containsKey("noticeTitle")) tenant.setNoticeTitle(str(body, "noticeTitle"));
         if (body.containsKey("noticeBody")) tenant.setNoticeBody(str(body, "noticeBody"));
-        if (body.containsKey("noticeVideoUrl")) tenant.setNoticeVideoUrl(str(body, "noticeVideoUrl"));
-        if (body.containsKey("noticePosterUrl")) tenant.setNoticePosterUrl(str(body, "noticePosterUrl"));
+        if (body.containsKey("noticeVideoUrl")) tenant.setNoticeVideoUrl(JsonLists.normalizeFileUrl(str(body, "noticeVideoUrl")));
+        if (body.containsKey("noticePosterUrl")) tenant.setNoticePosterUrl(JsonLists.normalizeFileUrl(str(body, "noticePosterUrl")));
+        if (body.containsKey("noticeAttachments")) {
+            List<Map<String, Object>> normalizedAttachments = JsonLists.normalizeAttachments(body.get("noticeAttachments"));
+            tenant.setNoticeAttachmentsJson(normalizedAttachments.isEmpty() ? null : JsonLists.write(normalizedAttachments));
+            if (blank(tenant.getNoticePosterUrl())) {
+                for (Map<String, Object> att : normalizedAttachments) {
+                    String ct = String.valueOf(att.getOrDefault("contentType", ""));
+                    if (ct.startsWith("image/") && att.get("fileUrl") != null) {
+                        tenant.setNoticePosterUrl(att.get("fileUrl").toString());
+                        break;
+                    }
+                }
+            }
+            if (blank(tenant.getNoticeVideoUrl())) {
+                for (Map<String, Object> att : normalizedAttachments) {
+                    String ct = String.valueOf(att.getOrDefault("contentType", ""));
+                    if (ct.startsWith("video/") && att.get("fileUrl") != null) {
+                        tenant.setNoticeVideoUrl(att.get("fileUrl").toString());
+                        break;
+                    }
+                }
+            }
+        }
         if (body.containsKey("noticePublished")) tenant.setNoticePublished(truthy(body.get("noticePublished")));
         tenant.setUpdatedBy(TenantContext.getUserId());
         tenantRepository.save(tenant);
@@ -230,8 +252,13 @@ public class WebsiteService {
         m.put("mapPlace", tenant.getMapPlace());
         m.put("noticeTitle", tenant.getNoticeTitle());
         m.put("noticeBody", tenant.getNoticeBody());
-        m.put("noticeVideoUrl", tenant.getNoticeVideoUrl());
-        m.put("noticePosterUrl", tenant.getNoticePosterUrl());
+        m.put("noticeVideoUrl", JsonLists.normalizeFileUrl(tenant.getNoticeVideoUrl()));
+        m.put("noticePosterUrl", JsonLists.normalizeFileUrl(tenant.getNoticePosterUrl()));
+        m.put("noticeAttachments", JsonLists.buildAttachments(
+                tenant.getNoticeAttachmentsJson(),
+                tenant.getNoticePosterUrl(),
+                tenant.getNoticeVideoUrl()
+        ));
         m.put("noticePublished", tenant.isNoticePublished());
         return m;
     }

@@ -2,6 +2,7 @@ package com.erpschool.announcement.service;
 
 import com.erpschool.announcement.entity.Announcement;
 import com.erpschool.announcement.repository.AnnouncementRepository;
+import com.erpschool.common.cache.CatalogCache;
 import com.erpschool.common.util.TenantGuard;
 import com.erpschool.notification.service.NotificationService;
 import com.erpschool.student.entity.ParentStudent;
@@ -12,6 +13,7 @@ import com.erpschool.tenant.context.TenantContext;
 import com.erpschool.user.entity.User;
 import com.erpschool.user.entity.UserRole;
 import com.erpschool.user.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,17 +29,29 @@ public class AnnouncementService {
     private final StudentRepository studentRepository;
     private final ParentStudentRepository parentStudentRepository;
     private final NotificationService notificationService;
+    private final CatalogCache catalogCache;
 
     public AnnouncementService(AnnouncementRepository repository,
                                UserRepository userRepository,
                                StudentRepository studentRepository,
                                ParentStudentRepository parentStudentRepository,
                                NotificationService notificationService) {
+        this(repository, userRepository, studentRepository, parentStudentRepository, notificationService, null);
+    }
+
+    @Autowired
+    public AnnouncementService(AnnouncementRepository repository,
+                               UserRepository userRepository,
+                               StudentRepository studentRepository,
+                               ParentStudentRepository parentStudentRepository,
+                               NotificationService notificationService,
+                               CatalogCache catalogCache) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.studentRepository = studentRepository;
         this.parentStudentRepository = parentStudentRepository;
         this.notificationService = notificationService;
+        this.catalogCache = catalogCache;
     }
 
     @Transactional
@@ -52,6 +66,9 @@ public class AnnouncementService {
         }
         a.setCreatedBy(TenantContext.getUserId());
         Announcement saved = repository.save(a);
+        if (catalogCache != null) {
+            catalogCache.evictTenant(tenantId);
+        }
         fanout(saved);
         return saved;
     }

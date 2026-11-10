@@ -35,8 +35,12 @@ export const publicApi = {
 };
 
 export const authApi = {
-  login: (username: string, password: string) =>
-    api.post<AuthPayload>(`${v1}/auth/login`, { username, password }),
+  login: (username: string, password: string, expectedRole?: Role) =>
+    api.post<AuthPayload>(`${v1}/auth/login`, {
+      username,
+      password,
+      ...(expectedRole ? { expectedRole } : {}),
+    }),
   refresh: (refreshToken: string) => api.post<AuthPayload>(`${v1}/auth/refresh`, { refreshToken }),
   logout: (refreshToken: string) => api.post<void>(`${v1}/auth/logout`, { refreshToken }),
   me: () => api.get<User>(`${v1}/auth/me`),
@@ -293,7 +297,17 @@ export const salaryApi = {
 };
 
 export const announcementApi = {
-  list: () => api.get<{ id: string; title: string; body?: string; audience?: string; createdAt?: string }[]>(`${v1}/announcements`),
+  list: () =>
+    api.get<{
+      id: string;
+      title: string;
+      body?: string;
+      audience?: string;
+      publishDate?: string;
+      createdAt?: string;
+      attachmentUrl?: string;
+      attachments?: { id?: string; fileName?: string; fileUrl: string; contentType?: string }[];
+    }[]>(`${v1}/announcements`),
   create: (body: Record<string, unknown>) => api.post<unknown>(`${v1}/announcements`, body),
 };
 
@@ -314,7 +328,7 @@ export const settingsApi = {
 
 export const fileApi = {
   upload: (file: { uri: string; name: string; type: string }) =>
-    api.upload<{ url: string; id?: string }>(`${v1}/files`, file),
+    api.upload<{ url: string; id?: string; fileName?: string; contentType?: string }>(`${v1}/files`, file),
 };
 
 export const notificationApi = {

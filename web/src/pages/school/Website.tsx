@@ -5,8 +5,8 @@ import { useBranding } from "../../lib/branding";
 import { useSession } from "../../lib/session";
 import { useToast } from "../../lib/toast";
 import { DEFAULT_HEROES } from "../../lib/site";
-import { Button, Field, Form, QueryState, useAsync } from "../../ui/kit";
-import type { Campus } from "../../lib/types";
+import { Button, Field, Form, NoticeAttachments, QueryState, useAsync } from "../../ui/kit";
+import type { Campus, NoticeAttachment } from "../../lib/types";
 
 type Hero = { imageUrl: string; title?: string; caption?: string };
 
@@ -196,6 +196,7 @@ function AdminWebsite() {
   const campuses = useAsync(() => campusApi.list());
   const [form, setForm] = useState<Record<string, string>>({});
   const [gallery, setGallery] = useState<Hero[]>([]);
+  const [noticeAttachments, setNoticeAttachments] = useState<NoticeAttachment[]>([]);
   const [noticePublished, setNoticePublished] = useState(false);
   const [busyFile, setBusyFile] = useState(false);
   const loaded = site.data;
@@ -231,10 +232,11 @@ function AdminWebsite() {
       noticePosterUrl: String(loaded.noticePosterUrl || ""),
     });
     setNoticePublished(Boolean(loaded.noticePublished));
+    setNoticeAttachments(Array.isArray(loaded.noticeAttachments) ? (loaded.noticeAttachments as NoticeAttachment[]) : []);
     setGallery(Array.isArray(loaded.gallery) ? loaded.gallery as Hero[] : []);
   }, [loaded]);
 
-  const pick = async (accept: string, onUrl: (url: string) => void) => {
+  const pick = async (accept: string, onUrl: (url: string, meta?: { fileName?: string; contentType?: string }) => void) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = accept;
@@ -243,8 +245,61 @@ function AdminWebsite() {
       if (!f) return;
       setBusyFile(true);
       try {
-        onUrl(await uploadFile(f, toast));
-      } catch { /* toasted */ } finally {
+        const up = await fileApi.upload(f);
+        const url = String(up.url || "");
+        if (!url) throw new Error("Upload did not return a file URL");
+        onUrl(url, { fileName: up.fileName || f.name, contentType: up.contentType || f.type });
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Upload failed";
+        toast("err", msg);
+      } finally {
+        setBusyFile(false);
+      }
+    };
+    input.click();
+  };
+
+  const pickNoticeFiles = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.accept = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf,.pdf,.doc,.docx";
+    input.onchange = async () => {
+      const files = input.files ? Array.from(input.files) : [];
+      if (!files.length) return;
+      setBusyFile(true);
+      try {
+        const uploaded: NoticeAttachment[] = [];
+        for (const f of files) {
+          const up = await fileApi.upload(f);
+          if (up?.url) {
+            uploaded.push({
+              id: up.id,
+              fileName: up.fileName || f.name,
+              fileUrl: String(up.url),
+              contentType: up.contentType || f.type,
+            });
+          }
+        }
+        if (uploaded.length) {
+          setNoticeAttachments((prev) => {
+            const seen = new Set(prev.map((a) => a.fileUrl));
+            const merged = [...prev];
+            for (const item of uploaded) {
+              if (!seen.has(item.fileUrl)) {
+                seen.add(item.fileUrl);
+                merged.push(item);
+              }
+            }
+            return merged;
+          });
+          setNoticePublished(true);
+          toast("ok", uploaded.length === 1 ? "Notice attachment uploaded" : `${uploaded.length} notice attachments uploaded`);
+        }
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Upload failed";
+        toast("err", msg);
+      } finally {
         setBusyFile(false);
       }
     };
@@ -267,6 +322,7 @@ function AdminWebsite() {
             await websiteApi.save({
               ...form,
               gallery,
+              noticeAttachments,
               noticePublished,
               mapLat: form.mapLat || null,
               mapLng: form.mapLng || null,
@@ -323,20 +379,41 @@ function AdminWebsite() {
             <Field label="WhatsApp"><input value={form.whatsappUrl || ""} onChange={(e) => setForm({ ...form, whatsappUrl: e.target.value })} placeholder="https://wa.me/…" /></Field>
 
             <h3>Public notice &amp; video</h3>
-            <p className="hint">Shown on the public website when published. Video is optional — YouTube URL or an uploaded MP4.</p>
+            <p className="hint">Shown on the public website when published. Attach images, videos, PDFs, or Word documents.</p>
             <Field label="Notice title"><input value={form.noticeTitle || ""} onChange={(e) => setForm({ ...form, noticeTitle: e.target.value })} /></Field>
             <Field label="Notice body"><textarea rows={3} value={form.noticeBody || ""} onChange={(e) => setForm({ ...form, noticeBody: e.target.value })} /></Field>
             <Field label="Video URL (YouTube or file)"><input value={form.noticeVideoUrl || ""} onChange={(e) => setForm({ ...form, noticeVideoUrl: e.target.value })} /></Field>
             <div className="row">
-              <Button type="button" kind="ghost" disabled={busyFile} onClick={() => void pick("video/mp4,video/webm,video/quicktime", (url) => {
+              <Button type="button" kind="ghost" disabled={busyFile} onClick={() => pickNoticeFiles()}>
+                Attach files (images, video, PDF, Word)
+              </Button>
+              <Button type="button" kind="ghost" disabled={busyFile} onClick={() => void pick("video/mp4,video/webm,video/quicktime", (url, meta) => {
                 setForm((cur) => ({ ...cur, noticeVideoUrl: url }));
+                setNoticeAttachments((prev) => prev.some((a) => a.fileUrl === url) ? prev : [...prev, { fileUrl: url, fileName: meta?.fileName, contentType: meta?.contentType || "video/mp4" }]);
+                setNoticePublished(true);
                 toast("ok", "Video uploaded");
               })}>Upload video</Button>
-              <Button type="button" kind="ghost" disabled={busyFile} onClick={() => void pick("image/*", (url) => {
+              <Button type="button" kind="ghost" disabled={busyFile} onClick={() => void pick("image/*", (url, meta) => {
                 setForm((cur) => ({ ...cur, noticePosterUrl: url }));
+                setNoticeAttachments((prev) => prev.some((a) => a.fileUrl === url) ? prev : [...prev, { fileUrl: url, fileName: meta?.fileName, contentType: meta?.contentType || "image/png" }]);
+                setNoticePublished(true);
                 toast("ok", "Poster uploaded");
               })}>Upload poster</Button>
             </div>
+            <NoticeAttachments
+              attachments={noticeAttachments}
+              posterUrl={form.noticePosterUrl}
+              videoUrl={form.noticeVideoUrl}
+              compact
+              onRemove={(fileUrl) => {
+                setNoticeAttachments((prev) => prev.filter((a) => a.fileUrl !== fileUrl));
+                setForm((cur) => ({
+                  ...cur,
+                  ...(cur.noticePosterUrl === fileUrl ? { noticePosterUrl: "" } : {}),
+                  ...(cur.noticeVideoUrl === fileUrl ? { noticeVideoUrl: "" } : {}),
+                }));
+              }}
+            />
             <label className="chip">
               <input type="checkbox" checked={noticePublished} onChange={(e) => setNoticePublished(e.target.checked)} />
               Publish notice on the public website

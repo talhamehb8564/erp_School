@@ -1,6 +1,8 @@
 package com.erpschool.website;
 
 import com.erpschool.admission.AdmissionService;
+import com.erpschool.announcement.entity.Announcement;
+import com.erpschool.announcement.repository.AnnouncementRepository;
 import com.erpschool.campus.entity.Campus;
 import com.erpschool.campus.repository.CampusRepository;
 import com.erpschool.common.cache.CatalogCache;
@@ -8,9 +10,11 @@ import com.erpschool.common.exception.ResourceNotFoundException;
 import com.erpschool.tenant.entity.Tenant;
 import com.erpschool.tenant.entity.TenantStatus;
 import com.erpschool.tenant.repository.TenantRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,15 +27,26 @@ public class PublicSchoolService {
     private final CampusRepository campusRepository;
     private final CatalogCache catalogCache;
     private final AdmissionService admissionService;
+    private final AnnouncementRepository announcementRepository;
 
     public PublicSchoolService(TenantRepository tenantRepository,
                                CampusRepository campusRepository,
                                CatalogCache catalogCache,
                                AdmissionService admissionService) {
+        this(tenantRepository, campusRepository, catalogCache, admissionService, null);
+    }
+
+    @Autowired
+    public PublicSchoolService(TenantRepository tenantRepository,
+                               CampusRepository campusRepository,
+                               CatalogCache catalogCache,
+                               AdmissionService admissionService,
+                               AnnouncementRepository announcementRepository) {
         this.tenantRepository = tenantRepository;
         this.campusRepository = campusRepository;
         this.catalogCache = catalogCache;
         this.admissionService = admissionService;
+        this.announcementRepository = announcementRepository;
     }
 
     @Transactional(readOnly = true)
@@ -80,16 +95,56 @@ public class PublicSchoolService {
                 tenant.getPrincipalPhotosJson(),
                 tenant.getPrincipalMessage(),
                 tenant.isPrincipalPublished()));
-        boolean noticeCustom = tenant.isNoticePublished()
-                && tenant.getNoticeTitle() != null && !tenant.getNoticeTitle().isBlank();
+        List<Map<String, Object>> noticeAttachments = JsonLists.buildAttachments(
+                tenant.getNoticeAttachmentsJson(),
+                tenant.getNoticePosterUrl(),
+                tenant.getNoticeVideoUrl()
+        );
+        boolean hasNoticeContent = (tenant.getNoticeTitle() != null && !tenant.getNoticeTitle().isBlank())
+                || (tenant.getNoticeBody() != null && !tenant.getNoticeBody().isBlank())
+                || (tenant.getNoticeVideoUrl() != null && !tenant.getNoticeVideoUrl().isBlank())
+                || (tenant.getNoticePosterUrl() != null && !tenant.getNoticePosterUrl().isBlank())
+                || !noticeAttachments.isEmpty();
+        boolean noticeCustom = tenant.isNoticePublished() && hasNoticeContent;
         Map<String, Object> notice = new LinkedHashMap<>();
         notice.put("title", tenant.getNoticeTitle());
         notice.put("body", tenant.getNoticeBody());
-        notice.put("videoUrl", tenant.getNoticeVideoUrl());
-        notice.put("posterUrl", tenant.getNoticePosterUrl());
+        notice.put("videoUrl", JsonLists.normalizeFileUrl(tenant.getNoticeVideoUrl()));
+        notice.put("posterUrl", JsonLists.normalizeFileUrl(tenant.getNoticePosterUrl()));
+        notice.put("attachments", noticeAttachments);
         notice.put("published", tenant.isNoticePublished());
         notice.put("isDefault", !noticeCustom);
         school.put("notice", notice);
+
+        List<Map<String, Object>> publicAnnouncements = new ArrayList<>();
+        if (announcementRepository != null) {
+            LocalDate today = LocalDate.now();
+            for (Announcement a : announcementRepository.findByTenantIdOrderByPublishDateDesc(tenant.getId())) {
+                String aud = a.getAudience() == null || a.getAudience().isBlank() ? "ALL" : a.getAudience().trim().toUpperCase();
+                if (!"ALL".equals(aud)) {
+                    continue;
+                }
+                if (a.getPublishDate() != null && a.getPublishDate().isAfter(today)) {
+                    continue;
+                }
+                if (a.getExpiryDate() != null && a.getExpiryDate().isBefore(today)) {
+                    continue;
+                }
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", a.getId());
+                item.put("title", a.getTitle());
+                item.put("body", a.getBody());
+                item.put("publishDate", a.getPublishDate());
+                item.put("expiryDate", a.getExpiryDate());
+                item.put("attachmentUrl", a.getAttachmentUrl());
+                item.put("attachments", a.getAttachments());
+                publicAnnouncements.add(item);
+                if (publicAnnouncements.size() >= 10) {
+                    break;
+                }
+            }
+        }
+        school.put("announcements", publicAnnouncements);
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("lat", tenant.getMapLat());
         map.put("lng", tenant.getMapLng());

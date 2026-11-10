@@ -71,24 +71,20 @@ public class FileStorageService {
                     video ? "Maximum video size is 25MB" : "Maximum upload size is 10MB");
         }
         try {
-            assertMagic(contentType, file.getInputStream().readNBytes(16));
-        } catch (IOException e) {
-            throw new BusinessException("FILE_TYPE", "Could not read the uploaded file");
-        }
-        try {
+            byte[] bytes = file.getBytes();
+            assertMagic(contentType, bytes.length > 16 ? java.util.Arrays.copyOf(bytes, 16) : bytes);
             Path dir = root.resolve(tenantId.toString());
             Files.createDirectories(dir);
             String storedName = UUID.randomUUID() + "-" + original;
             Path dest = dir.resolve(storedName);
-            try (InputStream in = file.getInputStream()) {
-                Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
-            }
+            Files.write(dest, bytes);
             StoredFile entity = new StoredFile();
             entity.setTenantId(tenantId);
             entity.setOriginalName(original);
             entity.setStoredPath("/api/v1/files/" + tenantId + "/" + storedName);
             entity.setContentType(contentType);
             entity.setSizeBytes(file.getSize());
+            entity.setFileData(bytes);
             entity.setCreatedBy(TenantContext.getUserId());
             entity = repository.save(entity);
             Map<String, Object> result = new java.util.LinkedHashMap<>();
@@ -103,6 +99,14 @@ public class FileStorageService {
         }
     }
 
+    public java.util.Optional<StoredFile> findStoredFile(UUID tenantId, String name) {
+        if (tenantId == null || name == null || name.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String storedPath = "/api/v1/files/" + tenantId + "/" + name;
+        return repository.findFirstByTenantIdAndStoredPathOrderByCreatedAtDesc(tenantId, storedPath);
+    }
+
     public Path resolvePublic(UUID tenantId, String name) {
         Path tenantDir = root.resolve(tenantId.toString()).normalize();
         Path dest = tenantDir.resolve(name).normalize();
@@ -112,15 +116,18 @@ public class FileStorageService {
         return dest;
     }
 
-    private static String normalizeContentType(String raw, String filename) {
+    public static String normalizeContentType(String raw, String filename) {
         String contentType = raw == null ? "" : raw.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
         if (contentType.isBlank() || "application/octet-stream".equals(contentType)) {
             contentType = inferFromName(filename);
         }
+        if ("image/jpg".equals(contentType)) {
+            contentType = "image/jpeg";
+        }
         return contentType;
     }
 
-    private static String inferFromName(String filename) {
+    public static String inferFromName(String filename) {
         String lower = filename == null ? "" : filename.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".pdf")) {
             return "application/pdf";

@@ -22,6 +22,16 @@ public class AppProperties {
     @NotNull
     private Seed seed = new Seed();
 
+    @NotNull
+    private Security security = new Security();
+
+    @Getter
+    @Setter
+    public static class Security {
+        private int maxLoginAttempts = 5;
+        private int lockoutDurationMinutes = 15;
+    }
+
     @Getter
     @Setter
     public static class Jwt {

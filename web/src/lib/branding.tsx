@@ -44,6 +44,7 @@ export interface PublicNotice {
   body?: string;
   videoUrl?: string;
   posterUrl?: string;
+  attachments?: import("./types").NoticeAttachment[];
   published?: boolean;
   isDefault?: boolean;
 }
@@ -87,6 +88,7 @@ export interface PublicSchool {
   gallery?: PublicMedia[];
   principal?: PublicPrincipal;
   notice?: PublicNotice;
+  announcements?: import("./types").Announcement[];
   map?: PublicMap;
 }
 

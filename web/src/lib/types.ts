@@ -428,6 +428,13 @@ export interface StaffSalary {
   verifiedAt?: string;
 }
 
+export interface NoticeAttachment {
+  id?: string;
+  fileName?: string;
+  fileUrl: string;
+  contentType?: string;
+}
+
 export interface Announcement {
   id: string;
   title: string;
@@ -436,6 +443,7 @@ export interface Announcement {
   classId?: string;
   sectionId?: string;
   attachmentUrl?: string;
+  attachments?: NoticeAttachment[];
   publishDate: string;
   expiryDate?: string;
 }

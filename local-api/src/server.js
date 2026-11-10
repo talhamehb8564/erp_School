@@ -448,33 +448,56 @@ app.get("/actuator/health", (req, res) => {
 
 app.post("/api/v1/auth/login", async (req, res, next) => {
   try {
+    const GENERIC_AUTH_ERROR = "Incorrect username or password.";
+    const MAX_ATTEMPTS = Number(process.env.APP_SECURITY_MAX_LOGIN_ATTEMPTS || 5);
+    const LOCKOUT_MINUTES = Number(process.env.APP_SECURITY_LOCKOUT_DURATION_MINUTES || 15);
     const username = (req.body?.username || "").trim();
     const password = req.body?.password || "";
+    const expectedRole = req.body?.expectedRole || req.body?.portalRole || null;
     if (!username || !password) return fail(res, 400, "VALIDATION_ERROR", "Username and password are required");
     const users = await query("select * from users where lower(username) = lower($1)", [username]);
     const user = users[0];
     if (!user) {
       await audit({ username }, "LOGIN_FAILED", "User", null, { reason: "unknown_user" }, req);
-      return fail(res, 401, "UNAUTHORIZED", "Invalid username or password");
+      return fail(res, 401, "UNAUTHORIZED", GENERIC_AUTH_ERROR);
     }
-    if (user.status === "LOCKED") {
-      return fail(res, 401, "UNAUTHORIZED", "Account is locked. Try again later or contact administration.");
+    if (user.status === "LOCKED" || user.locked_until) {
+      const lockedUntil = user.locked_until ? new Date(user.locked_until) : null;
+      if (lockedUntil && lockedUntil > new Date()) {
+        await audit({ id: user.id, username: user.username, role: user.role, tenantId: user.tenant_id },
+          "LOGIN_FAILED", "User", user.id, { reason: "account_locked" }, req);
+        return fail(res, 401, "UNAUTHORIZED", GENERIC_AUTH_ERROR);
+      }
+      await query(
+        "update users set status = 'ACTIVE', locked_until = null, failed_login_attempts = 0 where id = $1",
+        [user.id]
+      );
+      user.status = "ACTIVE";
+      user.locked_until = null;
+      user.failed_login_attempts = 0;
     }
-    if (user.status !== "ACTIVE") return fail(res, 401, "UNAUTHORIZED", "Account is inactive");
-    if (!bcrypt.compareSync(password, user.password_hash)) {
+    const recordFailure = async (reason, extra = {}) => {
       const attempts = Number(user.failed_login_attempts || 0) + 1;
-      if (attempts >= 8) {
+      if (attempts >= MAX_ATTEMPTS) {
         await query(
-          "update users set failed_login_attempts = $1, status = 'LOCKED', locked_until = now() + interval '15 minutes' where id = $2",
-          [attempts, user.id]
+          `update users set failed_login_attempts = $1, status = 'LOCKED', locked_until = now() + ($2 || ' minutes')::interval where id = $3`,
+          [attempts, String(LOCKOUT_MINUTES), user.id]
         );
       } else {
         await query("update users set failed_login_attempts = $1 where id = $2", [attempts, user.id]);
       }
       await audit({ id: user.id, username: user.username, role: user.role, tenantId: user.tenant_id },
-        "LOGIN_FAILED", "User", user.id, { reason: "bad_password" }, req);
-      return fail(res, 401, "UNAUTHORIZED", "Invalid username or password");
+        "LOGIN_FAILED", "User", user.id, { reason, ...extra }, req);
+    };
+    if (!bcrypt.compareSync(password, user.password_hash)) {
+      await recordFailure("bad_password");
+      return fail(res, 401, "UNAUTHORIZED", GENERIC_AUTH_ERROR);
     }
+    if (expectedRole && user.role !== expectedRole) {
+      await recordFailure("role_mismatch", { expectedRole });
+      return fail(res, 401, "UNAUTHORIZED", GENERIC_AUTH_ERROR);
+    }
+    if (user.status !== "ACTIVE") return fail(res, 401, "UNAUTHORIZED", "Account is inactive");
     await assertTenantLogin(user);
     await query(
       "update users set failed_login_attempts = 0, locked_until = null, last_login_at = now() where id = $1",

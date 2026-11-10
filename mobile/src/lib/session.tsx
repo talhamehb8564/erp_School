@@ -175,20 +175,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string, expected?: Role) => {
-    const payload = await authApi.login(username.trim(), password);
-    await setTokens(payload.accessToken, payload.refreshToken);
+    const payload = await authApi.login(username.trim(), password, expected);
     if (expected && payload.user.role !== expected) {
       const rt = payload.refreshToken;
       await clearTokens();
       await persistUser(null);
       setTenant(null);
       if (rt) void authApi.logout(rt).catch(() => undefined);
-      throw new ApiError(403, {
+      throw new ApiError(401, {
         success: false,
-        errorCode: "WRONG_PORTAL",
-        message: `This portal is for a different role. Your account is ${payload.user.role.replaceAll("_", " ").toLowerCase()}.`,
+        errorCode: "UNAUTHORIZED",
+        message: "Incorrect username or password.",
       });
     }
+    await setTokens(payload.accessToken, payload.refreshToken);
     await persistUser(payload.user);
     if (payload.features && payload.user.tenantId) {
       memoryFeatures = payload.features;

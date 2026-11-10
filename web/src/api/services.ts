@@ -44,8 +44,12 @@ import type {
 const v1 = "/api/v1";
 
 export const authApi = {
-  login: (username: string, password: string) =>
-    api.post<AuthPayload>(`${v1}/auth/login`, { username, password }),
+  login: (username: string, password: string, expectedRole?: Role) =>
+    api.post<AuthPayload>(`${v1}/auth/login`, {
+      username,
+      password,
+      ...(expectedRole ? { expectedRole } : {}),
+    }),
   refresh: (refreshToken: string) =>
     api.post<AuthPayload>(`${v1}/auth/refresh`, { refreshToken }),
   logout: (refreshToken: string) =>

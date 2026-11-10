@@ -37,7 +37,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request,
                                                            HttpServletRequest http) {
         return ResponseEntity.ok(ApiResponse.ok("Login successful",
-                authService.login(request.getUsername(), request.getPassword(), http)));
+                authService.login(request.getUsername(), request.getPassword(), request.resolveExpectedRole(), http)));
     }
 
     @PostMapping("/refresh")
