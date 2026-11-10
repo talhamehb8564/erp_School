@@ -1,18 +1,27 @@
 # Temporary Vercel Container (Fluid) image for the Spring Boot /api/v1 service.
-# Listens on $PORT (Vercel default 80). Does not change VPS or local 8080 config.
+#
+# Port contract: Vercel's container runtime routes to $PORT, which defaults to 80
+# and can be overridden in project settings. We set PORT=8080 (also project env)
+# because the image runs as the unprivileged "erp" user, which cannot bind port 80.
+# application.yml already maps server.port=${PORT:8080} and binds 0.0.0.0.
+# Nothing here changes the VPS or local 8080 configuration.
 FROM maven:3.9.9-eclipse-temurin-21-alpine AS build
 WORKDIR /src
 COPY pom.xml .
+RUN mvn -B -ntp -q dependency:go-offline || true
 COPY src ./src
-RUN mvn -B -DskipTests package
+RUN mvn -B -ntp -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S erp && adduser -S erp -G erp
 WORKDIR /app
-COPY --from=build /src/target/erp-school-*.jar /app/app.jar
+COPY --from=build /src/target/erp-school-0.2.0.jar /app/app.jar
 RUN mkdir -p /app/uploads && chown -R erp:erp /app
 USER erp
-ENV PORT=80
-ENV JAVA_TOOL_OPTIONS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
-EXPOSE 80
+# Single source of truth for the listen port; must match the project PORT env var.
+ENV PORT=8080
+# Startup-oriented JVM flags: container awareness, faster C1-only boot for a
+# short-lived demo instance, and no JMX/headless overhead.
+ENV JAVA_TOOL_OPTIONS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xss512k -Djava.awt.headless=true -Dspring.main.banner-mode=off -XX:+ExitOnOutOfMemoryError"
+EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
